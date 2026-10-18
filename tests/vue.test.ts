@@ -87,6 +87,26 @@ describe('vue composables', () => {
     expect(w.timeline.value?.locate(10)).toEqual({ index: 0, offset: 110 })
   })
 
+  it("useWatch plays a synthetic VOD's compiled upload when asked, keeping its segments for chat", async () => {
+    const vod = (id: string, extra = {}) => ({ ...rawFixture('vod-plain'), id, ...extra })
+    const compiled = [{ id: 'yt1', type: 'compiled', part: 1, duration: 100 }]
+    const { run } = setup(async (url) => {
+      if (url.endsWith('/vods/a%2B1')) return json(vod('a+1', { duration: '00:01:40', youtube: compiled, synthetic: { segments: [{ vodId: 'a', start: 100, end: 200, at: 0 }] } }))
+      if (url.endsWith('/vods/a')) return json(vod('a'))
+      return json({ message: 'Not found' }, 404)
+    })
+    const play = ref<'segments' | 'compiled'>('segments')
+    const w = run(() => useWatch('a+1', null, play))
+    await flush()
+    expect(w.hasCompiled.value).toBe(true)
+    expect(w.timeline.value?.locate(10)).toEqual({ index: 0, offset: 110 })
+    play.value = 'compiled'
+    expect(w.uploadType.value).toBe('compiled')
+    expect(w.timeline.value?.uploads.map((u) => u.id)).toEqual(['yt1'])
+    expect(w.timeline.value?.locate(10)?.offset).toBe(10)
+    expect(w.segments.value?.segmentAt(10)?.segment.vodId).toBe('a')
+  })
+
   it('useChat follows a synthetic VOD from one source to the next, inside each window', async () => {
     const urls: string[] = []
     const row = (vod: string, at: number) => ({ id: `${vod}@${at}`, vod_id: vod, display_name: 'u', content_offset_seconds: at, message: [{ text: 'hi' }], user_badges: null, user_color: null })

@@ -11,8 +11,8 @@ const pages = {
   games: Page,
   notFound: Page,
   manage: Object.fromEntries(
-    ['login', 'overview', 'jobs', 'job', 'vods', 'vod', 'synthetic', 'storage', 'youtube', 'settings', 'tags', 'audit'].map((k) => [k, Page]),
-  ) as Record<'login' | 'overview' | 'jobs' | 'job' | 'vods' | 'vod' | 'synthetic' | 'storage' | 'youtube' | 'settings' | 'tags' | 'audit', typeof Page>,
+    ['login', 'overview', 'jobs', 'job', 'vods', 'vod', 'synthetic', 'storage', 'youtube', 'settings', 'tags', 'home', 'audit'].map((k) => [k, Page]),
+  ) as Record<'login' | 'overview' | 'jobs' | 'job' | 'vods' | 'vod' | 'synthetic' | 'storage' | 'youtube' | 'settings' | 'tags' | 'home' | 'audit', typeof Page>,
 }
 
 /** The worker's answer to GET /admin/session. */
@@ -56,6 +56,25 @@ describe('vodsRoutes', () => {
     expect(router.currentRoute.value.fullPath).toBe('/manage/vods/3?x=1')
     await router.push('/vods?tab=playthroughs&q=a')
     expect(router.currentRoute.value.fullPath).toBe('/playthroughs?q=a')
+  })
+})
+
+describe('tag pages', () => {
+  it('serves a page for each tag type with one, and not-found for the rest', async () => {
+    vi.stubGlobal('fetch', adminSession({}))
+    const { router } = await setup()
+    const { tagConfig } = await import('../../src/app/lib/vodTags')
+    tagConfig.value = { ...tagConfig.value, highlight: { label: 'highlight', drawn: false, page: 'highlights', pageLabel: 'Highlights' } }
+    await router.push('/highlights?q=a')
+    expect(router.currentRoute.value.matched[0]?.path).toBe('/:tab([a-z0-9][a-z0-9-]*)')
+    await router.push('/playthroughs')
+    expect(router.currentRoute.value.params.tab).toBe('playthroughs')
+    await router.push('/nope?q=1')
+    expect(router.currentRoute.value.name).toBe('not-found')
+    expect(router.currentRoute.value.fullPath).toBe('/nope?q=1')
+    await router.push('/vods?tab=highlights')
+    expect(router.currentRoute.value.fullPath).toBe('/highlights')
+    expect(router.resolve('/manage').matched[0]?.path).toBe('/manage')
   })
 })
 

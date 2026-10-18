@@ -31,6 +31,12 @@ export interface TagStyle {
   textRotate?: number
   /** A pattern over the tag-colored parts: diagonal stripes or checks of `color` and `patternColor`. Unset: plain. */
   pattern?: 'stripes' | 'checks'
+  /** Its type: the slug of its own list page and header link (`/playthroughs`), or unset/null for none. */
+  page?: string | null
+  /** That page's title and link, e.g. "Playthroughs". Unset: the slug. */
+  pageLabel?: string
+  /** Whether the home page can show its newest VODs as a "latest" card. */
+  homeCard?: boolean
   /** The pattern's second color (any CSS color) and the width of one stripe or square in px. Unset: the page
    * background's color, and 4. */
   patternColor?: string
@@ -47,7 +53,7 @@ export const DEFAULT_TAGS: Record<string, TagStyle> = {
     new: { label: 'new', drawn: true, color: 'var(--vods-tag-new)', shape: null },
     updated: { label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', shape: null },
     complete: { label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', shape: null },
-    compilation: { label: 'playthrough', drawn: false },
+    compilation: { label: 'playthrough', drawn: false, page: 'playthroughs', pageLabel: 'Playthroughs', homeCard: true },
   }
 
 /** What tells one vods site from another. Everything else (the pages, the player, Manage) is the same. */

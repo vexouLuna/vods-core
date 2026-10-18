@@ -2,6 +2,7 @@
 import type { VodsConfig } from '../config'
 import { configureAdmin } from './admin/session'
 import { configurePlatform } from './admin/platform'
+import { loadSiteOptions } from './lib/siteOptions'
 import { loadTagConfig, tagConfig } from './lib/vodTags'
 import { configureSite, site, type VodsSite } from './site'
 
@@ -16,7 +17,7 @@ export interface VodsSiteOptions {
 
 /**
  * Sets up the site before its app mounts: the site and channel, the admin API, and how tags show (the site's own
- * until /manage/tags answers).
+ * until /manage/tags answers) and the homepage's cards (/manage/home).
  */
 export function setupVodsSite(options: VodsSiteOptions): void {
   configureSite(options.config, options.site)
@@ -24,4 +25,5 @@ export function setupVodsSite(options: VodsSiteOptions): void {
   configureAdmin(options.adminBase ?? '/backend-admin')
   configurePlatform()
   void loadTagConfig()
+  void loadSiteOptions()
 }

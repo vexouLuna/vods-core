@@ -1,17 +1,19 @@
 <script setup lang="ts">
 // /manage/synthetic/new and /manage/synthetic/:id: a VOD made of windows of real ones (GET/POST/PUT/DELETE
 // /api/v2/synthetic). A merge or split supersedes its sources (they leave the public lists and redirect into it); a
-// playthrough, built from a game's windows, is listed beside them and tagged `compilation`.
+// playthrough, built from a game's windows, is listed beside them and tagged `compilation`. Compile starts a job that
+// joins its windows into one file and uploads it as type `compiled` (the archive's compile_youtube_upload must be on).
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { errorText } from '@vex/platform-web'
-import type { PlaythroughWindow, SyntheticInput, SyntheticVod } from '../../admin/api'
+import type { PlaythroughWindow, SyntheticDmca, SyntheticInput, SyntheticVod } from '../../admin/api'
 import ManageShell from '../../admin/ManageShell.vue'
 import PlaythroughBuilder from '../../admin/PlaythroughBuilder.vue'
 import { admin } from '../../admin/session'
+import { platform, vodSubject } from '../../admin/platform'
 import TimeInput from '../../admin/TimeInput.vue'
 import { COMPLETE_TAG } from '../../lib/vodTags'
 import { site } from '../../site'
@@ -30,12 +32,17 @@ const loadError = ref<string | null>(null)
 const notFound = ref(false)
 const form = ref({ id: '', title: '', tags: '', supersedes: false })
 const segments = ref<Row[]>([])
+// The game a playthrough follows (the archive keeps its segments to that game's windows), or the one it was just built from.
+const follow = ref<{ id: string; name: string | null } | null>(null)
+const keepUp = ref(false)
 
 function fill(v: SyntheticVod | null) {
   vod.value = v
   form.value = { id: v?.id ?? '', title: v?.title ?? '', tags: (v?.tags ?? []).join(', '), supersedes: v?.supersedes ?? false }
   segments.value = (v?.segments ?? []).map((s) => row({ vod_id: s.vod_id, start: s.start, end: s.end, at: s.at, label: s.label ?? '' }))
   if (!segments.value.length) segments.value = [row()]
+  follow.value = v?.auto ? { id: v.auto.game_id, name: null } : null
+  keepUp.value = !!v?.auto
 }
 async function load() {
   loadError.value = null
@@ -59,7 +66,8 @@ const move = (i: number, by: -1 | 1) => {
 }
 const remove = (i: number) => (segments.value = segments.value.filter((_, j) => j !== i))
 const addRow = () => (segments.value = [...segments.value, row()])
-function addWindows(windows: PlaythroughWindow[], game: string | null) {
+function addWindows(windows: PlaythroughWindow[], game: string | null, gameId: string | null) {
+  if (gameId) follow.value = { id: gameId, name: game }
   const kept = segments.value.filter((s) => s.vod_id.trim())
   segments.value = [...kept, ...windows.map((w) => row({ vod_id: w.segment.vod_id, start: w.segment.start, end: w.segment.end, label: w.segment.label }))]
   // A playthrough stands beside its sources and is tagged so.
@@ -116,6 +124,8 @@ async function save() {
       ...(s.label.trim() ? { label: s.label.trim() } : {}),
     })),
   }
+  // Following a game, the archive makes the segments (it ignores these); without, they are a hand edit, which stops it.
+  if (keepUp.value && follow.value) body.auto = { game_id: follow.value.id }
   try {
     if (isNew.value) {
       const made = await admin.createSynthetic({ ...body, id: form.value.id.trim() })
@@ -129,6 +139,43 @@ async function save() {
     saveError.value = errorText(e)
   } finally {
     saving.value = false
+  }
+}
+
+const compiling = ref(false)
+/** The sources' DMCA claims, when Compile found some: the warning is open until it's accepted or cancelled. */
+const claims = ref<SyntheticDmca | null>(null)
+const accepted = ref(false)
+const claimsOpen = computed({ get: () => claims.value !== null, set: (open) => { if (!open) claims.value = null } })
+const ranges = (r: [number, number][]) => r.map(([a, b]) => `${toClock(a)}–${toClock(b)}`).join(', ')
+async function compile() {
+  compiling.value = true
+  try {
+    const found = await admin.syntheticDmca(props.id!)
+    // Any claim warns, also one outside the windows it plays.
+    if (found.overlapping.length || found.other.length) {
+      accepted.value = false
+      claims.value = found
+    } else await enqueueCompile(false)
+  } catch (e) {
+    toast.show(errorText(e), { kind: 'error', duration: 6000 })
+  } finally {
+    compiling.value = false
+  }
+}
+async function enqueueCompile(acceptDmca: boolean) {
+  compiling.value = true
+  try {
+    // `replace` swaps out the compiled uploads of an earlier run (none on the first); the archive refuses
+    // sources with DMCA claims unless `accept_dmca`.
+    const payload = { type: 'compiled', replace: true, ...(acceptDmca ? { accept_dmca: true } : {}) }
+    const job = await platform.enqueue({ kind: 'compile', subject: vodSubject(props.id!), payload })
+    claims.value = null
+    router.push(`/manage/jobs/${job.id}`)
+  } catch (e) {
+    toast.show(errorText(e), { kind: 'error', duration: 6000 })
+  } finally {
+    compiling.value = false
   }
 }
 
@@ -156,6 +203,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
   <ManageShell :title="isNew ? 'New synthetic VOD' : `Synthetic VOD ${id}`">
     <template #actions>
       <UiButton v-if="!isNew" :to="`/vods/${encodeURIComponent(id!)}`">Watch page</UiButton>
+      <UiButton v-if="!isNew" :loading="compiling" title="Join its windows into one file and upload it" @click="compile">{{ vod?.compiled ? 'Recompile' : 'Compile' }}</UiButton>
       <UiButton v-if="!isNew" variant="danger" @click="deleteOpen = true">Delete</UiButton>
     </template>
     <p class="back"><RouterLink to="/manage/vods?synthetic=true">← Synthetic VODs</RouterLink></p>
@@ -174,6 +222,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
           <div><dt>Streamed</dt><dd>{{ when(vod.created_at) }}</dd></div>
           <div><dt>Made</dt><dd :title="when(vod.made_at)">{{ vod.made_at ? timeAgo(vod.made_at) : '—' }}</dd></div>
           <div><dt>Changed</dt><dd :title="when(vod.changed_at)">{{ vod.changed_at ? timeAgo(vod.changed_at) : '—' }}</dd></div>
+          <div v-if="vod.compiled"><dt>Compiled</dt><dd><UiChip :tone="vod.compiled.outdated ? 'warn' : 'ok'">{{ vod.compiled.outdated ? 'outdated: the segments changed' : 'up to date' }}</UiChip></dd></div>
           <div><dt>Visibility</dt><dd><UiChip :tone="vod.hidden ? 'warn' : 'ok'">{{ vod.hidden ? 'hidden' : 'public' }}</UiChip></dd></div>
         </dl>
         <p class="vods-muted small">Hiding it, and its chapters and the like, are on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>
@@ -194,6 +243,11 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
         </div>
         <UiCheckbox v-model="complete" label="Played to the end: shows a complete tag on its thumbnail" />
         <UiCheckbox v-model="form.supersedes" label="Stands in for its sources (a merge or split): they leave the public lists and redirect here" />
+        <UiCheckbox
+          v-if="follow"
+          v-model="keepUp"
+          :label="`Keep up to date: every window of ${follow.name ?? `game ${follow.id}`}, new streams included (the segments below then aren't saved)`"
+        />
       </section>
 
       <section class="panel vods-panel">
@@ -236,6 +290,38 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
       </div>
     </form>
 
+    <UiDialog v-model:open="claimsOpen" title="Its sources have DMCA claims">
+      <UiCallout tone="error" title="The compiled file copies the claimed content">
+        These sources were claimed on YouTube. Their claimed ranges go into the compiled upload as they are, and it
+        can be claimed, blocked or get the channel a strike.
+      </UiCallout>
+      <p class="small"><strong>In the windows this video uses</strong></p>
+      <ul v-if="claims?.overlapping.length" class="claims">
+        <li v-for="(c, i) in claims.overlapping" :key="i">
+          <strong>VOD {{ c.vod_id }}</strong>{{ c.part !== null ? `, part ${c.part}` : '' }}:
+          <span v-if="c.mute.length">muted {{ ranges(c.mute) }}</span><span v-if="c.mute.length && c.blackout.length">; </span>
+          <span v-if="c.blackout.length">blacked out {{ ranges(c.blackout) }}</span>
+          <span v-if="!c.placed" class="vods-muted"> (a live copy's times: couldn't be matched to the windows)</span>
+        </li>
+      </ul>
+      <p v-else class="small vods-muted">None: every claim is outside the windows used.</p>
+      <details v-if="claims?.other.length" class="other">
+        <summary>Other claims in stitched videos ({{ claims.other.length }})</summary>
+        <ul class="claims">
+          <li v-for="(c, i) in claims.other" :key="i">
+            <strong>VOD {{ c.vod_id }}</strong>{{ c.part !== null ? `, part ${c.part}` : '' }}:
+            <span v-if="c.mute.length">muted {{ ranges(c.mute) }}</span><span v-if="c.mute.length && c.blackout.length">; </span>
+            <span v-if="c.blackout.length">blacked out {{ ranges(c.blackout) }}</span>
+          </li>
+        </ul>
+      </details>
+      <UiCheckbox v-model="accepted" label="I understand the risks" />
+      <template #actions="{ close }">
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton variant="danger-solid" :disabled="!accepted" :loading="compiling" @click="enqueueCompile(true)">Compile anyway</UiButton>
+      </template>
+    </UiDialog>
+
     <UiDialog v-model:open="deleteOpen" :title="`Delete ${id}?`">
       Its link stops working and, if it stood in for its sources, they come back. The sources themselves aren't touched.
       <template #actions="{ close }">
@@ -267,6 +353,9 @@ dd { margin: 0; }
 .n { align-self: center; min-width: 1.5em; opacity: 0.6; }
 .vodid { width: 9.5rem; }
 .grow { flex: 1 1 10rem; }
+.claims { margin: 8px 0 12px; padding-left: 1.2em; display: grid; gap: 4px; }
+.other { margin-bottom: 12px; }
+.other summary { cursor: pointer; }
 .acts { display: flex; gap: 2px; }
 .save { display: flex; flex-wrap: wrap; gap: 8px; }
 </style>
