@@ -117,6 +117,23 @@ describe('toChatMessage', () => {
     expect(toChatMessage({ ...base, deleted_at: '2026-01-01T00:00:00Z' }).removed?.type).toBe('delete')
   })
 
+  it("shows a resub's own message as a chat line under its system line, and Twitch's message types", () => {
+    const base = { ...comment(0, 0), source: 'bot' as const, kind: 'notice' as const, display_name: 'synthetiquee', user_color: null }
+    const system = "synthetiquee subscribed with Prime. They've subscribed for 3 months!"
+    const resub = toChatMessage({
+      ...base,
+      message: [{ text: system }],
+      bot: { type: 'resub', color: '#8A2BE2', fragments: [{ text: ':)', emote: { emoteID: '1' } }], payload: { system_message: system } },
+    })
+    expect(resub).toMatchObject({ kind: 'notice', noticeType: 'resub', system, color: '#8A2BE2' })
+    expect(resub.tokens.map((t) => t.kind)).toEqual(['emote'])
+    // Archived before the bot logged notice fragments: the text-only notice as before.
+    const old = toChatMessage({ ...base, message: [{ text: system }], bot: { type: 'resub' } })
+    expect([old.system, old.tokens]).toEqual([null, [{ kind: 'text', text: system }]])
+    const giant = toChatMessage({ ...comment(0, 0), message_type: 'power_ups_gigantified_emote' })
+    expect([giant.messageType, toChatMessage({ ...comment(0, 0), message_type: 'text' }).messageType]).toEqual(['power_ups_gigantified_emote', null])
+  })
+
   it('knows a replay username only when the display name is plain ASCII', () => {
     expect(loginOf({ display_name: 'SomeOne_42' })).toBe('someone_42')
     expect(loginOf({ display_name: '日本語' })).toBeNull()
