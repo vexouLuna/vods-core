@@ -59,8 +59,8 @@ export const DEFAULT_TAGS: Record<string, TagStyle> = {
 /** What tells one vods site from another. Everything else (the pages, the player, Manage) is the same. */
 export interface VodsSite {
   /**
-   * The site's id. For a site on vex-ui (`createVodsApp()`), its entry in the network's `SITES`: its accent, sky,
-   * switcher entry and repo links. A site with its own UI (the `kit` entry) uses any id.
+   * The site's id. For a Deep Field site, its entry in the network's `SITES`: its accent, sky, switcher entry and
+   * repo links. A site with its own look uses any id.
    */
   id: string
   /** The site's name in page titles and on the sign-in page: its host, e.g. `vods.vexoul.net`. */

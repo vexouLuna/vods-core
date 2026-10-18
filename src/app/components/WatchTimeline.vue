@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // One bar for the whole VOD (all parts): chapters in their game colour, restricted chapters hatched, parts that
 // can't play hatched red, part labels above. Click, drag or use the arrow keys to seek (VOD seconds). The logic is
-// useTimeline's (kit); this draws it.
+// useTimeline's; this draws it.
 import { toClock, type PartStatus, type PlayableTimeline, type Span } from '../../index'
 import { unplayable } from '../lib/cuts'
 import { useTimeline } from '../composables/useTimeline'

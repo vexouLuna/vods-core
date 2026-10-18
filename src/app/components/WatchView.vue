@@ -45,7 +45,7 @@ const props = withDefaults(
 )
 
 const toast = useToast()
-// The page's logic is useWatchView's (kit). Its `time` changes on every tick and is never read here: the clock, the
+// The page's logic is useWatchView's. Its `time` changes on every tick and is never read here: the clock, the
 // time into the part and the timeline bar read it through getters, so this template doesn't re-render each tick.
 const {
   chat,
