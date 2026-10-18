@@ -116,7 +116,7 @@ watchEffect(() => learnGameColors(posterGames.value))
           <div class="video-box">
             <div class="yt"><div ref="ytEl"></div></div>
             <div v-if="playerError" class="unavail">
-              <div class="vods-panel un-card">
+              <div class="vods-panel vx-glass-rim un-card">
                 <b>The YouTube player didn't load</b>
                 <p class="vods-muted">{{ playerError }} Check that youtube.com isn't blocked, then reload the page.</p>
               </div>
@@ -155,7 +155,7 @@ watchEffect(() => learnGameColors(posterGames.value))
               </div>
             </div>
             <div v-else-if="curBad" class="unavail">
-              <div class="vods-panel un-card" role="status">
+              <div class="vods-panel vx-glass-rim un-card" role="status">
                 <div class="vods-eyebrow">{{ label(partIndex) }} of {{ spans.length }}</div>
                 <b>This part isn't playable on YouTube <span class="vods-muted">({{ statusText[status[partIndex]!] }})</span></b>
                 <p class="vods-muted">

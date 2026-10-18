@@ -158,7 +158,7 @@ onMounted(() => {
         Last changed {{ timeAgo(data.updatedAt) }}<template v-if="data.updatedBy"> by {{ data.updatedBy }}</template>
       </p>
 
-      <section v-for="(d, i) in drafts" :key="d.key" class="tag vods-panel" :aria-label="d.name || 'New tag'">
+      <section v-for="(d, i) in drafts" :key="d.key" class="tag vods-panel vx-glass-rim" :aria-label="d.name || 'New tag'">
         <div class="preview" aria-hidden="true">
           <div class="thumb"><TagMark v-if="d.drawn" class="mark" :tag="previewOf(d, vodsConfig.apiBase)" /></div>
           <UiChip
@@ -267,7 +267,7 @@ onMounted(() => {
 
       <UiButton class="add" @click="add">+ Add a tag</UiButton>
 
-      <div class="savebar vods-panel" :class="{ 'is-on': pending.changed || saveError }">
+      <div class="savebar vods-panel vx-glass-rim" :class="{ 'is-on': pending.changed || saveError }">
         <UiCallout v-if="saveError" tone="error" title="Nothing was saved" class="save-err">{{ saveError }}</UiCallout>
         <span class="vods-muted">{{ pending.changed ? 'Unsaved changes' : 'No changes' }}</span>
         <span class="spacer" />

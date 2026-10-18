@@ -50,7 +50,7 @@ const entries = computed(() => vods.value.map((vod) => ({ vod, progress: props.r
 </script>
 
 <template>
-  <section v-if="loading || vods.length" class="strip vods-panel" :aria-label="`Latest ${name}`">
+  <section v-if="loading || vods.length" class="strip vods-panel vx-glass-rim" :aria-label="`Latest ${name}`">
     <div class="vods-eyebrow">Latest {{ name }}</div>
     <ul class="list" :aria-busy="loading && !vods.length">
       <template v-if="!vods.length">

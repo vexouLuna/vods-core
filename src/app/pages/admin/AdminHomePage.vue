@@ -92,7 +92,7 @@ onMounted(() => {
       <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
     </UiCallout>
     <div v-else-if="!saved" class="sk" aria-busy="true"><UiSkeleton h="160px" /></div>
-    <form v-else class="vods-panel panel" @submit.prevent="save">
+    <form v-else class="vods-panel vx-glass-rim panel" @submit.prevent="save">
       <ol v-if="cards.length" class="cards">
         <li v-for="(c, i) in cards" :key="homeCardKey(c)" class="card">
           <span class="name">{{ homeCardLabel(c, tagConfig) }}</span>

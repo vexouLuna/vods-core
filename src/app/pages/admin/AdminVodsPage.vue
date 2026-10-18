@@ -219,7 +219,7 @@ onMounted(() => {
     </UiCallout>
     <div v-else-if="loading && !vods.length" class="sk" aria-busy="true"><UiSkeleton v-for="i in 6" :key="i" h="36px" /></div>
     <template v-else>
-      <div class="batch vods-panel" role="group" aria-label="Ticked VODs">
+      <div class="batch vods-panel vx-glass-rim" role="group" aria-label="Ticked VODs">
         <UiCheckbox :model-value="allTicked" :disabled="!vods.length" @update:model-value="tickAll">
           <strong>{{ chosen.length }}</strong>&nbsp;ticked
         </UiCheckbox>

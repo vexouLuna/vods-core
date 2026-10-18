@@ -122,7 +122,7 @@ onMounted(() => {
     <div v-else-if="!view" class="sk" aria-busy="true"><UiSkeleton h="70px" /><UiSkeleton h="300px" /></div>
 
     <template v-else>
-      <section class="disk vods-panel">
+      <section class="disk vods-panel vx-glass-rim">
         <div class="disk-head">
           <h2 class="vods-eyebrow">Disk</h2>
           <span class="spacer" />

@@ -35,7 +35,12 @@ describe('the Deep Field theme', () => {
   const vods = [...rules(read('src/app/deep-field/deep-field.css'))].filter(([sel]) => sel.includes('.vods-'))
 
   it('copies vex-ui rules', () => {
-    expect(vods.map(([sel]) => sel)).toEqual(expect.arrayContaining(['.vods-panel', '.vods-panel:after', '.vods-btn', '.vods-display']))
+    expect(vods.map(([sel]) => sel)).toEqual(expect.arrayContaining(['.vods-panel', '.vods-btn', '.vods-display']))
+  })
+
+  // Panels take vex-ui's rim class in the markup instead of a copied ::after.
+  it('has the rim class it puts on every vods-panel', () => {
+    expect(vx.has('.vx-panel:after,.vx-glass-rim:after')).toBe(true)
   })
 
   it.each(vods.map(([sel, decls]) => [sel, decls] as const))('%s matches vex-ui', (sel, decls) => {

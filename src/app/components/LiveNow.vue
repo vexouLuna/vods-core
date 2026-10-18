@@ -25,7 +25,7 @@ const art = computed(() => (props.live.game ? boxArt(props.live.game.image) ?? u
 </script>
 
 <template>
-  <article class="live vods-panel">
+  <article class="live vods-panel vx-glass-rim">
     <div class="thumb">
       <UiLink :href="site.twitchUrl" external class="thumb-link" :aria-label="`${title} (live on Twitch)`" tabindex="-1">
         <div class="vods-ring img"><img :src="thumb" alt="" decoding="async" /></div>

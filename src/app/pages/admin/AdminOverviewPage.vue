@@ -193,7 +193,7 @@ async function connectYoutube() {
 
     <template v-if="health">
       <div class="tiles">
-        <div v-for="t in tiles" :key="t.name" class="tile vods-panel">
+        <div v-for="t in tiles" :key="t.name" class="tile vods-panel vx-glass-rim">
           <div class="vods-eyebrow">{{ t.name }}</div>
           <div class="tile-main"><UiStatusDot :status="t.status" />{{ t.text }}</div>
           <a v-if="t.link" class="tile-link small" :href="t.link.href" target="_blank" rel="noopener">{{ t.link.text }}</a>
@@ -202,7 +202,7 @@ async function connectYoutube() {
           <UiButton v-if="t.action === 'connect'" @click="connectYoutube">Connect YouTube</UiButton>
           <UiButton v-else-if="t.action === 'switch'" size="sm" title="Connect a different Google account or channel" @click="connectYoutube">Switch account</UiButton>
         </div>
-        <div v-for="t in uploadTiles" :key="t.name" class="tile vods-panel" :title="t.title">
+        <div v-for="t in uploadTiles" :key="t.name" class="tile vods-panel vx-glass-rim" :title="t.title">
           <div class="vods-eyebrow">{{ t.name }}</div>
           <div class="tile-main"><UiStatusDot :status="t.status" />{{ t.text }}</div>
           <div class="vods-muted small">{{ t.sub }}</div>

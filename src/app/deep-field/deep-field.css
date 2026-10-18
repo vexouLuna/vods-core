@@ -54,26 +54,13 @@
 .vods-muted { color: var(--vx-muted); }
 .vods-panel {
   position: relative;
-  background: var(--vx-glass-reflect), var(--vx-glass-sheen), var(--vx-glass-clear);
-  /* The reflection is pinned to the screen, so it lines up across panels, and drifts up at half the scroll speed
-     (VxSiteShell, under DeepFieldShell, sets --vx-scroll-y). */
-  background-attachment: fixed, scroll, scroll;
-  background-position: 0 calc(var(--vx-scroll-y, 0px) * -0.5), 0 0, 0 0;
-  background-size: 100% 3200px, auto, auto;
+  background: var(--vx-glass-panel);
   border: 1px solid var(--vx-glass-line);
   border-radius: var(--vx-radius);
   box-shadow: var(--vx-glass-edge);
 }
-.vods-panel::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  padding: 1px;
-  border-radius: inherit;
-  pointer-events: none;
-  background: var(--vx-glass-rim);
-  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-}
+/* The lit rim comes from vex-ui's .vx-glass-rim, which every vods-panel also carries in the markup (inert without
+   @vex/ui's style.css, i.e. off Deep Field). */
 .vods-pop {
   background: var(--vx-pop);
   border: 1px solid var(--vx-line);

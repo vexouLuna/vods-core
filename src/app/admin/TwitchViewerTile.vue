@@ -103,7 +103,7 @@ async function unlink() {
 </script>
 
 <template>
-  <div class="tile vods-panel">
+  <div class="tile vods-panel vx-glass-rim">
     <div class="vods-eyebrow">Twitch (ad-free)</div>
     <div class="tile-main"><UiStatusDot :status="tile.status" />{{ tile.text }}</div>
     <div v-if="tile.sub" class="vods-muted small">{{ tile.sub }}</div>

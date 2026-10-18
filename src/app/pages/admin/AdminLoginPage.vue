@@ -61,7 +61,7 @@ async function submit() {
 
 <template>
   <VodsShell sky="dim">
-    <form class="login vods-panel" @submit.prevent="submit">
+    <form class="login vods-panel vx-glass-rim" @submit.prevent="submit">
       <div class="vods-eyebrow">{{ site.name }}</div>
       <h1 class="vods-display">Manage</h1>
       <UiCallout v-if="signinError" tone="error">{{ signinError }}</UiCallout>

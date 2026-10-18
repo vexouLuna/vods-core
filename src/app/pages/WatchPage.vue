@@ -148,7 +148,7 @@ watchEffect(() => {
           <UiButton to="/vods" variant="primary">All VODs</UiButton>
         </template>
       </UiEmptyState>
-      <section class="cut vods-panel" aria-label="What was cut">
+      <section class="cut vods-panel vx-glass-rim" aria-label="What was cut">
         <ManageVodButton :id="vod.id" class="manage" />
         <div class="vods-eyebrow">What was cut · {{ vod.createdAt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) }}</div>
         <ol class="cut-list">
