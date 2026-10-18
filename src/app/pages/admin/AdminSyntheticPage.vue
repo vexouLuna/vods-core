@@ -225,7 +225,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
           <div v-if="vod.compiled"><dt>Compiled</dt><dd><UiChip :tone="vod.compiled.outdated ? 'warn' : 'ok'">{{ vod.compiled.outdated ? 'outdated: the segments changed' : 'up to date' }}</UiChip></dd></div>
           <div><dt>Visibility</dt><dd><UiChip :tone="vod.hidden ? 'warn' : 'ok'">{{ vod.hidden ? 'hidden' : 'public' }}</UiChip></dd></div>
         </dl>
-        <p class="vods-muted small">Hiding it, and its chapters and the like, are on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>
+        <p class="vods-muted small">Hide it, or change its chapters and the like, on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>
       </section>
 
       <section class="panel vods-panel vx-glass-rim">
