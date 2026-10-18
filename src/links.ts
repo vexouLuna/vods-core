@@ -1,6 +1,6 @@
 // How a VOD is shown and linked outside its watch page: the thumbnail, box art and the watch path. Kept here so the vods
 // site and every other site that links to a VOD (the stream card on vexoul.net) pick the same ones.
-import type { Vod } from './types'
+import type { UploadType, Vod } from './types'
 
 type Thumbed = Pick<Vod, 'thumbnail'> & {
   uploads: readonly Pick<Vod['uploads'][number], 'thumbnail'>[]
@@ -26,7 +26,7 @@ export function youtubeThumb(url: string | null | undefined, size: 'mqdefault' |
  * The watch page's path on the vods site: `/vods/:id` when there are VOD uploads, `/live/:id` for a live upload only,
  * else `/youtube/:id` (which picks one). `t` (seconds) resumes from there.
  */
-export function watchPath(vod: { id: string; uploads: readonly { type: 'vod' | 'live' }[] }, t?: number): string {
+export function watchPath(vod: { id: string; uploads: readonly { type: UploadType }[] }, t?: number): string {
   const id = encodeURIComponent(vod.id)
   const base = vod.uploads.some((u) => u.type === 'vod')
     ? `/vods/${id}`
