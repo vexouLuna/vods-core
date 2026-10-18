@@ -1,6 +1,6 @@
 import { ProblemError } from '@vex/platform-web'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { type BatchVod, useVodBatch, vodBatchTargets } from '../../src/app/kit'
+import { type BatchVod, useVodBatch, vodBatchTargets } from '../../src/app/admin/vodBatch'
 import { admin } from '../../src/app/admin/session'
 
 const vod = (id: string, over: Partial<BatchVod> = {}): BatchVod => ({

@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  type DoomtpStatus,
-  type YoutubeCheck,
   RECENT_PROBLEM_DAYS,
   diskLine,
   doomtpLine,
@@ -15,7 +13,8 @@ import {
   stuckVods,
   youtubeCheckLine,
   youtubeCheckMessage,
-} from '../../src/app/kit'
+} from '../../src/app/admin/health'
+import type { DoomtpStatus, YoutubeCheck } from '../../src/app/admin/api'
 import { admin } from '../../src/app/admin/session'
 
 afterEach(() => vi.restoreAllMocks())

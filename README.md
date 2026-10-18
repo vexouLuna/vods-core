@@ -6,11 +6,10 @@ The engine and the app behind the vods sites: [vods.vexoul.net](https://github.c
 - **the root entry and `vue`**: headless. The logic the old React site had spread across its components, with types
   and tests, and no UI.
 - **`app`**: the site itself, its pages, the Manage dashboard (the archive's admin pages) and the router, built from
-  the headless parts and [vex-ui](https://github.com/vexouLuna/vex-ui). A site calls `createVodsApp()` with its
-  channel and branding, and that's all it holds.
-- **`kit`**: the app without its look, for a site that draws its own pages (keekivods.vexoul.net): the pages' and
-  Manage's logic (list filters, tags, most played, chat settings, the admin API and its editors' drafts) and
-  `setupVodsSite()`. Nothing in it imports vex-ui.
+  the headless parts, with no look of its own. A site calls `createVodsApp()` with its channel, branding and
+  controls (`ui`), defines the `--vods-*` tokens, and that's all it holds.
+- **`deep-field`**: the [vex-ui](https://github.com/vexouLuna/vex-ui) Deep Field controls for `ui`, with
+  `deep-field.css` (vods.vexoul.net). keekivods.vexoul.net brings its own.
 - **`dev`**: `adminMock()`, a vite plugin that serves an in-memory admin API, for working on the Manage pages
   without a worker.
 
@@ -127,7 +126,7 @@ const { resume } = useProgress({ vodId, duration: () => vod.value?.duration ?? 0
 | `progress` | `LocalProgressStore` (browser storage) behind a `ProgressStore` interface. `AccountProgressStore` keeps it with the viewer's vexoul.net account instead (see below). |
 | `vue` | `createVods`, `useVods`, `useWatch`, `useChat`, `useProgress`. Import from `@vex/vods-core/vue`. |
 | `app` | `createVodsApp` and the site (`src/app/`): pages, components, the Manage dashboard, the router. Import from `@vex/vods-core/app`, with its styles from `@vex/vods-core/app.css`. |
-| `kit` | `setupVodsSite`, `vodsRoutes` and `installVodsSession` (the route table and the router's account and Manage wiring, with the site's own pages and account), and the app's logic without components or styles (`src/app/kit.ts`): `lib/`, `composables/`, the admin API (`AdminClient`, `admin`, `session`, `platform`) and the Manage editors' drafts, and the logic of the watch page, its timeline, merge and split, and the chapter editor (`useWatchView`, `useTimeline`, `useSplice`, `useChaptersDraft`) for a site to bind its own markup to. Import from `@vex/vods-core/kit`, alongside `vue`. Needs `@vex/platform-web`, never `@vex/ui`. |
+| `deep-field` | `deepField`, the Deep Field controls to pass as `createVodsApp({ ui })`, with `@vex/vods-core/deep-field.css`. |
 | `dev` | `adminMock`, the dev server's admin API. Import from `@vex/vods-core/dev` in a vite config. |
 
 ## Progress with an account
