@@ -28,17 +28,20 @@
 /* The pages' container queries (@container vods) run against Deep Field's shell. */
 .vx-site { container-name: vx-site vods; }
 
-/* shortcut: copied from vex-ui's base.css and components.css (vx-display… vx-btn); re-copy if vex-ui changes them. */
+/* Copies of vex-ui's rules (src/styles/base.css: vx-display… vx-ring; components.css: vx-input, vx-btn), as vods-*.
+   CSS can't reuse a rule under another name, so tests/app/deepField.test.ts checks each one against the installed
+   @vex/ui's style.css: a vex-ui bump that changes one fails it until it's re-copied here. */
 .vods-display {
   font-family: var(--vx-font-mono);
   font-weight: 500;
   line-height: 1.15;
   margin: 0;
-  background-image: linear-gradient(90deg, #5a5a5a, #fff 70%);
+  background-image: linear-gradient(90deg, var(--vx-heading-from), var(--vx-heading-to) 70%);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+.vods-display { padding-bottom: 0.08em; /* the clipped gradient cuts descenders otherwise */ }
 .vods-eyebrow {
   font-family: var(--vx-font-mono);
   font-size: 11px;
@@ -50,10 +53,26 @@
 .vods-mono { font-family: var(--vx-font-mono); }
 .vods-muted { color: var(--vx-muted); }
 .vods-panel {
-  background: var(--vx-glass-sheen), var(--vx-glass-clear);
+  position: relative;
+  background: var(--vx-glass-reflect), var(--vx-glass-sheen), var(--vx-glass-clear);
+  /* The reflection is pinned to the screen, so it lines up across panels, and drifts up at half the scroll speed
+     (VxSiteShell, under DeepFieldShell, sets --vx-scroll-y). */
+  background-attachment: fixed, scroll, scroll;
+  background-position: 0 calc(var(--vx-scroll-y, 0px) * -0.5), 0 0, 0 0;
+  background-size: 100% 3200px, auto, auto;
   border: 1px solid var(--vx-glass-line);
   border-radius: var(--vx-radius);
   box-shadow: var(--vx-glass-edge);
+}
+.vods-panel::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--vx-glass-rim);
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
 .vods-pop {
   background: var(--vx-pop);
@@ -92,17 +111,17 @@
   font: inherit;
   font-size: 13px;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--vx-ink);
   background: var(--vx-glass);
   border: 1px solid var(--vx-glass-line);
   border-radius: var(--vx-radius-sm);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--vx-glass-edge);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
   text-decoration: none;
 }
 .vods-btn:hover { background: var(--vx-hover); border-color: color-mix(in srgb, var(--vx-accent) 55%, transparent); color: var(--vx-ink); }
-.vods-btn.is-primary { background: var(--vx-accent); border-color: var(--vx-accent); color: var(--vx-bg); font-weight: 600; backdrop-filter: none; }
+.vods-btn.is-primary { background: var(--vx-accent); border-color: var(--vx-accent); color: var(--vx-bg); font-weight: 600; box-shadow: none; }
 .vods-btn.is-sm { height: var(--vx-ctl-sm); padding: 0 9px; font-size: 12px; gap: 5px; }

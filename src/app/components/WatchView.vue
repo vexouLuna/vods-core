@@ -358,7 +358,7 @@ watchEffect(() => learnGameColors(posterGames.value))
 .handoff-actions { align-items: center; justify-content: center; gap: 16px; flex-wrap: nowrap; }
 .handoff-btns { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .go { min-width: 12ch; justify-content: center; }
-.go.stop { background: var(--vods-warn); border-color: var(--vods-warn); color: var(--vods-bg); font-weight: 600; backdrop-filter: none; }
+.go.stop { background: var(--vods-warn); border-color: var(--vods-warn); color: var(--vods-bg); font-weight: 600; box-shadow: none; backdrop-filter: none; }
 .go.stop:hover { filter: brightness(1.08); color: var(--vods-bg); }
 
 .controls { border-top: 1px solid var(--vods-line); background: rgb(0 0 0 / 0.7); }
