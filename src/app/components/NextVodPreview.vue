@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // The VOD the end card suggests: its thumbnail (a link to it), title, when it was streamed and how long it is, and
 // where you'd pick it up.
-import { VxLink } from '@vex/ui'
 import { toClock, watchPath, type Vod } from '../../index'
 import { computed } from 'vue'
 import { useThumbnail } from '../composables/useThumbnail'
@@ -18,35 +17,35 @@ const { src, srcset, onLoad, onError } = useThumbnail(() => props.vod, 'hidpi')
 
 <template>
   <div class="next">
-    <VxLink :to="to" class="thumb" :aria-label="title" tabindex="-1">
-      <div class="vx-ring img">
+    <UiLink :to="to" class="thumb" :aria-label="title" tabindex="-1">
+      <div class="vods-ring img">
         <img v-if="src" :src="src" :srcset="srcset" alt="" decoding="async" @load="onLoad" @error="onError" />
         <NoThumbnail v-else />
       </div>
-      <span class="dur vx-mono">{{ toClock(vod.duration) }}</span>
+      <span class="dur vods-mono">{{ toClock(vod.duration) }}</span>
       <span v-if="watched" class="watched" :style="{ width: `${watched * 100}%` }"></span>
-    </VxLink>
+    </UiLink>
     <div class="text">
-      <VxLink :to="to" class="title" :title="title">{{ title }}</VxLink>
-      <span class="vx-muted sub">{{ date }}</span>
-      <span v-if="t != null" class="vx-mono sub at">▶ from {{ toClock(t) }}</span>
+      <UiLink :to="to" class="title" :title="title">{{ title }}</UiLink>
+      <span class="vods-muted sub">{{ date }}</span>
+      <span v-if="t != null" class="vods-mono sub at">▶ from {{ toClock(t) }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
 .next { display: flex; gap: 12px; align-items: center; min-width: 0; text-align: left; }
-.thumb { position: relative; flex: none; width: 160px; display: block; border-radius: var(--vx-radius-sm); overflow: hidden; }
+.thumb { position: relative; flex: none; width: 160px; display: block; border-radius: var(--vods-radius-sm); overflow: hidden; }
 .img { aspect-ratio: 16 / 9; overflow: hidden; }
 .img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .dur { position: absolute; right: 4px; bottom: 6px; font-size: 11px; padding: 1px 4px; border-radius: 3px; background: rgb(0 0 0 / 0.75); color: #fff; }
-.watched { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--vx-accent); }
+.watched { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--vods-accent); }
 .text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .title { font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; color: inherit; }
 .sub { font-size: 12px; }
-.at { color: var(--vx-accent); }
+.at { color: var(--vods-accent); }
 
-@container vx-site (max-width: 420px) {
+@container vods (max-width: 420px) {
   .thumb { width: 120px; }
 }
 </style>

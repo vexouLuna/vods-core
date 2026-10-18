@@ -1,6 +1,5 @@
 <script setup lang="ts">
 // A VOD time as text ("1:02:03", "1h2m3s" or seconds). Commits on blur / Enter; unreadable text is flagged, not kept.
-import { VxInput } from '@vex/ui'
 import { ref, watch } from 'vue'
 import { formatTime, parseTime } from './edits'
 
@@ -31,7 +30,7 @@ function commit() {
 </script>
 
 <template>
-  <VxInput
+  <UiInput
     :id="id"
     v-model="text"
     class="time"

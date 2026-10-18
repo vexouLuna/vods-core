@@ -1,6 +1,6 @@
 // The vods site itself: its pages, the Manage dashboard, the router and the wiring between them. A site is this plus
-// its own config and branding: its main.ts calls createVodsApp() and mounts what it returns.
-import { VxBuild, useToast } from '@vex/ui'
+// its own config, branding and look (`ui`): its main.ts calls createVodsApp() and mounts what it returns.
+import { useToast } from '@vex/ui/utils'
 import { createAccount } from '@vex/ui/account'
 import { twitchUserLookup } from '@vex/platform-web/chat'
 import { createPlatformUi } from '@vex/platform-web/vue'
@@ -10,23 +10,29 @@ import { createRouter, createWebHistory, RouterLink, type Router } from 'vue-rou
 import type { VodsConfig } from '../config'
 import { createVods } from '../vue'
 
-import '@vex/ui/platform.css'
-import './styles/tags.css'
+import './styles/tokens.css'
 
 import App from './App.vue'
 import { configureArt, type VodsArt } from './art'
 import { setupVodsSite } from './kit'
 import { installVodsSession, vodsRoutes } from './router'
 import type { VodsSite } from './site'
+import { installUi, type VodsUi } from './ui'
 
 export { DEFAULT_TAGS, site, type TagStyle, type VodsSite } from './site'
 export { art, type VodsArt } from './art'
+export type { UiShellComponent, VodsUi, VodsUiComponents } from './ui'
 
 export interface VodsAppOptions {
   /** The channel and its archive API (`defineVodsConfig`). */
   config: VodsConfig
   /** What tells this site from the other vods sites: its network id, name, Twitch link, and tags. */
   site: Partial<VodsSite> & Pick<VodsSite, 'id' | 'name' | 'twitchUrl'>
+  /**
+   * The site's look: the controls the pages are built from (registered as Ui*) and its shell. `deepField` from
+   * `@vex/vods-core/deep-field` for a Deep Field site, with its `deep-field.css`.
+   */
+  ui: VodsUi
   /** The worker's admin API, for the Manage pages. Default `/backend-admin` on the same origin. */
   adminBase?: string
   /**
@@ -43,7 +49,7 @@ export interface VodsAppOptions {
   commit?: string
   /**
    * The site's own art for the app's stand-ins (a VOD with no thumbnail, the Twitch mark). Unset, plain placeholders:
-   * e.g. `{ noThumbnail: VxNoThumbnail, twitchGlyph: VxTwitchGlyph }` from vex-ui.
+   * e.g. vex-ui's `{ noThumbnail: VxNoThumbnail, twitchGlyph: VxTwitchGlyph }`.
    */
   art?: VodsArt
   /**
@@ -93,8 +99,9 @@ export function createVodsApp(options: VodsAppOptions): VodsApp {
   const { progress } = installVodsSession(router, account, { adminClientId: options.adminClientId })
 
   const app = createApp(App)
+  installUi(app, options.ui, options.commit ?? '')
+  app
     .use(router)
-    .use(VxBuild, { commit: options.commit ?? '' })
     .use(account)
     .use(createVods(options.config, { progress }))
     // The shared jobs, audit and chat-line components: where a job or a subject (vod:<id>, job:<id>) lives, and toasts.

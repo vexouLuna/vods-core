@@ -2,7 +2,7 @@
 // /vods/:id, /live/:id and /youtube/:id. `?t=` is VOD time (wins), `?part=` starts a part from its beginning;
 // with neither, playback resumes where this browser left off. A VOD merged into another one, or replaced by a
 // synthetic VOD (a merge or split that keeps the original), sends you to the same moment in that one.
-import { useToast, VxButton, VxCallout, VxEmptyState, VxSkeleton } from '@vex/ui'
+import { useToast } from '@vex/ui/utils'
 import { isFinished, isResumable, parseTimestamp, redirectTarget, resumeProgress, toClock, toHMS, type Position, type UploadType } from '../../index'
 import { useVodsContext, useWatch } from '../../vue/index'
 import { computed, shallowRef, watch, watchEffect } from 'vue'
@@ -107,28 +107,28 @@ watchEffect(() => {
     :share-url="shareUrl"
   />
   <VodsShell v-else>
-    <VxCallout v-if="error" tone="error" title="Couldn't load this VOD">
+    <UiCallout v-if="error" tone="error" title="Couldn't load this VOD">
       {{ error.message }}
-      <template #actions><VxButton size="sm" @click="reload">Try again</VxButton></template>
-    </VxCallout>
-    <VxEmptyState v-else-if="notFound" code="404" title="No VOD with that id" text="It may never have been archived, or the link is mistyped.">
-      <template #actions><VxButton to="/vods" variant="primary">Browse VODs</VxButton></template>
-    </VxEmptyState>
-    <VxEmptyState
+      <template #actions><UiButton size="sm" @click="reload">Try again</UiButton></template>
+    </UiCallout>
+    <UiEmptyState v-else-if="notFound" code="404" title="No VOD with that id" text="It may never have been archived, or the link is mistyped.">
+      <template #actions><UiButton to="/vods" variant="primary">Browse VODs</UiButton></template>
+    </UiEmptyState>
+    <UiEmptyState
       v-else-if="vod && timeline?.isEmpty && !moved"
       title="Not on YouTube yet"
       :text="`“${vod.title}” has no ${uploadType === 'live' ? 'live' : 'VOD'} uploads yet. Chat replay needs a video to follow.`"
     >
       <template #actions>
-        <VxButton v-if="other" :to="other" variant="primary">Watch the other upload</VxButton>
-        <VxButton :href="site.twitchUrl" external>Twitch channel</VxButton>
-        <VxButton to="/vods">All VODs</VxButton>
+        <UiButton v-if="other" :to="other" variant="primary">Watch the other upload</UiButton>
+        <UiButton :href="site.twitchUrl" external>Twitch channel</UiButton>
+        <UiButton to="/vods">All VODs</UiButton>
       </template>
-    </VxEmptyState>
+    </UiEmptyState>
     <div v-else-if="loading || !start" class="loading" aria-busy="true">
-      <VxSkeleton ratio="16 / 9" h="auto" />
-      <VxSkeleton w="60%" />
-      <VxSkeleton w="30%" h="0.8em" />
+      <UiSkeleton ratio="16 / 9" h="auto" />
+      <UiSkeleton w="60%" />
+      <UiSkeleton w="30%" h="0.8em" />
     </div>
   </VodsShell>
 </template>

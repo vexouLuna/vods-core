@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The header's account control, wired to the shared sign-in (@vex/ui/account, set up by createVodsApp()). A dashboard session signed in
 // with the admin password (no account) shows as "admin". Signing out ends both.
-import { VxAccountMenu, VxMenuItem, type AccountUser } from '@vex/ui'
+import type { AccountUser } from '@vex/ui'
 import { useAccount } from '@vex/ui/account'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -29,7 +29,7 @@ async function signOut() {
 </script>
 
 <template>
-  <VxAccountMenu
+  <UiAccountMenu
     :user="user"
     :note="note"
     :disabled="!account.enabled"
@@ -37,8 +37,8 @@ async function signOut() {
     @sign-out="signOut"
   >
     <template #default="{ close }">
-      <VxMenuItem v-if="session.authenticated" to="/manage" @click="close()">Manage</VxMenuItem>
+      <UiMenuItem v-if="session.authenticated" to="/manage" @click="close()">Manage</UiMenuItem>
       <slot :close="close"></slot>
     </template>
-  </VxAccountMenu>
+  </UiAccountMenu>
 </template>
