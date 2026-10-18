@@ -16,6 +16,7 @@ import TickText from './TickText.vue'
 import WatchTimeline from './WatchTimeline.vue'
 import { useWatchView } from '../composables/useWatchView'
 import { gamesWithArt } from '../lib/art'
+import { kindLabel } from '../lib/listQuery'
 import VodsShell from './VodsShell.vue'
 import ManageVodButton from './ManageVodButton.vue'
 
@@ -37,12 +38,14 @@ const props = withDefaults(
     download?: DriveFile | null
     /** Save the watch position in this browser. */
     track?: boolean
+    /** The other version of a synthetic VOD with a compiled upload (its segments, or that one file). */
+    switchTo?: { label: string; to: string } | null
   }>(),
-  { download: null, track: true, segments: null, sources: () => [] },
+  { download: null, track: true, segments: null, sources: () => [], switchTo: null },
 )
 
 const toast = useToast()
-// The page's logic is useWatchView's (kit). Its `time` changes on every tick and is never read here: the clock, the
+// The page's logic is useWatchView's. Its `time` changes on every tick and is never read here: the clock, the
 // time into the part and the timeline bar read it through getters, so this template doesn't re-render each tick.
 const {
   chat,
@@ -232,6 +235,7 @@ watchEffect(() => learnGameColors(posterGames.value))
               </div>
             </div>
 
+            <UiButton v-if="switchTo" size="sm" variant="ghost" :to="switchTo.to">{{ switchTo.label }}</UiButton>
             <slot name="parts" :part-index="partIndex">
               <UiPopover prefer="up" align="right" width="min(320px, calc(100vw - 24px))" :cap="360">
                 <template #trigger="{ toggle, open }">
@@ -280,7 +284,7 @@ watchEffect(() => learnGameColors(posterGames.value))
                     v-for="a in appearsIn"
                     :key="a.id"
                     :to="watchPath({ id: a.id, uploads: [] })"
-                    :sub="a.tags.includes('compilation') ? 'playthrough' : undefined"
+                    :sub="kindLabel(a.tags)"
                     @click="close()"
                   >
                     {{ a.title || a.id }}

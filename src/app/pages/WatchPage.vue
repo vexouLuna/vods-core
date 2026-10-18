@@ -2,7 +2,8 @@
 // /vods/:id, /live/:id and /youtube/:id. `?t=` is VOD time (wins), `?part=` starts a part from its beginning;
 // with neither, playback resumes where this browser left off. A VOD merged into another one, or replaced by a
 // synthetic VOD (a merge or split that keeps the original), sends you to the same moment in that one. A VOD cut in
-// full (every chapter cut from the YouTube uploads) gets its own page saying so, with what was cut.
+// full (every chapter cut from the YouTube uploads) gets its own page saying so, with what was cut. A synthetic VOD
+// with a compiled upload plays the version `?play=` names (segments or compiled), else the site's default.
 import { useToast } from '@vex/ui/utils'
 import { boxArt, isFinished, isResumable, parseTimestamp, redirectTarget, resumeProgress, toClock, toHMS, type Position, type UploadType } from '../../index'
 import { useVodsContext, useWatch } from '../../vue/index'
@@ -13,15 +14,27 @@ import { site } from '../site'
 import { cutNote } from '../lib/cuts'
 import VodsShell from '../components/VodsShell.vue'
 import ManageVodButton from '../components/ManageVodButton.vue'
+import { siteOptions, type PlayDefault } from '../lib/siteOptions'
 
 const props = defineProps<{ id: string; type: UploadType | null }>()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const { progress } = useVodsContext()
-const { vod, sources, timeline, segments, uploadType, download, loading, notFound, error, reload } = useWatch(
+const play = computed<PlayDefault>(() =>
+  route.query.play === 'compiled' || route.query.play === 'segments' ? route.query.play : siteOptions.value.playDefault,
+)
+const { vod, sources, timeline, segments, uploadType, hasCompiled, download, loading, notFound, error, reload } = useWatch(
   () => props.id,
   () => props.type,
+  play,
+)
+const switchTo = computed(() =>
+  hasCompiled.value
+    ? play.value === 'compiled'
+      ? { label: 'Play the segments', to: `${route.path}?play=segments` }
+      : { label: 'Play the compiled file', to: `${route.path}?play=compiled` }
+    : null,
 )
 
 // Old links to a VOD that now plays inside another one: the later half of a merged broadcast, or an original a
@@ -114,6 +127,7 @@ watchEffect(() => {
     :start="start"
     :download="download"
     :share-url="shareUrl"
+    :switch-to="switchTo"
   />
   <VodsShell v-else>
     <UiCallout v-if="error" tone="error" title="Couldn't load this VOD">

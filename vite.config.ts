@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [vue()],
   build: {
     lib: {
-      entry: { index: 'src/index.ts', vue: 'src/vue/index.ts', app: 'src/app/index.ts', kit: 'src/app/kit.ts', 'deep-field': 'src/app/deep-field/index.ts', dev: 'src/dev/adminMock.ts' },
+      entry: { index: 'src/index.ts', vue: 'src/vue/index.ts', app: 'src/app/index.ts', 'deep-field': 'src/app/deep-field/index.ts', dev: 'src/dev/adminMock.ts' },
       formats: ['es'],
       // The app's styles (its components and styles/tokens.css), as @vex/vods-core/app.css. deep-field.css ships from src/.
       cssFileName: 'app',

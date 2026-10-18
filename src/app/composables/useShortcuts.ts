@@ -8,11 +8,13 @@ export interface Shortcut {
   run: (e: KeyboardEvent) => void
 }
 
-function typing(e: KeyboardEvent): boolean {
+/** Whether the key belongs to the focused control rather than the page. */
+export function typing(e: KeyboardEvent): boolean {
   const t = e.target as HTMLElement | null
   if (!t) return false
-  // Space and Enter on a focused button or link belong to that control.
-  if ((e.key === ' ' || e.key === 'Enter') && t.closest('button, a, [role="slider"], [role="switch"]')) return true
+  // Space and Enter on a focused button or link belong to that control. A slider (the timeline) takes only arrows
+  // and Home/End, so Space still plays and pauses after a click on the timeline.
+  if ((e.key === ' ' || e.key === 'Enter') && t.closest('button, a, [role="switch"]')) return true
   return t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName)
 }
 

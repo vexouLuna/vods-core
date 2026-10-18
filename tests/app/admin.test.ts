@@ -48,12 +48,14 @@ describe('AdminClient', () => {
     await c.createSynthetic({ id: 'elden-ring', tags: ['compilation'], segments: [{ vod_id: '1', start: 5 }] })
     await c.updateSynthetic('elden ring', { title: 'x' })
     await c.playthroughCandidates('512953')
+    await c.syntheticDmca('elden ring')
     const sent = fetch.mock.calls.map(([url, init]) => [url, init!.method, init!.body ?? null])
     expect(sent).toEqual([
       ['/api/v2/vods?synthetic=true&cursor=abc&limit=30', 'GET', null],
       ['/api/v2/synthetic', 'POST', JSON.stringify({ id: 'elden-ring', tags: ['compilation'], segments: [{ vod_id: '1', start: 5 }] })],
       ['/api/v2/synthetic/elden%20ring', 'PUT', JSON.stringify({ title: 'x' })],
       ['/api/v2/playthrough-candidates?game_id=512953', 'GET', null],
+      ['/api/v2/synthetic/elden%20ring/dmca', 'GET', null],
     ])
   })
 

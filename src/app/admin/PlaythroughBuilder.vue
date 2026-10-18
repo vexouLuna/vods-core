@@ -9,7 +9,7 @@ import type { GameValue } from './edits'
 import GameSearch from './GameSearch.vue'
 import { admin } from './session'
 
-const emit = defineEmits<{ add: [windows: PlaythroughWindow[], game: string | null] }>()
+const emit = defineEmits<{ add: [windows: PlaythroughWindow[], game: string | null, gameId: string | null] }>()
 
 const game = ref<GameValue>({ name: null, gameId: null, imageTemplate: null })
 const windows = ref<PlaythroughWindow[] | null>(null)
@@ -61,7 +61,7 @@ const total = computed(() => chosen.value.reduce((s, w) => s + w.length, 0))
         </li>
       </ul>
       <div class="row">
-        <UiButton variant="primary" :disabled="!chosen.length" @click="emit('add', chosen, game.name)">
+        <UiButton variant="primary" :disabled="!chosen.length" @click="emit('add', chosen, game.name, game.gameId)">
           Add {{ chosen.length }} {{ chosen.length === 1 ? 'window' : 'windows' }} ({{ toClock(total) }})
         </UiButton>
       </div>

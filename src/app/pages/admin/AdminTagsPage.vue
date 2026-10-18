@@ -180,6 +180,15 @@ onMounted(() => {
               <TagColorInput :id="id" v-model="d.color" :swatches="SWATCHES" :invalid="!!err(d, 'color')" placeholder="var(--vods-accent)" :pick-label="`Pick a color for ${d.name || 'the tag'}`" />
             </template>
           </UiField>
+          <UiField label="Page" :error="err(d, 'page')" help="Its own list page and header link, e.g. playthroughs. Empty: none.">
+            <template #default="{ id }"><UiInput :id="id" v-model="d.page" mono :invalid="!!err(d, 'page')" placeholder="highlights" /></template>
+          </UiField>
+          <UiField v-if="d.page.trim()" label="Page title" :error="err(d, 'pageLabel')" help="The page's heading and header link.">
+            <template #default="{ id }"><UiInput :id="id" v-model="d.pageLabel" :invalid="!!err(d, 'pageLabel')" placeholder="Highlights" /></template>
+          </UiField>
+          <div class="drawn">
+            <UiSwitch v-model="d.homeCard" :label="'Can be a home page card'" />
+          </div>
           <div class="drawn">
             <UiSwitch v-model="d.drawn" :label="'Drawn on the thumbnail'" />
           </div>
