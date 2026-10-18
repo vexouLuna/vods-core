@@ -5,6 +5,7 @@
 import { toClock, type PartStatus, type PlayableTimeline, type Span } from '../../index'
 import { unplayable } from '../lib/cuts'
 import { useTimeline } from '../composables/useTimeline'
+import { art } from '../art'
 import SnailMarker from './SnailMarker.vue'
 
 const props = defineProps<{
@@ -118,7 +119,7 @@ const {
       </span>
       <span class="rest" :style="{ left: pct(shown) }"></span>
       <span class="played" :style="{ width: pct(shown) }"></span>
-      <SnailMarker class="head" :mode="snailMode" :rate="rate" :shell="shownColor" :style="{ left: pct(shown) }" />
+      <component :is="art.playhead ?? SnailMarker" class="head" :mode="snailMode" :rate="rate" :shell="shownColor" :style="{ left: pct(shown) }" />
       <span
         v-if="hover"
         ref="tip"

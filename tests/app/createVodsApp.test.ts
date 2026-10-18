@@ -64,6 +64,7 @@ describe('createVodsApp', () => {
     createVodsApp({ ...opts, art: { noThumbnail: NoThumb } })
     expect(art.noThumbnail).toBe(NoThumb)
     expect(art.twitchGlyph).toBeUndefined()
+    expect(art.playhead).toBeUndefined()
     createVodsApp(opts)
     expect(art.noThumbnail).toBeUndefined()
   })
