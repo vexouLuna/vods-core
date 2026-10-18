@@ -49,6 +49,7 @@ export interface RawTag {
   shape: string | null
   width: number | null
   height: number | null
+  rotate: number | null
   text: string | null
   textColor: string | null
   textSize: number | null
@@ -67,6 +68,7 @@ export const TAG_TEXT_MAX = 24
 export const TAG_TEXT_SIZE = { min: 6, max: 48 }
 export const TAG_TEXT_NUDGE = { min: -100, max: 100 }
 export const TAG_TEXT_ROTATE = { min: -180, max: 180 }
+export const TAG_ROTATE = { min: -180, max: 180 }
 export const TAG_PATTERNS = ['stripes', 'checks'] as const
 export type TagPattern = (typeof TAG_PATTERNS)[number]
 export const TAG_PATTERN_SIZE = { min: 2, max: 40 }
@@ -89,6 +91,7 @@ export function fromRaw(raw: RawTag[], apiBase: string): Record<string, TagStyle
       shape: typeof t.shape === 'string' && /^v1\/site\/tags\/[\w.?=&-]+$/.test(t.shape) ? `${apiBase.replace(/\/+$/, '')}/${t.shape}` : null,
       width: size(t.width),
       height: size(t.height),
+      rotate: within(t.rotate, TAG_ROTATE),
       text: typeof t.text === 'string' && t.text.trim() ? t.text.trim().slice(0, TAG_TEXT_MAX) : undefined,
       textColor: color(t.textColor),
       textSize: within(t.textSize, TAG_TEXT_SIZE),

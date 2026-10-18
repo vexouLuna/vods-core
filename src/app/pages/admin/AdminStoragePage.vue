@@ -43,6 +43,16 @@ const folders = computed(() =>
   (view.value?.folders ?? []).filter((f) => (area.value === 'all' || f.area === area.value) && (!staleOnly.value || f.stale)),
 )
 const staleBytes = computed(() => (view.value?.folders ?? []).filter((f) => f.stale).reduce((n, f) => n + f.bytes, 0))
+const archiveBytes = computed(() => (view.value?.folders ?? []).filter((f) => !f.stale).reduce((n, f) => n + f.bytes, 0))
+/** The used part of the disk split into the archive's own folders, stale ones and anything else, as % of the disk. */
+const usage = computed(() => {
+  const d = disk.value
+  if (!d || d.total <= 0) return null
+  const pct = (n: number) => `${(Math.max(0, n) / d.total) * 100}%`
+  const archive = Math.min(archiveBytes.value, d.used)
+  const stale = Math.min(staleBytes.value, d.used - archive)
+  return { archive: pct(archive), stale: pct(stale), other: pct(d.used - archive - stale) }
+})
 const staleCount = computed(() => (view.value?.folders ?? []).filter((f) => f.stale).length)
 
 const columns: TableColumn[] = [
@@ -120,8 +130,21 @@ onMounted(() => {
           <UiButton size="sm" :loading="loading" @click="load(true)">Refresh</UiButton>
         </div>
         <template v-if="disk">
-          <UiProgress :value="disk.used" :max="disk.total" :label="`${bytes(disk.used)} of ${bytes(disk.total)} used`" />
+          <div
+            class="usage"
+            role="img"
+            :aria-label="`${bytes(disk.used)} of ${bytes(disk.total)} used: ${bytes(archiveBytes)} archive, ${bytes(staleBytes)} stale`"
+          >
+            <template v-if="usage">
+              <span class="seg is-archive" :style="{ width: usage.archive }"></span>
+              <span class="seg is-stale" :style="{ width: usage.stale }"></span>
+              <span class="seg is-other" :style="{ width: usage.other }"></span>
+            </template>
+          </div>
           <p class="facts vods-mono small">
+            <span><i class="key is-archive"></i>{{ bytes(archiveBytes) }} archive</span>
+            <span v-if="staleCount"><i class="key is-stale"></i>{{ bytes(staleBytes) }} stale</span>
+            <span><i class="key is-other"></i>{{ bytes(Math.max(0, disk.used - archiveBytes - staleBytes)) }} other</span>
             <span>{{ bytes(disk.used) }} used</span>
             <span>{{ bytes(disk.free) }} free</span>
             <span>{{ bytes(disk.total) }} total</span>
@@ -209,6 +232,12 @@ h2 { margin: 0; }
 .spacer { flex: 1; }
 .small { font-size: 12px; }
 .facts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 0 0; }
+.usage { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--vods-surface); border: 1px solid var(--vods-line); }
+.seg { display: block; height: 100%; }
+.is-archive { background: var(--vods-accent); }
+.is-stale { background: var(--vods-warn, var(--vods-bad)); }
+.is-other { background: var(--vods-muted); }
+.key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .stale-sum { color: var(--vods-warn, var(--vods-accent)); }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 10px; }
 .table { overflow-x: auto; }

@@ -13,7 +13,7 @@ import TagColorInput from '../../admin/TagColorInput.vue'
 import { admin } from '../../admin/session'
 import { blankDraft, draftsOf, previewOf, rawOf, tagChanges, type TagDraft, type TagField } from '../../admin/tags'
 import TagMark from '../../components/TagMark.vue'
-import { loadTagConfig, TAG_PATTERN_SIZE, TAG_SIZE, TAG_TEXT_MAX, TAG_TEXT_NUDGE, TAG_TEXT_ROTATE, TAG_TEXT_SIZE, type TagPattern } from '../../lib/vodTags'
+import { loadTagConfig, TAG_PATTERN_SIZE, TAG_SIZE, TAG_TEXT_MAX, TAG_TEXT_NUDGE, TAG_TEXT_ROTATE, TAG_TEXT_SIZE, TAG_ROTATE, type TagPattern } from '../../lib/vodTags'
 import { site, vodsConfig } from '../../site'
 
 const toast = useToast()
@@ -189,6 +189,9 @@ onMounted(() => {
             </UiField>
             <UiField label="Height" :error="err(d, 'height')" :help="`px; empty: 22`">
               <template #default="{ id }"><UiInput :id="id" v-model="d.height" type="number" mono :invalid="!!err(d, 'height')" placeholder="22" /></template>
+            </UiField>
+            <UiField label="Tag rotate" :error="err(d, 'rotate')" :help="`degrees, ${TAG_ROTATE.min} to ${TAG_ROTATE.max}; + is clockwise; empty: -4`">
+              <template #default="{ id }"><UiInput :id="id" v-model="d.rotate" type="number" mono :invalid="!!err(d, 'rotate')" placeholder="-4" /></template>
             </UiField>
             <div class="shape">
               <span class="vods-eyebrow">Shape</span>
