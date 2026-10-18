@@ -1,5 +1,12 @@
 # @vex/vods-core
 
+## 0.36.1
+
+### Patch Changes
+
+- c9464b8: Deep Field panels, headings and buttons match vex-ui v0.27.0 again: panels get the window reflection and the lit rim, headings take the accent-tinted gradient, and buttons have the glass edge instead of a blur. A test now checks each copied rule against the installed @vex/ui, so a vex-ui change can't drift unnoticed. Solid buttons ("See all", "Stop timer") drop the glass edge.
+- 383fef1: Manage is only in the account menu now, with the Twitch mark beside it, as on dtp.vexoul.net: the header's Manage button is gone. An admin signed in with the dashboard password alone still gets the menu, as "admin", with Manage in it. The Twitch mark now sits inline beside its text in every site's controls.
+
 ## 0.36.0
 
 ### Minor Changes
