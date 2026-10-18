@@ -1,5 +1,12 @@
 # @vex/vods-core
 
+## 0.36.3
+
+### Patch Changes
+
+- badb3e0: Manage: a synthetic VOD's page now says "Hide it, or change its chapters and the like, on its VOD page." in place of a sentence that didn't parse.
+- 84659df: Deep Field: `--vods-accent` (the timeline snail, the "new" tag and the rest) follows the site's accent again instead of vex-ui's default accent.
+
 ## 0.36.2
 
 ### Patch Changes
