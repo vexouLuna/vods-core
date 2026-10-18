@@ -17,6 +17,7 @@ import WatchTimeline from './WatchTimeline.vue'
 import { useWatchView } from '../composables/useWatchView'
 import { gamesWithArt } from '../lib/art'
 import VodsShell from './VodsShell.vue'
+import ManageVodButton from './ManageVodButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -165,6 +166,7 @@ watchEffect(() => learnGameColors(posterGames.value))
             </div>
           </div>
           <UiButton v-if="!chat.open" class="chat-reopen" icon label="Show chat" @click="chat.open = true">⇤</UiButton>
+          <ManageVodButton :id="vod.id" class="manage" :class="{ 'by-reopen': !chat.open }" />
         </div>
 
         <button
@@ -337,6 +339,10 @@ watchEffect(() => learnGameColors(posterGames.value))
 .video-box { position: relative; width: min(100cqw, 100cqh * 16 / 9); aspect-ratio: 16 / 9; }
 .yt, .yt :deep(iframe) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .chat-reopen { position: absolute; right: 8px; top: 8px; }
+/* Over the black above the player's own top-right icons; beside "show chat" when that's there. */
+.manage { right: 8px; top: 8px; opacity: 0.7; }
+.manage:hover, .manage:focus-visible { opacity: 1; }
+.manage.by-reopen { right: 48px; }
 
 .unavail { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; background: rgb(0 0 0 / 0.75); }
 /* The player's own cards (next stream, end of the VOD) sit straight on the black where the video was, no panel. */

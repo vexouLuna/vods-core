@@ -1,8 +1,8 @@
 import { ProblemError } from '@vex/platform-web'
-import type { GamePlayed, Vod, VodPage } from '../types'
+import type { GamePlayed, LiveStatus, Vod, VodPage } from '../types'
 import { normalizeGamePlayed, normalizeVod } from './normalize'
 import { toQueryString, vodListQuery, type QueryObject, type VodListOptions } from './query'
-import type { ChatSource, Page, RawBadges, RawCommentPage, RawEmoteSets, RawGamePlayed, RawStream, RawThirdPartyEmotes, RawVod } from './types'
+import type { ChatSource, Page, RawBadges, RawCommentPage, RawEmoteSets, RawGamePlayed, RawStatus, RawStream, RawThirdPartyEmotes, RawVod } from './types'
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>
 
@@ -65,6 +65,20 @@ export class ArchiveClient {
   async liveStream(signal?: AbortSignal): Promise<RawStream | null> {
     const page = await this.find<RawStream>('streams', { is_live: true, $limit: 1 }, signal)
     return page.data[0] ?? null
+  }
+
+  /** The live stream, with its title, game and VOD, or null when the channel is offline (`/v1/status`). */
+  async liveStatus(signal?: AbortSignal): Promise<LiveStatus | null> {
+    const { live, stream, vod } = await this.get<RawStatus>('/v1/status', signal)
+    if (!live || !stream) return null
+    const game = stream.game?.name ? { name: stream.game.name, image: stream.game.imageTemplate ?? stream.game.image ?? null } : null
+    return {
+      id: stream.id,
+      startedAt: stream.started_at ? new Date(stream.started_at) : null,
+      title: stream.title ?? null,
+      game,
+      vod: vod ? normalizeVod(vod) : null,
+    }
   }
 
   /** Emote sets saved for a VOD, or null when none were saved. */

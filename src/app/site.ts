@@ -17,6 +17,8 @@ export interface TagStyle {
   /** A drawn tag's size in px. Default 62 × 22. */
   width?: number
   height?: number
+  /** Turns a drawn tag, in degrees, clockwise (−180 to 180). Unset: −4, a slight tilt. */
+  rotate?: number
   /** Text written on a drawn tag (not the label, which stays for chips and screen readers). Unset: none. */
   text?: string
   /** The text's color (any CSS color) and size in px. Unset: the page background's color, and half the height. */

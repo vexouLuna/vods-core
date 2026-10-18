@@ -253,6 +253,25 @@ async function publicJson(api: string, path: string): Promise<unknown> {
   return res.json()
 }
 
+async function mockLive(api: string, res: ServerResponse) {
+  try {
+    const { vod } = (await publicJson(api, '/v1/status')) as { vod: Json | null }
+    const startedAt = new Date(Date.now() - 83 * 60_000).toISOString()
+    const game = { name: 'Celeste', gameId: '504461', image: null, imageTemplate: 'https://static-cdn.jtvnw.net/ttv-boxart/504461-{width}x{height}.jpg' }
+    send(res, 200, { live: true, stream: { id: '1', started_at: startedAt, title: 'Mock stream: strawberries all the way down', game }, vod })
+  } catch (e) {
+    send(res, 502, { name: 'BadGateway', message: String(e), code: 502 })
+  }
+}
+async function mockFullyCut(api: string, id: string, res: ServerResponse) {
+  try {
+    const vod = (await publicJson(api, `/vods/${encodeURIComponent(id)}`)) as Json
+    send(res, 200, { ...vod, chapters: ((vod.chapters ?? []) as Json[]).map((c) => ({ ...c, restricted: true })) })
+  } catch (e) {
+    send(res, 404, { name: 'NotFound', message: String(e), code: 404 })
+  }
+}
+
 /** The list's `firstLiveAt` / `lastLiveAt` filters (vexouLuna/twitch-archive#57) until the public API has them: the
  * rest of the query from the public API, unpaged, then filtered and paged here. A regular VOD's are its createdAt. */
 async function liveFiltered(api: string, rawUrl: string, res: ServerResponse) {
@@ -663,16 +682,16 @@ function checkSetting(key: string, v: unknown): string | null {
 
 // ---- site tags (docs/admin-api.md, "Site tags"); MOCK_SITE_TAGS=no answers 404, like an archive without them ----
 interface SiteTag {
-  name: string; label: string; drawn: boolean; color: string | null; width: number | null; height: number | null
+  name: string; label: string; drawn: boolean; color: string | null; width: number | null; height: number | null; rotate: number | null
   text: string | null; textColor: string | null; textSize: number | null; textX: number | null; textY: number | null; textRotate: number | null
   pattern: 'stripes' | 'checks' | null; patternColor: string | null; patternSize: number | null
 }
 const NO_TEXT = { text: null, textColor: null, textSize: null, textX: null, textY: null, textRotate: null, pattern: null, patternColor: null, patternSize: null }
 let siteTags: SiteTag[] = [
-  { name: 'new', label: 'new', drawn: true, color: 'var(--vods-tag-new)', width: null, height: null, ...NO_TEXT },
-  { name: 'updated', label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', width: null, height: null, ...NO_TEXT },
-  { name: 'complete', label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', width: null, height: null, ...NO_TEXT },
-  { name: 'compilation', label: 'playthrough', drawn: false, color: null, width: null, height: null, ...NO_TEXT },
+  { name: 'new', label: 'new', drawn: true, color: 'var(--vods-tag-new)', width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'updated', label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'complete', label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'compilation', label: 'playthrough', drawn: false, color: null, width: null, height: null, rotate: null, ...NO_TEXT },
 ]
 /** Cleaned SVGs by tag name, with the hash that versions their URL. */
 const tagShapes = new Map<string, { svg: string; v: string }>()
@@ -699,6 +718,7 @@ function checkTags(list: unknown): SiteTag[] | string {
     for (const k of ['width', 'height'] as const) {
       if (t[k] != null && !(Number.isInteger(t[k]) && t[k] >= 8 && t[k] <= 200)) return `${t.name}: ${k} must be 8–200`
     }
+    if (t.rotate != null && !(Number.isInteger(t.rotate) && t.rotate >= -180 && t.rotate <= 180)) return `${t.name}: rotate must be -180 to 180`
     const text = t.text == null ? null : typeof t.text === 'string' ? t.text.trim() : undefined
     if (text === undefined || text === '' || (text && text.length > 24)) return `${t.name}: text must be 1–24 characters, or null`
     if (t.textColor != null && (typeof t.textColor !== 'string' || !isTagColor(t.textColor))) return `${t.name}: textColor is not a color the site takes`
@@ -712,7 +732,7 @@ function checkTags(list: unknown): SiteTag[] | string {
     if (t.textRotate != null && !(Number.isInteger(t.textRotate) && t.textRotate >= -180 && t.textRotate <= 180)) return `${t.name}: textRotate must be -180 to 180`
     const pattern = t.pattern ? { pattern: t.pattern, patternColor: t.patternColor ?? null, patternSize: t.patternSize ?? null } : { pattern: null, patternColor: null, patternSize: null }
     const style = text ? { textColor: t.textColor ?? null, textSize: t.textSize ?? null, textX: t.textX ?? null, textY: t.textY ?? null, textRotate: t.textRotate ?? null } : NO_TEXT
-    out.push({ name: t.name, label: t.label.trim(), drawn: t.drawn, color: t.color ?? null, width: t.width ?? null, height: t.height ?? null, ...style, text, ...pattern })
+    out.push({ name: t.name, label: t.label.trim(), drawn: t.drawn, color: t.color ?? null, width: t.width ?? null, height: t.height ?? null, rotate: t.rotate ?? null, ...style, text, ...pattern })
   }
   const gone = ['new', 'updated', 'compilation'].find((name) => !seen.has(name))
   if (gone) return `${gone} is set automatically and can't be removed`
@@ -828,6 +848,10 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           })
           return res.end(sh.svg)
         }
+        // MOCK_LIVE=yes: the channel is live, recording into the latest VOD. MOCK_FULLY_CUT=<vod id>: every chapter of
+        // that VOD is cut from the uploads. Both only to try those pages without waiting for the real thing.
+        if (tagsPath === '/v1/status' && process.env.MOCK_LIVE === 'yes') return void mockLive(publicApi, res)
+        if (process.env.MOCK_FULLY_CUT && tagsPath === `/vods/${process.env.MOCK_FULLY_CUT}`) return void mockFullyCut(publicApi, process.env.MOCK_FULLY_CUT!, res)
         if (tagsPath === '/vods' && /[?&](first|last)LiveAt%5B|[?&](first|last)LiveAt\[/.test(req.url ?? '')) return liveFiltered(publicApi, req.url!, res)
         const pm = /^\/vods\/([^/?]+)(?:\?.*)?$/.exec(req.url ?? '')
         const id = pm ? decodeURIComponent(pm[1]!) : ''
