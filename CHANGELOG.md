@@ -1,5 +1,27 @@
 # @vex/vods-core
 
+## 0.36.0
+
+### Minor Changes
+
+- bc6b163: A playthrough can keep itself up to date: on the synthetic VOD page, "Keep up to date" (offered once it was built from a game) has the archive keep its segments to every window of that game. `SyntheticVod` and `SyntheticInput` gained `auto`.
+- 4841978: A synthetic VOD can be compiled into one file: "Compile" on its manage page starts the archive's `compile` job, whose uploads have the new upload type `compiled`. The watch page plays the segments or that file (`?play=segments|compiled`, with a switcher beside the parts menu), defaulting to the new site option `playDefault`, set on /manage/home. `UploadType` and `RawUpload.type` gained `'compiled'`; `useWatch` takes a third `play` argument and returns `hasCompiled`, and `segments` stays set on a synthetic VOD while its compiled file plays. When the segments change after (by hand or a playthrough following its game), the manage page shows the compiled uploads as outdated and offers Recompile (`SyntheticVod.compiled`). A gap between segments no longer stops a compile: the file plays the runs back to back and each upload's `gaps` keeps the timeline right. Compile first checks the sources for DMCA claims (`AdminClient.syntheticDmca`, `SourceDmcaClaim`): when there are some, a warning lists each VOD and its claimed ranges in the windows used (`SyntheticDmca.overlapping`), with the rest of those sources' claims in a collapsed "Other claims in stitched videos" (`other`), and needs "I understand the risks" before the job is queued with `accept_dmca`.
+- 072ce56: Removes the `kit` entry (`@vex/vods-core/kit`). Its only user, keeki-vods, now runs `createVodsApp()` with its own controls.
+- cb5d5b4: Homepage cards come from the archive (`GET /v1/site/options`): which cards show and in what order (the latest VOD, the newest VODs with a tag, the most played games). The new Manage page `/manage/home` edits them, and `pages.manage` takes an optional `home` page for it. `LatestPlaythroughs` became `LatestTagged`, which takes a `tag`.
+- 2600cef: - Tag types: a tag on /manage/tags can have its own page and menu entry (`page`, `pageLabel`) and can feed a
+    homepage card (`homeCard`). Playthroughs is now the `compilation` tag's page; a new type (highlights, say) needs
+    only its tag set up. A path no tag has is "not found".
+  - Breaking for kit users: `TABS` is gone; `tabs()` lists the list pages from the tag config.
+- be4d1b1: A VOD can carry why it was cut (`cut_reason` from the archive, `Vod.cutReason`). Manage's Details form edits it, and
+  the page for a VOD cut in full shows it instead of the generic text when set. Needs twitch-archive with `cutReason`.
+
+### Patch Changes
+
+- f8a80c6: Sign in stays greyed out until the account check finishes, with the tooltip "Checking sign-in…" (UiAccountMenu gets a `checking` prop; keeki-vods' KAccountMenu has it); Space plays and pauses after a click on the timeline; the Manage tag color picker highlights the swatch for colors saved as `var(--vx-*)` or `var(--k-*)`.
+- 62260f6: Depends on `@vex/platform-web` v0.11.0 (batch retry of succeeded runs behind a confirm, `admin` for the password sign-in) and builds against `@vex/ui` v0.27.0.
+- 2a0790a: - The admin 🔧 on VOD cards, the latest VOD and the live card is back at the thumbnail's top-right corner.
+- 5264712: Manage: the merge note says either VOD may have no uploads (a lost first or last section).
+
 ## 0.35.0
 
 ### Minor Changes
