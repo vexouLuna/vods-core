@@ -2,7 +2,7 @@
 // /manage/synthetic/new and /manage/synthetic/:id: a VOD made of windows of real ones (GET/POST/PUT/DELETE
 // /api/v2/synthetic). A merge or split supersedes its sources (they leave the public lists and redirect into it); a
 // playthrough, built from a game's windows, is listed beside them and tagged `compilation`. Compile starts a job that
-// joins its windows into one file and uploads it as type `compiled` (the archive's compile_upload must be on).
+// joins its windows into one file and uploads it as type `compiled` (the archive's compile_youtube_upload must be on).
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
@@ -180,7 +180,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
   <ManageShell :title="isNew ? 'New synthetic VOD' : `Synthetic VOD ${id}`">
     <template #actions>
       <UiButton v-if="!isNew" :to="`/vods/${encodeURIComponent(id!)}`">Watch page</UiButton>
-      <UiButton v-if="!isNew" :loading="compiling" title="Join its windows into one file and upload it" @click="compile">Compile</UiButton>
+      <UiButton v-if="!isNew" :loading="compiling" title="Join its windows into one file and upload it" @click="compile">{{ vod?.compiled ? 'Recompile' : 'Compile' }}</UiButton>
       <UiButton v-if="!isNew" variant="danger" @click="deleteOpen = true">Delete</UiButton>
     </template>
     <p class="back"><RouterLink to="/manage/vods?synthetic=true">← Synthetic VODs</RouterLink></p>
@@ -199,6 +199,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
           <div><dt>Streamed</dt><dd>{{ when(vod.created_at) }}</dd></div>
           <div><dt>Made</dt><dd :title="when(vod.made_at)">{{ vod.made_at ? timeAgo(vod.made_at) : '—' }}</dd></div>
           <div><dt>Changed</dt><dd :title="when(vod.changed_at)">{{ vod.changed_at ? timeAgo(vod.changed_at) : '—' }}</dd></div>
+          <div v-if="vod.compiled"><dt>Compiled</dt><dd><UiChip :tone="vod.compiled.outdated ? 'warn' : 'ok'">{{ vod.compiled.outdated ? 'outdated: the segments changed' : 'up to date' }}</UiChip></dd></div>
           <div><dt>Visibility</dt><dd><UiChip :tone="vod.hidden ? 'warn' : 'ok'">{{ vod.hidden ? 'hidden' : 'public' }}</UiChip></dd></div>
         </dl>
         <p class="vods-muted small">Hiding it, and its chapters and the like, are on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>

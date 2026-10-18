@@ -461,6 +461,8 @@ export interface SyntheticVod {
   /** A game it follows: its segments are every window of it, kept so by the archive. Null: by hand. */
   auto: { game_id: string } | null
   segments: SyntheticSegment[]
+  /** Set when it has compiled uploads; outdated: its segments changed since they were made. Absent from older archives. */
+  compiled?: { outdated: boolean } | null
 }
 
 /** POST /api/v2/synthetic (with `id`) or PUT /api/v2/synthetic/{id} (only the fields sent change). */
