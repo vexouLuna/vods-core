@@ -9,7 +9,8 @@
     "**/*.css"
   ],
   "files": [
-    "dist"
+    "dist",
+    "src/app/deep-field/deep-field.css"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -28,6 +29,11 @@
       "import": "./dist/app.js"
     },
     "./app.css": "./dist/app.css",
+    "./deep-field": {
+      "types": "./dist/types/app/deep-field/index.d.ts",
+      "import": "./dist/deep-field.js"
+    },
+    "./deep-field.css": "./src/app/deep-field/deep-field.css",
     "./kit": {
       "types": "./dist/types/app/kit.d.ts",
       "import": "./dist/kit.js"

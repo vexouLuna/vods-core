@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { VxButton, VxCallout, VxDialog, VxField, VxInput, VxStatusDot, timeAgo, useToast } from '@vex/ui'
+import { useToast } from '@vex/ui/utils'
+import { timeAgo } from '../lib/time'
 import { errorText } from '@vex/platform-web'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import type { TwitchDeviceFlow, TwitchViewerStatus } from './api'
@@ -102,73 +103,73 @@ async function unlink() {
 </script>
 
 <template>
-  <div class="tile vx-panel">
-    <div class="vx-eyebrow">Twitch (ad-free)</div>
-    <div class="tile-main"><VxStatusDot :status="tile.status" />{{ tile.text }}</div>
-    <div v-if="tile.sub" class="vx-muted small">{{ tile.sub }}</div>
+  <div class="tile vods-panel">
+    <div class="vods-eyebrow">Twitch (ad-free)</div>
+    <div class="tile-main"><UiStatusDot :status="tile.status" />{{ tile.text }}</div>
+    <div v-if="tile.sub" class="vods-muted small">{{ tile.sub }}</div>
     <template v-if="status">
       <div v-if="!tile.linked" class="buttons">
-        <VxButton title="Sign in on Twitch as an account that sees no ads on the channel" @click="startLink">Link Twitch account</VxButton>
-        <VxButton size="sm" variant="ghost" @click="openPaste">Paste a token</VxButton>
+        <UiButton title="Sign in on Twitch as an account that sees no ads on the channel" @click="startLink">Link Twitch account</UiButton>
+        <UiButton size="sm" variant="ghost" @click="openPaste">Paste a token</UiButton>
       </div>
       <div v-else class="buttons">
-        <VxButton size="sm" title="Link a different Twitch account" @click="startLink">Switch account</VxButton>
-        <VxButton size="sm" variant="ghost" title="Link with a pasted token instead" @click="openPaste">Paste a token</VxButton>
-        <VxButton size="sm" variant="ghost" @click="unlinkOpen = true">Unlink</VxButton>
+        <UiButton size="sm" title="Link a different Twitch account" @click="startLink">Switch account</UiButton>
+        <UiButton size="sm" variant="ghost" title="Link with a pasted token instead" @click="openPaste">Paste a token</UiButton>
+        <UiButton size="sm" variant="ghost" @click="unlinkOpen = true">Unlink</UiButton>
       </div>
     </template>
 
-    <VxDialog :open="linkOpen" title="Link a Twitch account" @update:open="onLinkOpen">
+    <UiDialog :open="linkOpen" title="Link a Twitch account" @update:open="onLinkOpen">
       <p>
         Sign in on Twitch as the account live recordings should be watched as: one that sees no ads on this channel
         (Turbo, or a sub where the channel gives subs ad-free viewing). Then enter this code there.
       </p>
-      <VxCallout v-if="linkError" tone="error" title="The link didn't go through">{{ linkError }}</VxCallout>
+      <UiCallout v-if="linkError" tone="error" title="The link didn't go through">{{ linkError }}</UiCallout>
       <template v-else-if="flow">
-        <div class="code vx-mono" aria-label="Code to enter at Twitch">{{ flow.userCode }}</div>
+        <div class="code vods-mono" aria-label="Code to enter at Twitch">{{ flow.userCode }}</div>
         <a class="tile-link" :href="flow.verificationUri" target="_blank" rel="noopener">Open Twitch to enter the code</a>
-        <p class="vx-muted small">Waiting for Twitch… this closes once the account is linked.</p>
+        <p class="vods-muted small">Waiting for Twitch… this closes once the account is linked.</p>
       </template>
-      <p v-else-if="starting" class="vx-muted small">Asking Twitch for a code…</p>
+      <p v-else-if="starting" class="vods-muted small">Asking Twitch for a code…</p>
       <template #actions="{ close }">
-        <VxButton @click="close">{{ linkError ? 'Close' : 'Cancel' }}</VxButton>
-        <VxButton v-if="linkError" variant="primary" @click="startLink">Start again</VxButton>
+        <UiButton @click="close">{{ linkError ? 'Close' : 'Cancel' }}</UiButton>
+        <UiButton v-if="linkError" variant="primary" @click="startLink">Start again</UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
 
-    <VxDialog v-model:open="pasteOpen" title="Paste a Twitch token">
+    <UiDialog v-model:open="pasteOpen" title="Paste a Twitch token">
       <p>
-        If the linked account still gets ads in the recording, paste the <span class="vx-mono">auth-token</span> cookie
+        If the linked account still gets ads in the recording, paste the <span class="vods-mono">auth-token</span> cookie
         of twitch.tv, signed in as that account. The worker checks it with Twitch and keeps it; it isn't shown again.
         Signing out on twitch.tv ends it.
       </p>
       <form @submit.prevent="pasteDraft.trim() && paste()">
-        <VxField label="Token" :error="pasteError ?? undefined">
-          <template #default="{ id }"><VxInput :id="id" v-model="pasteDraft" type="password" mono :invalid="!!pasteError" /></template>
-        </VxField>
+        <UiField label="Token" :error="pasteError ?? undefined">
+          <template #default="{ id }"><UiInput :id="id" v-model="pasteDraft" type="password" mono :invalid="!!pasteError" /></template>
+        </UiField>
       </form>
       <template #actions="{ close }">
-        <VxButton @click="close">Cancel</VxButton>
-        <VxButton variant="primary" :loading="pasting" :disabled="!pasteDraft.trim()" @click="paste">Link</VxButton>
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton variant="primary" :loading="pasting" :disabled="!pasteDraft.trim()" @click="paste">Link</UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
 
-    <VxDialog v-model:open="unlinkOpen" :title="`Unlink ${status?.login ?? 'the Twitch account'}?`">
+    <UiDialog v-model:open="unlinkOpen" :title="`Unlink ${status?.login ?? 'the Twitch account'}?`">
       Live recordings are asked for anonymously again, with Twitch's ads cut out as gaps. The token isn't revoked; sign
       out on Twitch to end it.
       <template #actions="{ close }">
-        <VxButton @click="close">Cancel</VxButton>
-        <VxButton variant="danger-solid" :loading="unlinking" @click="unlink">Unlink</VxButton>
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton variant="danger-solid" :loading="unlinking" @click="unlink">Unlink</UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
   </div>
 </template>
 
 <style scoped>
 .tile { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; align-items: flex-start; }
 .tile-main { display: flex; align-items: center; gap: 8px; font-size: 16px; }
-.tile-link { color: var(--vx-accent); text-decoration: underline; text-underline-offset: 2px; }
-.tile-link:hover { color: var(--vx-ink); }
+.tile-link { color: var(--vods-accent); text-decoration: underline; text-underline-offset: 2px; }
+.tile-link:hover { color: var(--vods-ink); }
 .small { font-size: 12px; }
 .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 .code { font-size: 28px; letter-spacing: 0.15em; margin: 8px 0; }

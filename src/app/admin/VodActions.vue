@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Jobs and fixes for one VOD, through the worker's existing routes. Each starts a job (shown in the VOD's job list);
 // delete removes the VOD from the archive after typing its id.
-import { VxButton, VxCheckbox, VxDialog, VxField, VxInput, VxSelect, useToast, type Option } from '@vex/ui'
+import { useToast } from '@vex/ui/utils'
+import type { Option } from '@vex/ui'
 import { computed, ref } from 'vue'
 import { errorText } from '@vex/platform-web'
 import { isSpliced, type ActionResult, type AdminVod } from './api'
@@ -88,101 +89,101 @@ function remove() {
 
 <template>
   <div class="actions">
-    <p v-if="spliced" class="vx-muted spliced">
+    <p v-if="spliced" class="vods-muted spliced">
       This VOD was merged or split, so it no longer matches Twitch's VOD of the same id. Re-fetching from Twitch,
       downloading, re-uploading and deleting are off until that's undone (see Merge and split).
     </p>
     <div class="group">
-      <div class="vx-eyebrow">Metadata</div>
+      <div class="vods-eyebrow">Metadata</div>
       <div class="btns">
-        <VxButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'chapters'" @click="run('chapters', () => admin.refetchChapters(vod.id, forceChapters))">Re-fetch chapters from Twitch</VxButton>
-        <VxCheckbox v-if="vod.chaptersLocked && !spliced" v-model="forceChapters" class="small">replace hand edits (locked)</VxCheckbox>
-        <VxButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'chat'" @click="run('chat', () => admin.saveChat(vod.id))">Save chat again</VxButton>
-        <VxButton :disabled="spliced" :title="spliced ? TWITCH_OFF : 'Read this VOD’s chat from doomtp-bot’s log (the live recording)'" :loading="busy === 'botChat'" @click="run('botChat', () => admin.botChat(vod.id), () => emit('changed'))">Read bot chat</VxButton>
-        <VxButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'duration'" @click="run('duration', () => admin.refreshDuration(vod.id), () => emit('changed'))">Refresh duration</VxButton>
+        <UiButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'chapters'" @click="run('chapters', () => admin.refetchChapters(vod.id, forceChapters))">Re-fetch chapters from Twitch</UiButton>
+        <UiCheckbox v-if="vod.chaptersLocked && !spliced" v-model="forceChapters" class="small">replace hand edits (locked)</UiCheckbox>
+        <UiButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'chat'" @click="run('chat', () => admin.saveChat(vod.id))">Save chat again</UiButton>
+        <UiButton :disabled="spliced" :title="spliced ? TWITCH_OFF : 'Read this VOD’s chat from doomtp-bot’s log (the live recording)'" :loading="busy === 'botChat'" @click="run('botChat', () => admin.botChat(vod.id), () => emit('changed'))">Read bot chat</UiButton>
+        <UiButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'duration'" @click="run('duration', () => admin.refreshDuration(vod.id), () => emit('changed'))">Refresh duration</UiButton>
       </div>
     </div>
     <div class="group">
-      <div class="vx-eyebrow">YouTube</div>
+      <div class="vods-eyebrow">YouTube</div>
       <div class="btns">
-        <VxSelect v-if="hasLive" v-model="descType" :options="TYPES" width="96px" />
-        <VxButton :loading="busy === 'describe'" @click="run('describe', () => admin.updateDescriptions(vod.id, descType))">Update descriptions</VxButton>
-        <VxButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'reupload'" @click="ruOpen = true">Re-upload a part…</VxButton>
-        <VxButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'download'" @click="dlOpen = true">Download and upload again…</VxButton>
-        <VxButton :disabled="spliced" :title="spliced ? TWITCH_OFF : 'Upload again with today’s settings and censor ranges, deleting the old uploads'" :loading="busy === 'rearchive'" @click="raOpen = true">Re-archive…</VxButton>
+        <UiSelect v-if="hasLive" v-model="descType" :options="TYPES" width="96px" />
+        <UiButton :loading="busy === 'describe'" @click="run('describe', () => admin.updateDescriptions(vod.id, descType))">Update descriptions</UiButton>
+        <UiButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'reupload'" @click="ruOpen = true">Re-upload a part…</UiButton>
+        <UiButton :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'download'" @click="dlOpen = true">Download and upload again…</UiButton>
+        <UiButton :disabled="spliced" :title="spliced ? TWITCH_OFF : 'Upload again with today’s settings and censor ranges, deleting the old uploads'" :loading="busy === 'rearchive'" @click="raOpen = true">Re-archive…</UiButton>
       </div>
     </div>
     <div class="group">
-      <div class="vx-eyebrow">Danger</div>
+      <div class="vods-eyebrow">Danger</div>
       <div class="btns">
-        <VxButton variant="danger" :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'delete'" @click="delConfirm = ''; delOpen = true">Delete from the archive…</VxButton>
+        <UiButton variant="danger" :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'delete'" @click="delConfirm = ''; delOpen = true">Delete from the archive…</UiButton>
       </div>
     </div>
 
-    <VxDialog v-model:open="dlOpen" title="Download and upload again">
+    <UiDialog v-model:open="dlOpen" title="Download and upload again">
       Downloads the VOD again (while Twitch still has it), splits it and uploads the parts. Leave the range empty for every part.
       <div class="form">
-        <VxField label="Source">
-          <template #default="{ id }"><VxSelect :id="id" v-model="dlType" :options="TYPES" width="100%" /></template>
-        </VxField>
+        <UiField label="Source">
+          <template #default="{ id }"><UiSelect :id="id" v-model="dlType" :options="TYPES" width="100%" /></template>
+        </UiField>
         <div class="range">
-          <VxField label="From part"><template #default="{ id }"><VxInput :id="id" v-model="dlStart" mono placeholder="1" /></template></VxField>
-          <VxField label="To part"><template #default="{ id }"><VxInput :id="id" v-model="dlEnd" mono placeholder="last" /></template></VxField>
+          <UiField label="From part"><template #default="{ id }"><UiInput :id="id" v-model="dlStart" mono placeholder="1" /></template></UiField>
+          <UiField label="To part"><template #default="{ id }"><UiInput :id="id" v-model="dlEnd" mono placeholder="last" /></template></UiField>
         </div>
       </div>
       <template #actions="{ close }">
-        <VxButton @click="close">Cancel</VxButton>
-        <VxButton variant="primary" :disabled="dlBad" @click="download">Start</VxButton>
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton variant="primary" :disabled="dlBad" @click="download">Start</UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
 
-    <VxDialog v-model:open="ruOpen" title="Re-upload a part">
+    <UiDialog v-model:open="ruOpen" title="Re-upload a part">
       Splits that part again from the saved video (or downloads it) and uploads it as a new YouTube video.
       <div class="form range">
-        <VxField label="Source">
-          <template #default="{ id }"><VxSelect :id="id" v-model="ruType" :options="TYPES" width="100%" /></template>
-        </VxField>
-        <VxField label="Part" :error="ruBad ? 'A whole number ≥ 1.' : undefined">
-          <template #default="{ id }"><VxInput :id="id" v-model="ruPart" mono :invalid="ruBad" /></template>
-        </VxField>
+        <UiField label="Source">
+          <template #default="{ id }"><UiSelect :id="id" v-model="ruType" :options="TYPES" width="100%" /></template>
+        </UiField>
+        <UiField label="Part" :error="ruBad ? 'A whole number ≥ 1.' : undefined">
+          <template #default="{ id }"><UiInput :id="id" v-model="ruPart" mono :invalid="ruBad" /></template>
+        </UiField>
       </div>
       <template #actions="{ close }">
-        <VxButton @click="close">Cancel</VxButton>
-        <VxButton variant="primary" :disabled="ruBad" @click="reupload">Start</VxButton>
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton variant="primary" :disabled="ruBad" @click="reupload">Start</UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
 
-    <VxDialog v-model:open="raOpen" title="Re-archive">
+    <UiDialog v-model:open="raOpen" title="Re-archive">
       Uploads the VOD again from the saved video (or downloads it while Twitch still has it), with today's settings
       <template v-if="censored">and its {{ censored }} censor {{ censored === 1 ? 'range' : 'ranges' }}</template><template v-else>(no censor ranges)</template>.
       Each old upload is deleted from YouTube once its replacement is up, so the VOD is never left without one; an old
       upload YouTube won't delete stays listed. Leave the part empty for the whole VOD.
       <div class="form range">
-        <VxField label="Source">
-          <template #default="{ id }"><VxSelect :id="id" v-model="raType" :options="TYPES" width="100%" /></template>
-        </VxField>
-        <VxField label="Part" :error="raBad ? 'A whole number ≥ 1, or empty.' : undefined">
-          <template #default="{ id }"><VxInput :id="id" v-model="raPart" mono placeholder="all" :invalid="raBad" /></template>
-        </VxField>
+        <UiField label="Source">
+          <template #default="{ id }"><UiSelect :id="id" v-model="raType" :options="TYPES" width="100%" /></template>
+        </UiField>
+        <UiField label="Part" :error="raBad ? 'A whole number ≥ 1, or empty.' : undefined">
+          <template #default="{ id }"><UiInput :id="id" v-model="raPart" mono placeholder="all" :invalid="raBad" /></template>
+        </UiField>
       </div>
-      <p class="vx-muted small">{{ raOld ? `Replaces ${raOld} ${raOld === 1 ? 'upload' : 'uploads'}.` : 'Nothing to replace: uploads it as new.' }}</p>
+      <p class="vods-muted small">{{ raOld ? `Replaces ${raOld} ${raOld === 1 ? 'upload' : 'uploads'}.` : 'Nothing to replace: uploads it as new.' }}</p>
       <template #actions="{ close }">
-        <VxButton @click="close">Cancel</VxButton>
-        <VxButton variant="primary" :disabled="raBad" @click="rearchive">Re-archive</VxButton>
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton variant="primary" :disabled="raBad" @click="rearchive">Re-archive</UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
 
-    <VxDialog v-model:open="delOpen" title="Delete this VOD from the archive?">
+    <UiDialog v-model:open="delOpen" title="Delete this VOD from the archive?">
       Removes the VOD with its chat, emotes and game uploads from the archive and the site. The YouTube videos stay.
       This can't be undone. Type the VOD id to confirm.
       <div class="form">
-        <VxInput v-model="delConfirm" mono :placeholder="vod.id" />
+        <UiInput v-model="delConfirm" mono :placeholder="vod.id" />
       </div>
       <template #actions="{ close }">
-        <VxButton @click="close">Keep it</VxButton>
-        <VxButton variant="danger-solid" :disabled="delConfirm.trim() !== vod.id" @click="remove">Delete</VxButton>
+        <UiButton @click="close">Keep it</UiButton>
+        <UiButton variant="danger-solid" :disabled="delConfirm.trim() !== vod.id" @click="remove">Delete</UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -192,6 +193,6 @@ function remove() {
 .btns { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .small { font-size: 12px; }
 .spliced { margin: 0; font-size: 13px; max-width: 72ch; }
-.form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; color: var(--vx-text, inherit); }
+.form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; color: var(--vods-text, inherit); }
 .range { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 </style>

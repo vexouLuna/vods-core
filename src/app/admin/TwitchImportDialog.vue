@@ -2,7 +2,7 @@
 // "Find on Twitch": every VOD Twitch still keeps for the channel (7 to 60 days back), with what the archive has of
 // each. The ones it doesn't have are ticked; adding them queues an archive job for each, paused before its first step,
 // so nothing downloads until it's resumed on /manage/jobs.
-import { VxButton, VxCallout, VxCheckbox, VxChip, VxDialog, VxSkeleton, useToast } from '@vex/ui'
+import { useToast } from '@vex/ui/utils'
 import { errorText } from '@vex/platform-web'
 import { computed, ref, watch } from 'vue'
 import type { TwitchVideo } from './api'
@@ -57,47 +57,47 @@ async function addPicked() {
 </script>
 
 <template>
-  <VxDialog v-model:open="open" title="Find VODs on Twitch" width="620px">
+  <UiDialog v-model:open="open" title="Find VODs on Twitch" width="620px">
     Twitch keeps past broadcasts for a while. The ones ticked are queued to archive, paused before they download: resume
     them on Jobs.
-    <VxCallout v-if="error" tone="error" title="Couldn't ask Twitch" class="body">
+    <UiCallout v-if="error" tone="error" title="Couldn't ask Twitch" class="body">
       {{ errorText(error) }}
-      <template #actions><VxButton size="sm" @click="load">Try again</VxButton></template>
-    </VxCallout>
-    <div v-else-if="loading" class="body sk" aria-busy="true"><VxSkeleton v-for="i in 4" :key="i" h="44px" /></div>
-    <p v-else-if="!videos.length" class="body vx-muted">Twitch has no past broadcasts for the channel.</p>
+      <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
+    </UiCallout>
+    <div v-else-if="loading" class="body sk" aria-busy="true"><UiSkeleton v-for="i in 4" :key="i" h="44px" /></div>
+    <p v-else-if="!videos.length" class="body vods-muted">Twitch has no past broadcasts for the channel.</p>
     <template v-else>
-      <p class="body vx-muted small">{{ videos.length }} on Twitch, {{ missing }} not in the archive.</p>
+      <p class="body vods-muted small">{{ videos.length }} on Twitch, {{ missing }} not in the archive.</p>
       <ul class="list">
         <li v-for="v in videos" :key="v.id" :class="{ taken: taken(v) }">
-          <VxCheckbox v-model="picked[v.id]" :disabled="taken(v)">
+          <UiCheckbox v-model="picked[v.id]" :disabled="taken(v)">
             <span class="text">
               <span class="title">{{ v.title || 'Untitled' }}</span>
-              <span class="meta vx-mono vx-muted">{{ v.id }} · {{ v.createdAt.slice(0, 10) }} · {{ v.duration }}</span>
+              <span class="meta vods-mono vods-muted">{{ v.id }} · {{ v.createdAt.slice(0, 10) }} · {{ v.duration }}</span>
             </span>
-          </VxCheckbox>
-          <VxChip :tone="status(v).tone" :title="status(v).title">{{ status(v).text }}</VxChip>
+          </UiCheckbox>
+          <UiChip :tone="status(v).tone" :title="status(v).title">{{ status(v).text }}</UiChip>
         </li>
       </ul>
     </template>
     <template #actions="{ close }">
-      <VxButton @click="close">Cancel</VxButton>
-      <VxButton variant="primary" :disabled="!chosen.length" :loading="adding" @click="addPicked">
+      <UiButton @click="close">Cancel</UiButton>
+      <UiButton variant="primary" :disabled="!chosen.length" :loading="adding" @click="addPicked">
         Add {{ chosen.length || '' }} paused
-      </VxButton>
+      </UiButton>
     </template>
-  </VxDialog>
+  </UiDialog>
 </template>
 
 <style scoped>
 .body { margin-top: 12px; }
 .sk { display: flex; flex-direction: column; gap: 6px; }
 .small { font-size: 12px; }
-.list { list-style: none; margin: 8px 0 0; padding: 0; max-height: min(55vh, 480px); overflow-y: auto; border-top: 1px solid var(--vx-line); }
-.list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 8px 0; border-bottom: 1px solid var(--vx-line); }
+.list { list-style: none; margin: 8px 0 0; padding: 0; max-height: min(55vh, 480px); overflow-y: auto; border-top: 1px solid var(--vods-line); }
+.list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 8px 0; border-bottom: 1px solid var(--vods-line); }
 .list li.taken { opacity: 0.6; }
-.list :deep(.vx-check) { flex: 1 1 240px; align-items: flex-start; min-width: 0; }
+.list li > :first-child { flex: 1 1 240px; align-items: flex-start; min-width: 0; }
 .text { min-width: 0; }
-.title { display: block; color: var(--vx-ink); overflow-wrap: anywhere; }
+.title { display: block; color: var(--vods-ink); overflow-wrap: anywhere; }
 .meta { display: block; font-size: 11px; margin-top: 2px; }
 </style>

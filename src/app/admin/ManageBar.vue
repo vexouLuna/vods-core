@@ -24,8 +24,8 @@ const who = computed(() => (session.user ? `@${session.user.login}` : 'admin (pa
 </script>
 
 <template>
-  <nav class="manage vx-panel" aria-label="Manage">
-    <span class="vx-eyebrow label">Manage</span>
+  <nav class="manage vods-panel" aria-label="Manage">
+    <span class="vods-eyebrow label">Manage</span>
     <div class="links">
       <RouterLink
         v-for="l in LINKS"
@@ -36,7 +36,7 @@ const who = computed(() => (session.user ? `@${session.user.login}` : 'admin (pa
         :aria-current="current(l.to, l.exact) ? 'page' : undefined"
       >{{ l.label }}</RouterLink>
     </div>
-    <span class="who vx-muted vx-mono">{{ who }}</span>
+    <span class="who vods-muted vods-mono">{{ who }}</span>
   </nav>
 </template>
 
@@ -53,12 +53,12 @@ const who = computed(() => (session.user ? `@${session.user.login}` : 'admin (pa
 .links { display: flex; flex-wrap: wrap; gap: 2px; }
 .link {
   padding: 5px 10px;
-  border-radius: var(--vx-radius-sm);
-  color: var(--vx-muted);
+  border-radius: var(--vods-radius-sm);
+  color: var(--vods-muted);
   text-decoration: none;
   font-size: 13px;
 }
-.link:hover { color: var(--vx-ink); background: var(--vx-hover); }
-.link.is-current { color: var(--vx-accent); background: var(--vx-hover); }
+.link:hover { color: var(--vods-ink); background: var(--vods-hover); }
+.link.is-current { color: var(--vods-accent); background: var(--vods-hover); }
 .who { margin-left: auto; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 </style>
