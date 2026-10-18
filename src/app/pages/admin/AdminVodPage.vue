@@ -186,7 +186,7 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
           <YoutubeEditor :vod="vod" @saved="saved" />
         </section>
 
-        <section class="panel vods-panel">
+        <section id="censor" class="panel vods-panel">
           <h2 class="vods-eyebrow">Censor</h2>
           <CensorEditor :vod="vod" :duration="duration" @saved="saved" />
         </section>
