@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The header's account control, wired to the shared sign-in (@vex/ui/account, set up by createVodsApp()). A dashboard session signed in
-// with the admin password (no account) shows as "admin". Sign in waits for the account check; signing out ends both,
-// and every account session.
+// with the admin password (no account) shows as "admin", so it has Manage here too (the only way in, as on dtp). Sign in
+// waits for the account check; signing out ends both, and every account session.
 import type { AccountUser } from '@vex/ui'
 import { useAccount } from '@vex/ui/account'
 import { computed } from 'vue'
