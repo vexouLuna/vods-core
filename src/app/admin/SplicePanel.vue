@@ -80,8 +80,8 @@ const {
         <div class="vods-eyebrow">Merge the next VOD into this one</div>
         <p class="vods-muted note">
           For a stream that dropped and came back as a second Twitch VOD. The time between becomes a “Technical
-          difficulties” chapter; nothing is downloaded or uploaded again. Also for a stream whose first section was
-          lost: merge the rest into the lost one's VOD (no uploads needed) and the site keeps counting its time.
+          difficulties” chapter; nothing is downloaded or uploaded again. Also for a stream whose first or last section
+          was lost: either VOD may have no uploads, and the site keeps counting its time.
         </p>
         <UiCallout v-if="candsError" tone="error">
           {{ candsError }}
