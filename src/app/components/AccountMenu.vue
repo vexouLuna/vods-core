@@ -34,6 +34,7 @@ async function signOut() {
     :user="user"
     :note="note"
     :disabled="!account.enabled || !account.ready.value"
+    :checking="account.enabled && !account.ready.value"
     @sign-in="account.signIn()"
     @sign-out="signOut"
   >
