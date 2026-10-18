@@ -23,8 +23,11 @@ export interface VodsPages {
   watch: VodsPage
   games: VodsPage
   notFound: VodsPage
-  /** Manage: the archive's admin pages. Every one but `login` needs a dashboard session (installVodsSession). */
-  manage: Record<'login' | 'overview' | 'jobs' | 'job' | 'vods' | 'vod' | 'synthetic' | 'storage' | 'youtube' | 'settings' | 'tags' | 'home' | 'audit', VodsPage>
+  /** Manage: the archive's admin pages. Every one but `login` needs a dashboard session (installVodsSession). `home`
+   * (the homepage cards) is optional: a site without it has no /manage/home. */
+  manage: Record<'login' | 'overview' | 'jobs' | 'job' | 'vods' | 'vod' | 'synthetic' | 'storage' | 'youtube' | 'settings' | 'tags' | 'audit', VodsPage> & {
+    home?: VodsPage
+  }
 }
 
 const NOT_FOUND = 'not-found'
@@ -69,7 +72,7 @@ export function vodsRoutes(pages: VodsPages): RouteRecordRaw[] {
     { path: '/manage/youtube', component: m.youtube },
     { path: '/manage/settings', component: m.settings },
     { path: '/manage/tags', component: m.tags },
-    { path: '/manage/home', component: m.home },
+    ...(m.home ? [{ path: '/manage/home', component: m.home }] : []),
     { path: '/manage/audit', component: m.audit },
     // The old admin URLs, for bookmarks and the worker's sign-in errors (it sends those to /admin/login).
     { path: '/admin/:rest(.*)*', redirect: (to) => ({ path: `/manage${to.path.slice('/admin'.length)}`, query: to.query, hash: to.hash }) },
