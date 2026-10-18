@@ -46,7 +46,7 @@ watchEffect(() => learnGameColors(top.value.map((g) => ({ name: g.name, image: a
 </script>
 
 <template>
-  <aside class="strip vods-panel" aria-label="Most played games">
+  <aside class="strip vods-panel vx-glass-rim" aria-label="Most played games">
     <div class="group">
       <div class="head">
         <div class="vods-eyebrow">Most played</div>

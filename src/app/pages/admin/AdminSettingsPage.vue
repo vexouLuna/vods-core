@@ -107,7 +107,7 @@ onMounted(() => {
     <div v-else-if="!items" class="sk" aria-busy="true"><UiSkeleton v-for="i in 3" :key="i" h="160px" /></div>
 
     <form v-else @submit.prevent="save">
-      <section v-for="g in groups" :key="g.name" class="group vods-panel">
+      <section v-for="g in groups" :key="g.name" class="group vods-panel vx-glass-rim">
         <h2 class="vods-eyebrow">{{ g.name }}</h2>
         <div v-for="s in g.items" :key="s.key" class="setting" :class="{ 'is-changed': changed(s.key), 'has-error': pending.errors.has(s.key) }">
           <div class="about">
@@ -165,7 +165,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <div class="savebar vods-panel" :class="{ 'is-on': count > 0 || saveError }">
+      <div class="savebar vods-panel vx-glass-rim" :class="{ 'is-on': count > 0 || saveError }">
         <UiCallout v-if="saveError" tone="error" title="Nothing was saved" class="save-err">{{ saveError }}</UiCallout>
         <span class="vods-muted">{{ count ? `${count} unsaved ${count === 1 ? 'change' : 'changes'}` : 'No changes' }}</span>
         <span class="spacer" />

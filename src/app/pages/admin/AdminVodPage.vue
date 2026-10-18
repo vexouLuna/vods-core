@@ -119,7 +119,7 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
         <template #actions><UiButton size="sm" :to="`/manage/synthetic/${encodeURIComponent(id)}`">Edit its segments</UiButton></template>
       </UiCallout>
 
-      <section class="panel vods-panel">
+      <section class="panel vods-panel vx-glass-rim">
         <h2 class="title">{{ vod.title ?? 'Untitled' }}</h2>
         <div class="visibility">
           <UiSwitch id="vod-public" :model-value="!vod.hidden" :disabled="hiding" @update:model-value="toggleHidden" />
@@ -149,54 +149,54 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
       </section>
 
       <!-- A synthetic VOD's details and segments are edited on its own page (the worker refuses them here). -->
-      <section v-if="!vod.synthetic" class="panel vods-panel">
+      <section v-if="!vod.synthetic" class="panel vods-panel vx-glass-rim">
         <h2 class="vods-eyebrow">Details</h2>
         <DetailsEditor :vod="vod" @saved="saved" />
       </section>
 
-      <section class="panel vods-panel">
+      <section class="panel vods-panel vx-glass-rim">
         <h2 class="vods-eyebrow">Actions</h2>
         <VodActions :vod="vod" @job="jobStarted" @changed="load" @deleted="deleted" />
       </section>
 
-      <section v-if="!vod.synthetic" class="panel vods-panel">
+      <section v-if="!vod.synthetic" class="panel vods-panel vx-glass-rim">
         <h2 class="vods-eyebrow">Merge and split</h2>
         <SplicePanel :vod="vod" @changed="load" @job="jobStarted" />
       </section>
 
-      <section class="panel vods-panel">
+      <section class="panel vods-panel vx-glass-rim">
         <h2 class="vods-eyebrow">Jobs <span v-if="activeJobs" class="vods-muted">· {{ activeJobs }} active</span></h2>
         <JobsTable :jobs="jobs" empty="No jobs for this VOD." label="This VOD's jobs" />
       </section>
 
       <!-- A VOD merged into another, or a synthetic one, has no chapters, uploads or emotes of its own to edit. -->
       <template v-if="!vod.merged_into && !vod.synthetic">
-        <section class="panel vods-panel">
+        <section class="panel vods-panel vx-glass-rim">
           <h2 class="vods-eyebrow">Chapters</h2>
           <ChaptersEditor :vod="vod" :duration="duration" @saved="saved" />
         </section>
 
-        <section class="panel vods-panel">
+        <section class="panel vods-panel vx-glass-rim">
           <h2 class="vods-eyebrow">Games</h2>
           <GamesEditor :vod="vod" :duration="duration" @saved="saved" />
         </section>
 
-        <section class="panel vods-panel">
+        <section class="panel vods-panel vx-glass-rim">
           <h2 class="vods-eyebrow">YouTube parts</h2>
           <YoutubeEditor :vod="vod" @saved="saved" />
         </section>
 
-        <section id="censor" class="panel vods-panel">
+        <section id="censor" class="panel vods-panel vx-glass-rim">
           <h2 class="vods-eyebrow">Censor</h2>
           <CensorEditor :vod="vod" :duration="duration" @saved="saved" />
         </section>
 
-        <section class="panel vods-panel">
+        <section class="panel vods-panel vx-glass-rim">
           <h2 class="vods-eyebrow">Drive files</h2>
           <DriveEditor :vod="vod" @saved="saved" />
         </section>
 
-        <section class="panel vods-panel">
+        <section class="panel vods-panel vx-glass-rim">
           <h2 class="vods-eyebrow">Emotes</h2>
           <EmotesPanel :vod-id="vod.id" :spliced="isSpliced(vod)" @job="jobStarted" />
         </section>

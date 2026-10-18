@@ -35,7 +35,7 @@ const { src: thumb, srcset: thumbSet, onLoad: thumbLoaded, onError: thumbFailed 
 </script>
 
 <template>
-  <article class="latest vods-panel">
+  <article class="latest vods-panel vx-glass-rim">
     <div class="main">
       <div class="thumb">
         <UiLink :to="to" class="thumb-link" :aria-label="title" tabindex="-1">

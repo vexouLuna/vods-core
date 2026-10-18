@@ -25,7 +25,7 @@ const who = computed(() => (session.user ? `@${session.user.login}` : 'admin (pa
 </script>
 
 <template>
-  <nav class="manage vods-panel" aria-label="Manage">
+  <nav class="manage vods-panel vx-glass-rim" aria-label="Manage">
     <span class="vods-eyebrow label">Manage</span>
     <div class="links">
       <RouterLink

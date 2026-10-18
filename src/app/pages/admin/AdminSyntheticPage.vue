@@ -216,7 +216,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
     <div v-else-if="!isNew && !vod" class="sk" aria-busy="true"><UiSkeleton h="90px" /><UiSkeleton h="200px" /></div>
 
     <form v-else @submit.prevent="save">
-      <section v-if="vod" class="panel vods-panel">
+      <section v-if="vod" class="panel vods-panel vx-glass-rim">
         <dl class="facts">
           <div><dt>Length</dt><dd class="vods-mono">{{ vod.duration ?? '—' }}</dd></div>
           <div><dt>Streamed</dt><dd>{{ when(vod.created_at) }}</dd></div>
@@ -228,7 +228,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
         <p class="vods-muted small">Hiding it, and its chapters and the like, are on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>
       </section>
 
-      <section class="panel vods-panel">
+      <section class="panel vods-panel vx-glass-rim">
         <h2 class="vods-eyebrow sec">Details</h2>
         <div class="fields">
           <UiField v-if="isNew" label="Id" :error="form.id && idError ? idError : undefined" help="In its link: /vods/<id>. Can't change later.">
@@ -250,7 +250,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
         />
       </section>
 
-      <section class="panel vods-panel">
+      <section class="panel vods-panel vx-glass-rim">
         <div class="head">
           <h2 class="vods-eyebrow sec">Segments</h2>
           <span class="vods-muted small">{{ segments.length }} · {{ total == null ? 'some run to their source’s end' : toClock(total) }}</span>

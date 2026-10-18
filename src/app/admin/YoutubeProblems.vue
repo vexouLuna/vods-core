@@ -9,7 +9,7 @@ defineProps<{ problems: YoutubeVodReport[] }>()
 
 <template>
   <ul class="problems">
-    <li v-for="p in problems" :key="p.id" class="problem vods-panel">
+    <li v-for="p in problems" :key="p.id" class="problem vods-panel vx-glass-rim">
       <div class="problem-head">
         <RouterLink :to="`/manage/vods/${p.id}`" class="problem-title">{{ p.title || p.id }}</RouterLink>
         <span class="vods-muted small" :title="p.planned < p.seconds ? 'Restricted games are left out of the uploads on purpose' : undefined">
