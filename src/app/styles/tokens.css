@@ -1,0 +1,52 @@
+/*
+ * The app's look, as tokens and a few utility classes. The pages use only these (and the site's Ui* controls), so a
+ * site's theme sets them: deep-field.css maps them to Deep Field, keeki-vods to its own tokens. The defaults here are
+ * plain and dark, at zero specificity, so any theme wins.
+ *
+ * Utility classes a theme styles: .vods-display (page titles), .vods-eyebrow (small caps labels), .vods-mono,
+ * .vods-muted, .vods-panel (a card surface), .vods-pop (a floating surface), .vods-ring (hover ring on thumbnails),
+ * .vods-overlay (base for panels teleported out of the shell), .vods-input (a raw text field), .vods-btn (+ .is-sm,
+ * .is-primary: a raw button look, e.g. on a file <label>).
+ */
+:where(:root) {
+  --vods-bg: #111;
+  --vods-surface: #1a1a1a;
+  --vods-surface-2: #222;
+  --vods-pop: #1c1c1c;
+  --vods-ink: #eee;
+  --vods-muted: #999;
+  --vods-line: #333;
+  --vods-accent: #8ab4f8;
+  --vods-info: #8ab4f8;
+  --vods-ok: #81c995;
+  --vods-warn: #fdd663;
+  --vods-bad: #f28b82;
+  --vods-ring: #fff;
+  --vods-hover: rgb(255 255 255 / 0.06);
+  --vods-radius: 8px;
+  --vods-radius-sm: 5px;
+  --vods-font-mono: ui-monospace, monospace;
+  --vods-hatch: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--vods-ink) 35%, transparent) 0 3px, transparent 3px 6px);
+  --vods-hatch-dark: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--vods-bg) 55%, transparent) 0 2px, transparent 2px 5px);
+  --vods-hatch-bad: repeating-linear-gradient(45deg, color-mix(in srgb, var(--vods-bad) 55%, transparent) 0 2px, color-mix(in srgb, var(--vods-bg) 65%, transparent) 2px 6px);
+  /* The built-in tags' colors (site.ts, DEFAULT_TAGS). */
+  --vods-tag-new: var(--vods-accent);
+  --vods-tag-updated: var(--vods-info);
+  --vods-tag-complete: var(--vods-ok);
+}
+
+:where(.vods-mono, .vods-eyebrow, .vods-display) { font-family: var(--vods-font-mono); }
+:where(.vods-muted, .vods-eyebrow) { color: var(--vods-muted); }
+:where(.vods-eyebrow) { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+:where(.vods-display) { margin: 0; line-height: 1.15; }
+:where(.vods-panel, .vods-pop) { background: var(--vods-surface); border: 1px solid var(--vods-line); border-radius: var(--vods-radius); }
+:where(.vods-pop) { background: var(--vods-pop); }
+:where(.vods-ring:hover, a:hover > .vods-ring, .vods-ring:focus-visible) { box-shadow: 0 0 0 2px var(--vods-ring); }
+:where(.vods-input, .vods-btn) {
+  font: inherit; font-size: 13px; color: var(--vods-ink); background: var(--vods-surface-2);
+  border: 1px solid var(--vods-line); border-radius: var(--vods-radius-sm);
+}
+:where(.vods-input) { width: 100%; min-width: 0; padding: 6px 10px; }
+:where(.vods-btn) { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer; }
+:where(.vods-btn.is-sm) { padding: 3px 9px; font-size: 12px; }
+:where(.vods-btn.is-primary) { background: var(--vods-accent); border-color: var(--vods-accent); color: var(--vods-bg); }

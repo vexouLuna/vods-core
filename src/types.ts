@@ -135,6 +135,18 @@ export interface AppearsIn {
   tags: string[]
 }
 
+/** The channel's stream while it's live (`ArchiveClient.liveStatus`). */
+export interface LiveStatus {
+  /** Twitch's stream id. */
+  id: string
+  startedAt: Date | null
+  title: string | null
+  /** What's being played now, if Twitch or the VOD says. `image` is like `Chapter.image`. */
+  game: { name: string; image: string | null } | null
+  /** The VOD the archive is recording of it, once it has one. */
+  vod: Vod | null
+}
+
 /** A game that appears in the archive's chapters, for game pickers. */
 export interface GamePlayed {
   name: string

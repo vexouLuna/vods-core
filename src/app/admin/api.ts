@@ -671,6 +671,11 @@ export class AdminClient {
   saveCensor(id: string, censor: CensorRange[]): Promise<AdminVod> {
     return this.request('PUT', `/admin/vods/${enc(id)}/censor`, { censor })
   }
+  /** Answers a job the censor check paused: "upload" resumes it (with the censor ranges set by now), "cut" first
+   * leaves the flagged games' chapters out of the uploads (marks them restricted, locks the chapters). */
+  censorReview(jobId: number, decision: 'upload' | 'cut'): Promise<{ message: string }> {
+    return this.request('POST', `/admin/jobs/${jobId}/censor-review`, { decision })
+  }
   /** Deletes uploads (ids from the VOD's list) from YouTube, 50 quota units each, and takes them off the VOD. */
   deleteUploads(id: string, videos: string[]): Promise<DeleteUploadsResult> {
     return this.request('POST', `/admin/vods/${enc(id)}/youtube/delete`, { videos })

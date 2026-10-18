@@ -101,7 +101,7 @@ const style = computed(() => ({
 
 <style scoped>
 .snail {
-  --snail-body: var(--vx-accent);
+  --snail-body: var(--vods-accent);
   --snail-shell: #d3bc5f;
   display: block;
   overflow: visible;

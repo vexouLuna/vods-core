@@ -12,8 +12,8 @@ defineProps<{ title: string }>()
   <VodsShell sky="dim">
     <ManageBar v-if="session.authenticated" />
     <div class="head">
-      <div class="vx-eyebrow">Manage</div>
-      <h1 class="vx-display">{{ title }}</h1>
+      <div class="vods-eyebrow">Manage</div>
+      <h1 class="vods-display">{{ title }}</h1>
       <div v-if="$slots.actions" class="actions"><slot name="actions"></slot></div>
     </div>
     <slot></slot>
@@ -22,7 +22,7 @@ defineProps<{ title: string }>()
 
 <style scoped>
 .head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 16px; margin-bottom: 20px; }
-.head .vx-eyebrow { flex-basis: 100%; }
+.head .vods-eyebrow { flex-basis: 100%; }
 .head h1 { font-size: 28px; margin: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 </style>

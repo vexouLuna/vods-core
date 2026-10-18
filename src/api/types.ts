@@ -140,6 +140,18 @@ export interface RawStream {
   is_live: boolean | null
 }
 
+/** `/v1/status`: the live stream (title and game from Twitch, else from its VOD row) and its VOD, or the latest VOD. */
+export interface RawStatus {
+  live: boolean
+  stream: {
+    id: string
+    started_at: string | null
+    title?: string | null
+    game?: { name: string | null; gameId?: string | null; image?: string | null; imageTemplate?: string | null } | null
+  } | null
+  vod: RawVod | null
+}
+
 /** `/v1/games-played`: one entry per distinct game across every VOD's chapters. */
 export interface RawGamePlayed {
   name: string

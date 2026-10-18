@@ -12,10 +12,10 @@ type State = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled'
 const STATES: State[] = ['queued', 'running', 'paused', 'done', 'failed', 'cancelled']
 // Same kinds and steps as the worker (twitch-archive README, "Job kinds"). manualSteps are the kind's default pause gates.
 const KINDS: Record<string, { steps: string[]; manualSteps: string[]; description?: string; cooperative?: boolean }> = {
-  archive: { steps: ['capture', 'finalize', 'chapters', 'chat', 'emotes', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: [], description: 'Record a live stream and publish it', cooperative: true },
-  download: { steps: ['ensure_source', 'chapters', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: [], description: 'Download a Twitch VOD and upload it to YouTube' },
-  reupload: { steps: ['ensure_source', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: ['upload'] },
-  dmca: { steps: ['ensure_source', 'dmca_edit', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: ['upload'] },
+  archive: { steps: ['capture', 'finalize', 'chapters', 'chat', 'emotes', 'censor_check', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: [], description: 'Record a live stream and publish it', cooperative: true },
+  download: { steps: ['ensure_source', 'chapters', 'censor_check', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: [], description: 'Download a Twitch VOD and upload it to YouTube' },
+  reupload: { steps: ['ensure_source', 'censor_check', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: ['upload'] },
+  dmca: { steps: ['ensure_source', 'dmca_edit', 'censor_check', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: ['upload'] },
   chat: { steps: ['chat'], manualSteps: [] },
   chapters: { steps: ['chapters'], manualSteps: [] },
   emotes: { steps: ['emotes'], manualSteps: [] },
@@ -64,6 +64,10 @@ for (let i = 0; i < 70; i++) add(i % 3 ? 'archive' : 'chapters', String(23000000
 add('dmca', '2301234567', 'cancelled', 1, 60 * 30)
 add('reupload', '2309876543', 'failed', 1, 60 * 5, { lastError: 'YouTube quota exceeded (403 quotaExceeded); retry after midnight Pacific.' })
 add('download', '2311111111', 'paused', 2, 90, { pauseBefore: ['upload'] })
+// Paused by the censor check (POST /admin/jobs/{id}/censor-review answers it).
+add('download', '2309876543', 'paused', 3, 70, {
+  payload: { censor_review: { games: [{ gameId: '1469308723', name: "Baldur's Gate 3", igdbId: 119171, matched: ['Partial Nudity', 'Sexual Content'] }] } },
+})
 add('archive', '2312345678', 'running', 6, 40)
 add('emotes', '2312345678', 'queued', 0, 1)
 // A backfill and the bot_chat runs it queued (GET /api/v2/jobs/{id}/related shows them as a tree).
@@ -247,6 +251,25 @@ async function publicJson(api: string, path: string): Promise<unknown> {
   const res = await fetch(`${api}${path}`)
   if (!res.ok) throw new Error(`public API ${res.status}`)
   return res.json()
+}
+
+async function mockLive(api: string, res: ServerResponse) {
+  try {
+    const { vod } = (await publicJson(api, '/v1/status')) as { vod: Json | null }
+    const startedAt = new Date(Date.now() - 83 * 60_000).toISOString()
+    const game = { name: 'Celeste', gameId: '504461', image: null, imageTemplate: 'https://static-cdn.jtvnw.net/ttv-boxart/504461-{width}x{height}.jpg' }
+    send(res, 200, { live: true, stream: { id: '1', started_at: startedAt, title: 'Mock stream: strawberries all the way down', game }, vod })
+  } catch (e) {
+    send(res, 502, { name: 'BadGateway', message: String(e), code: 502 })
+  }
+}
+async function mockFullyCut(api: string, id: string, res: ServerResponse) {
+  try {
+    const vod = (await publicJson(api, `/vods/${encodeURIComponent(id)}`)) as Json
+    send(res, 200, { ...vod, chapters: ((vod.chapters ?? []) as Json[]).map((c) => ({ ...c, restricted: true })) })
+  } catch (e) {
+    send(res, 404, { name: 'NotFound', message: String(e), code: 404 })
+  }
 }
 
 /** The list's `firstLiveAt` / `lastLiveAt` filters (vexouLuna/twitch-archive#57) until the public API has them: the
@@ -614,6 +637,8 @@ const SETTINGS: SettingSpec[] = [
   { key: 'youtube_description', type: 'text', group: 'YouTube', applies: 'next job', help: 'Last line of every description', default: 'Archived by vods.vexoul.net' },
   { key: 'youtube_keepalive_hours', type: 'float', group: 'YouTube', applies: 'now', help: 'How often the YouTube token is refreshed (from the next refresh)', default: 72, min: 1, max: 720 },
   { key: 'restricted_games', type: 'list', group: 'Pipeline', applies: 'next job', help: 'Chapters of these games are left out of uploads', default: ['Music'] },
+  { key: 'censor_descriptors', type: 'list', group: 'Pipeline', applies: 'next job', help: 'A game whose IGDB content descriptors or themes contain one of these pauses the job for a censor review before upload (empty: no check)', default: ['Sexual Content', 'Nudity'] },
+  { key: 'censor_allow_games', type: 'list', group: 'Pipeline', applies: 'next job', help: 'Games uploaded without the IGDB check (restricted games are still cut)', default: [] },
   { key: 'split_duration', type: 'int', group: 'Pipeline', applies: 'next job', help: 'Maximum YouTube part length in seconds', default: 43200, min: 600, max: 43200 },
   { key: 'keep_hls', type: 'bool', group: 'Pipeline', applies: 'next job', help: 'Keep the HLS segments after upload', default: false },
   { key: 'keep_mp4', type: 'bool', group: 'Pipeline', applies: 'next job', help: 'Keep the MP4 after upload', default: false },
@@ -657,16 +682,16 @@ function checkSetting(key: string, v: unknown): string | null {
 
 // ---- site tags (docs/admin-api.md, "Site tags"); MOCK_SITE_TAGS=no answers 404, like an archive without them ----
 interface SiteTag {
-  name: string; label: string; drawn: boolean; color: string | null; width: number | null; height: number | null
+  name: string; label: string; drawn: boolean; color: string | null; width: number | null; height: number | null; rotate: number | null
   text: string | null; textColor: string | null; textSize: number | null; textX: number | null; textY: number | null; textRotate: number | null
   pattern: 'stripes' | 'checks' | null; patternColor: string | null; patternSize: number | null
 }
 const NO_TEXT = { text: null, textColor: null, textSize: null, textX: null, textY: null, textRotate: null, pattern: null, patternColor: null, patternSize: null }
 let siteTags: SiteTag[] = [
-  { name: 'new', label: 'new', drawn: true, color: 'var(--vods-tag-new)', width: null, height: null, ...NO_TEXT },
-  { name: 'updated', label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', width: null, height: null, ...NO_TEXT },
-  { name: 'complete', label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', width: null, height: null, ...NO_TEXT },
-  { name: 'compilation', label: 'playthrough', drawn: false, color: null, width: null, height: null, ...NO_TEXT },
+  { name: 'new', label: 'new', drawn: true, color: 'var(--vods-tag-new)', width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'updated', label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'complete', label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'compilation', label: 'playthrough', drawn: false, color: null, width: null, height: null, rotate: null, ...NO_TEXT },
 ]
 /** Cleaned SVGs by tag name, with the hash that versions their URL. */
 const tagShapes = new Map<string, { svg: string; v: string }>()
@@ -693,6 +718,7 @@ function checkTags(list: unknown): SiteTag[] | string {
     for (const k of ['width', 'height'] as const) {
       if (t[k] != null && !(Number.isInteger(t[k]) && t[k] >= 8 && t[k] <= 200)) return `${t.name}: ${k} must be 8–200`
     }
+    if (t.rotate != null && !(Number.isInteger(t.rotate) && t.rotate >= -180 && t.rotate <= 180)) return `${t.name}: rotate must be -180 to 180`
     const text = t.text == null ? null : typeof t.text === 'string' ? t.text.trim() : undefined
     if (text === undefined || text === '' || (text && text.length > 24)) return `${t.name}: text must be 1–24 characters, or null`
     if (t.textColor != null && (typeof t.textColor !== 'string' || !isTagColor(t.textColor))) return `${t.name}: textColor is not a color the site takes`
@@ -706,7 +732,7 @@ function checkTags(list: unknown): SiteTag[] | string {
     if (t.textRotate != null && !(Number.isInteger(t.textRotate) && t.textRotate >= -180 && t.textRotate <= 180)) return `${t.name}: textRotate must be -180 to 180`
     const pattern = t.pattern ? { pattern: t.pattern, patternColor: t.patternColor ?? null, patternSize: t.patternSize ?? null } : { pattern: null, patternColor: null, patternSize: null }
     const style = text ? { textColor: t.textColor ?? null, textSize: t.textSize ?? null, textX: t.textX ?? null, textY: t.textY ?? null, textRotate: t.textRotate ?? null } : NO_TEXT
-    out.push({ name: t.name, label: t.label.trim(), drawn: t.drawn, color: t.color ?? null, width: t.width ?? null, height: t.height ?? null, ...style, text, ...pattern })
+    out.push({ name: t.name, label: t.label.trim(), drawn: t.drawn, color: t.color ?? null, width: t.width ?? null, height: t.height ?? null, rotate: t.rotate ?? null, ...style, text, ...pattern })
   }
   const gone = ['new', 'updated', 'compilation'].find((name) => !seen.has(name))
   if (gone) return `${gone} is set automatically and can't be removed`
@@ -822,6 +848,10 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           })
           return res.end(sh.svg)
         }
+        // MOCK_LIVE=yes: the channel is live, recording into the latest VOD. MOCK_FULLY_CUT=<vod id>: every chapter of
+        // that VOD is cut from the uploads. Both only to try those pages without waiting for the real thing.
+        if (tagsPath === '/v1/status' && process.env.MOCK_LIVE === 'yes') return void mockLive(publicApi, res)
+        if (process.env.MOCK_FULLY_CUT && tagsPath === `/vods/${process.env.MOCK_FULLY_CUT}`) return void mockFullyCut(publicApi, process.env.MOCK_FULLY_CUT!, res)
         if (tagsPath === '/vods' && /[?&](first|last)LiveAt%5B|[?&](first|last)LiveAt\[/.test(req.url ?? '')) return liveFiltered(publicApi, req.url!, res)
         const pm = /^\/vods\/([^/?]+)(?:\?.*)?$/.exec(req.url ?? '')
         const id = pm ? decodeURIComponent(pm[1]!) : ''
@@ -1111,6 +1141,27 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           await new Promise((r) => setTimeout(r, 600))
           ytCheck = await youtubeCheckJson(publicApi)
           return send(res, 200, { running: false, last: ytCheck })
+        }
+
+        // ---- censor review (a job the censor check paused) ----
+        const crm = /^\/admin\/jobs\/(\d+)\/censor-review$/.exec(path)
+        if (crm && method === 'POST') {
+          const job = jobs.find((j) => j.id === Number(crm[1]))
+          if (!job) return fail(res, 404, 'No such job')
+          const games = ((job.payload.censor_review as Json | undefined)?.games ?? []) as Json[]
+          if (job.state !== 'paused' || !games.length) return fail(res, 409, `Job ${job.id} is not paused for a censor review`)
+          if (b.decision !== 'upload' && b.decision !== 'cut') return fail(res, 400, 'decision must be "upload" or "cut"')
+          if (b.decision === 'cut') {
+            const ids = new Set(games.map((g) => String(g.gameId)))
+            const vod = job.vodId ? await vodOf(publicApi, job.vodId) : null
+            if (vod) {
+              vod.chapters = ((vod.chapters ?? []) as Json[]).map((c) => (ids.has(String(c.gameId)) ? { ...c, restricted: true } : c))
+              locked.add(String(vod.id))
+            }
+          }
+          job.state = 'queued'
+          log(job, `Censor review: ${b.decision}; resumed`)
+          return send(res, 200, { message: `Job ${job.id} resumed at step ${job.step} (${b.decision})` })
         }
 
         // ---- storage ----

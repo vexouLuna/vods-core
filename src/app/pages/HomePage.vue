@@ -1,13 +1,14 @@
 <script setup lang="ts">
-// The home page: the newest VOD in its own panel, the latest playthroughs with what each one is, and the most played
+// The home page: the newest VOD in its own panel (the live stream instead, while the channel is live), the latest playthroughs with what each one is, and the most played
 // games. The full lists are their own pages (/vods, /playthroughs: the header and each tile's "see all" button); a
 // game card opens the VODs list narrowed to that game.
-import { resumeProgress, type GamePlayed, type Progress, type Vod } from '../../index'
+import { resumeProgress, type GamePlayed, type LiveStatus, type Progress, type Vod } from '../../index'
 import { useVods, useVodsContext } from '../../vue/index'
 import { computed, ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import LatestPlaythroughs from '../components/LatestPlaythroughs.vue'
 import LatestVod from '../components/LatestVod.vue'
+import LiveNow from '../components/LiveNow.vue'
 import MostPlayed from '../components/MostPlayed.vue'
 import VodsShell from '../components/VodsShell.vue'
 import { loadGamesPlayed } from '../lib/gamesPlayed'
@@ -20,6 +21,10 @@ const tabFilter = (t: Tab) => toApiFilter(parseListQuery({}, t))
 const { vods: latestVods } = useVods(() => ({ ...tabFilter('vods'), page: 1, perPage: 1 }))
 const latest = computed(() => latestVods.value[0] ?? null)
 const { vods: latestPlaythroughs, loading: playthroughsLoading } = useVods(() => ({ ...tabFilter('playthroughs'), page: 1, perPage: 2 }))
+
+// Offline, or the status call failed: the latest VOD shows as usual.
+const live = shallowRef<LiveStatus | null>(null)
+client.liveStatus().then((s) => (live.value = s)).catch(() => undefined)
 
 const games = shallowRef<GamePlayed[] | null>(null)
 const gamesError = ref<string | null>(null)
@@ -44,7 +49,8 @@ const resumeOf = (v: Vod) => resumeProgress(saved.value.get(v.id), v.duration)
 <template>
   <VodsShell>
     <section class="top">
-      <LatestVod v-if="latest" :vod="latest" :progress="resumeOf(latest)" />
+      <LiveNow v-if="live" :live="live" />
+      <LatestVod v-else-if="latest" :vod="latest" :progress="resumeOf(latest)" />
       <LatestPlaythroughs :vods="latestPlaythroughs" :loading="playthroughsLoading" :resume="resumeOf" />
       <MostPlayed :games="games" :error="gamesError" @game="openGame" @retry="fetchGames(true)" />
     </section>

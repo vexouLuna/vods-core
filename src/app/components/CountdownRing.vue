@@ -10,12 +10,12 @@ defineProps<{ left: number | null; total: number; label: string }>()
       <circle class="ring-track" cx="24" cy="24" r="21" pathLength="1" />
       <circle v-if="left !== null" class="ring-left" cx="24" cy="24" r="21" pathLength="1" :stroke-dashoffset="1 - left / total" />
     </svg>
-    <span class="ring-n vx-mono" aria-hidden="true">{{ left !== null ? Math.ceil(left) : '–' }}</span>
+    <span class="ring-n vods-mono" aria-hidden="true">{{ left !== null ? Math.ceil(left) : '–' }}</span>
   </div>
 </template>
 
 <style scoped>
-.ring { position: relative; flex: none; display: grid; place-items: center; width: 100px; height: 100px; color: var(--vx-accent); }
+.ring { position: relative; flex: none; display: grid; place-items: center; width: 100px; height: 100px; color: var(--vods-accent); }
 .ring.off { color: inherit; opacity: 0.4; }
 .ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .ring circle { fill: none; stroke: currentColor; stroke-width: 3; }

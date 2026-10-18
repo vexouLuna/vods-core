@@ -4,7 +4,8 @@
 // Twitch still has), and make a synthetic one (a playthrough, say). Status: uploaded or details only, and each queued,
 // running or paused job; `upload=stuck` keeps the ones not on YouTube with no job (the overview links there). Tick VODs
 // to queue them to archive, refetch their chapters, chat or emotes, hide or show them, or add or take off a tag.
-import { VxButton, VxCallout, VxCheckbox, VxChip, VxDialog, VxField, VxInput, VxSegmented, VxSelect, VxSkeleton, VxTable, useToast, type Option, type TableColumn } from '@vex/ui'
+import { useToast } from '@vex/ui/utils'
+import type { Option, TableColumn } from '@vex/ui'
 import { toClock } from '../../../index'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -197,33 +198,33 @@ onMounted(() => {
 <template>
   <ManageShell title="VODs">
     <template #actions>
-      <VxButton to="/manage/synthetic/new">New synthetic VOD</VxButton>
-      <VxButton @click="findOpen = true">Find on Twitch</VxButton>
-      <VxButton variant="primary" @click="addId = ''; addOpen = true">Add from Twitch</VxButton>
+      <UiButton to="/manage/synthetic/new">New synthetic VOD</UiButton>
+      <UiButton @click="findOpen = true">Find on Twitch</UiButton>
+      <UiButton variant="primary" @click="addId = ''; addOpen = true">Add from Twitch</UiButton>
     </template>
 
     <div class="search">
-      <VxInput v-model="draft" type="search" placeholder="Search titles, or paste a VOD id…" clearable>
+      <UiInput v-model="draft" type="search" placeholder="Search titles, or paste a VOD id…" clearable>
         <template #icon>⌕</template>
-      </VxInput>
-      <VxSegmented :model-value="shown" :options="SHOWN" label="Visibility" @update:model-value="setShown" />
-      <VxSegmented :model-value="kind" :options="KIND" label="Kind" @update:model-value="setKind" />
-      <VxSegmented :model-value="upload" :options="UPLOAD" label="Upload" @update:model-value="setUpload" />
-      <VxButton v-if="idLike" :to="`/manage/vods/${idLike}`" variant="primary">Open VOD {{ idLike }}</VxButton>
+      </UiInput>
+      <UiSegmented :model-value="shown" :options="SHOWN" label="Visibility" @update:model-value="setShown" />
+      <UiSegmented :model-value="kind" :options="KIND" label="Kind" @update:model-value="setKind" />
+      <UiSegmented :model-value="upload" :options="UPLOAD" label="Upload" @update:model-value="setUpload" />
+      <UiButton v-if="idLike" :to="`/manage/vods/${idLike}`" variant="primary">Open VOD {{ idLike }}</UiButton>
     </div>
 
-    <VxCallout v-if="error" tone="error" title="Couldn't load the VODs">
+    <UiCallout v-if="error" tone="error" title="Couldn't load the VODs">
       {{ errorText(error) }}
-      <template #actions><VxButton size="sm" @click="refresh">Try again</VxButton></template>
-    </VxCallout>
-    <div v-else-if="loading && !vods.length" class="sk" aria-busy="true"><VxSkeleton v-for="i in 6" :key="i" h="36px" /></div>
+      <template #actions><UiButton size="sm" @click="refresh">Try again</UiButton></template>
+    </UiCallout>
+    <div v-else-if="loading && !vods.length" class="sk" aria-busy="true"><UiSkeleton v-for="i in 6" :key="i" h="36px" /></div>
     <template v-else>
-      <div class="batch vx-panel" role="group" aria-label="Ticked VODs">
-        <VxCheckbox :model-value="allTicked" :disabled="!vods.length" @update:model-value="tickAll">
+      <div class="batch vods-panel" role="group" aria-label="Ticked VODs">
+        <UiCheckbox :model-value="allTicked" :disabled="!vods.length" @update:model-value="tickAll">
           <strong>{{ chosen.length }}</strong>&nbsp;ticked
-        </VxCheckbox>
+        </UiCheckbox>
         <template v-if="chosen.length">
-          <VxButton
+          <UiButton
             v-for="b in VOD_BATCH"
             :key="b.action"
             size="sm"
@@ -231,57 +232,57 @@ onMounted(() => {
             :disabled="!!batch.busy.value || !count(b.action)"
             :loading="batch.busy.value === b.action"
             @click="runBatch(b.action)"
-          >{{ b.label }} {{ count(b.action) }}</VxButton>
+          >{{ b.label }} {{ count(b.action) }}</UiButton>
           <span class="tagging">
-            <VxSelect v-model="batchTag" :options="tagOptions" placeholder="Tag…" size="sm" width="160px" />
-            <VxButton size="sm" title="Add the tag to the ones without it" :disabled="!!batch.busy.value || !count('tag')" :loading="batch.busy.value === 'tag'" @click="runBatch('tag')">Add {{ count('tag') }}</VxButton>
-            <VxButton size="sm" title="Take the tag off the ones with it" :disabled="!!batch.busy.value || !count('untag')" :loading="batch.busy.value === 'untag'" @click="runBatch('untag')">Remove {{ count('untag') }}</VxButton>
+            <UiSelect v-model="batchTag" :options="tagOptions" placeholder="Tag…" size="sm" width="160px" />
+            <UiButton size="sm" title="Add the tag to the ones without it" :disabled="!!batch.busy.value || !count('tag')" :loading="batch.busy.value === 'tag'" @click="runBatch('tag')">Add {{ count('tag') }}</UiButton>
+            <UiButton size="sm" title="Take the tag off the ones with it" :disabled="!!batch.busy.value || !count('untag')" :loading="batch.busy.value === 'untag'" @click="runBatch('untag')">Remove {{ count('untag') }}</UiButton>
           </span>
           <span class="grow" />
-          <VxButton size="sm" @click="selected = []">Untick all</VxButton>
+          <UiButton size="sm" @click="selected = []">Untick all</UiButton>
         </template>
-        <span v-else class="vx-muted small">Tick VODs to archive, refetch, hide, show or tag several at once.</span>
+        <span v-else class="vods-muted small">Tick VODs to archive, refetch, hide, show or tag several at once.</span>
       </div>
-      <VxTable :columns="columns" :rows="rows" row-key="id" manual label="VODs" empty="No VODs match.">
+      <UiTable :columns="columns" :rows="rows" row-key="id" manual label="VODs" empty="No VODs match.">
         <template #cell-pick="{ row }">
-          <VxCheckbox :model-value="picked.has(row.id)" @update:model-value="tick(row.id, $event)"><span class="sr">Tick {{ row.id }}</span></VxCheckbox>
+          <UiCheckbox :model-value="picked.has(row.id)" @update:model-value="tick(row.id, $event)"><span class="sr">Tick {{ row.id }}</span></UiCheckbox>
         </template>
         <template #cell-id="{ row }"><RouterLink :to="row.to">{{ row.id }}</RouterLink></template>
         <template #cell-title="{ row }">
           <RouterLink :to="row.to" class="title">{{ row.title }}</RouterLink>
-          <VxChip v-if="row.synthetic" tone="accent" :title="row.synthetic === 'synthetic' ? 'Made of windows of other VODs' : 'Stands in for the VODs it was made of'">{{ row.synthetic }}</VxChip>
-          <VxChip v-for="t in row.tags" :key="t">{{ t }}</VxChip>
-          <VxChip v-if="row.hidden" tone="warn" title="Gone from the public site">hidden</VxChip>
-          <VxChip v-if="row.merged" :title="`Merged into ${row.merged}`">merged</VxChip>
+          <UiChip v-if="row.synthetic" tone="accent" :title="row.synthetic === 'synthetic' ? 'Made of windows of other VODs' : 'Stands in for the VODs it was made of'">{{ row.synthetic }}</UiChip>
+          <UiChip v-for="t in row.tags" :key="t">{{ t }}</UiChip>
+          <UiChip v-if="row.hidden" tone="warn" title="Gone from the public site">hidden</UiChip>
+          <UiChip v-if="row.merged" :title="`Merged into ${row.merged}`">merged</UiChip>
         </template>
         <template #cell-status="{ row }">
           <span class="status">
-            <VxChip v-if="row.upload" :tone="row.upload.tone" :title="row.upload.title">{{ row.upload.text }}</VxChip>
-            <RouterLink v-for="j in row.jobs" :key="j.id" :to="jobHref(j.id)" class="job"><VxChip :tone="j.tone" :title="j.title">{{ j.text }}</VxChip></RouterLink>
+            <UiChip v-if="row.upload" :tone="row.upload.tone" :title="row.upload.title">{{ row.upload.text }}</UiChip>
+            <RouterLink v-for="j in row.jobs" :key="j.id" :to="jobHref(j.id)" class="job"><UiChip :tone="j.tone" :title="j.title">{{ j.text }}</UiChip></RouterLink>
           </span>
         </template>
-      </VxTable>
+      </UiTable>
       <div class="more">
-        <VxButton v-if="next" :loading="loading" @click="more">More</VxButton>
-        <span class="vx-muted vx-mono small">{{ vods.length }} shown</span>
+        <UiButton v-if="next" :loading="loading" @click="more">More</UiButton>
+        <span class="vods-muted vods-mono small">{{ vods.length }} shown</span>
       </div>
     </template>
 
     <TwitchImportDialog v-model:open="findOpen" @added="refresh" />
 
-    <VxDialog v-model:open="addOpen" title="Add a VOD from Twitch" width="460px">
+    <UiDialog v-model:open="addOpen" title="Add a VOD from Twitch" width="460px">
       For a stream the monitor missed, while Twitch still has the VOD.
       <form class="form" @submit.prevent="!addBad && add('archive')">
-        <VxField label="Twitch VOD id" help="The number in twitch.tv/videos/…">
-          <template #default="{ id }"><VxInput :id="id" v-model="addId" mono placeholder="2375792832" /></template>
-        </VxField>
+        <UiField label="Twitch VOD id" help="The number in twitch.tv/videos/…">
+          <template #default="{ id }"><UiInput :id="id" v-model="addId" mono placeholder="2375792832" /></template>
+        </UiField>
       </form>
       <template #actions="{ close }">
-        <VxButton @click="close">Cancel</VxButton>
-        <VxButton :disabled="addBad" :loading="adding === 'create'" @click="add('create')">Details only</VxButton>
-        <VxButton variant="primary" :disabled="addBad" :loading="adding === 'archive'" @click="add('archive')">Archive it</VxButton>
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton :disabled="addBad" :loading="adding === 'create'" @click="add('create')">Details only</UiButton>
+        <UiButton variant="primary" :disabled="addBad" :loading="adding === 'archive'" @click="add('archive')">Archive it</UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
   </ManageShell>
 </template>
 
@@ -300,5 +301,5 @@ a { color: inherit; }
 .tagging { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .grow { flex: 1; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.form { margin-top: 12px; color: var(--vx-text, inherit); }
+.form { margin-top: 12px; color: var(--vods-text, inherit); }
 </style>

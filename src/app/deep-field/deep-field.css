@@ -1,0 +1,108 @@
+/*
+ * The app (tokens.css) on Deep Field: --vods-* from vex-ui's --vx-* tokens, and the vods-* utility classes as their
+ * vx-* twins. A Deep Field site imports this after @vex/ui's style.css: `@vex/vods-core/deep-field.css`.
+ */
+:root {
+  --vods-bg: var(--vx-bg);
+  --vods-surface: var(--vx-surface);
+  --vods-surface-2: var(--vx-surface-2);
+  --vods-pop: var(--vx-pop);
+  --vods-ink: var(--vx-ink);
+  --vods-muted: var(--vx-muted);
+  --vods-line: var(--vx-line);
+  --vods-accent: var(--vx-accent);
+  --vods-info: var(--vx-info);
+  --vods-ok: var(--vx-ok);
+  --vods-warn: var(--vx-warn);
+  --vods-bad: var(--vx-bad);
+  --vods-ring: var(--vx-ring);
+  --vods-hover: var(--vx-hover);
+  --vods-radius: var(--vx-radius);
+  --vods-radius-sm: var(--vx-radius-sm);
+  --vods-font-mono: var(--vx-font-mono);
+  --vods-hatch: var(--vx-hatch);
+  --vods-hatch-dark: var(--vx-hatch-dark);
+  --vods-hatch-bad: var(--vx-hatch-bad);
+}
+
+/* The pages' container queries (@container vods) run against Deep Field's shell. */
+.vx-site { container-name: vx-site vods; }
+
+/* shortcut: copied from vex-ui's base.css and components.css (vx-display… vx-btn); re-copy if vex-ui changes them. */
+.vods-display {
+  font-family: var(--vx-font-mono);
+  font-weight: 500;
+  line-height: 1.15;
+  margin: 0;
+  background-image: linear-gradient(90deg, #5a5a5a, #fff 70%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.vods-eyebrow {
+  font-family: var(--vx-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--vx-muted);
+}
+.vods-mono { font-family: var(--vx-font-mono); }
+.vods-muted { color: var(--vx-muted); }
+.vods-panel {
+  background: var(--vx-glass-sheen), var(--vx-glass-clear);
+  border: 1px solid var(--vx-glass-line);
+  border-radius: var(--vx-radius);
+  box-shadow: var(--vx-glass-edge);
+}
+.vods-pop {
+  background: var(--vx-pop);
+  border: 1px solid var(--vx-line);
+  border-radius: var(--vx-radius);
+  box-shadow: var(--vx-shadow);
+}
+.vods-ring { transition: box-shadow 0.15s; }
+.vods-ring:hover, a:hover > .vods-ring, .vods-ring:focus-visible {
+  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.55), 0 0 0 5px var(--vx-ring);
+}
+.vods-overlay { font-family: var(--vx-font-sans); color: var(--vx-ink); font-size: 14px; line-height: 1.5; }
+.vods-overlay *, .vods-overlay *::before, .vods-overlay *::after { box-sizing: border-box; }
+.vods-input {
+  height: var(--vx-ctl);
+  min-width: 0;
+  width: 100%;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--vx-ink);
+  background: var(--vx-glass);
+  border: 1px solid var(--vx-glass-line);
+  border-radius: var(--vx-radius-sm);
+}
+.vods-input::placeholder { color: var(--vx-muted); }
+.vods-input:focus { outline: 1px solid var(--vx-accent); outline-offset: 1px; }
+.vods-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: none;
+  height: var(--vx-ctl);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--vx-ink);
+  background: var(--vx-glass);
+  border: 1px solid var(--vx-glass-line);
+  border-radius: var(--vx-radius-sm);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  text-decoration: none;
+}
+.vods-btn:hover { background: var(--vx-hover); border-color: color-mix(in srgb, var(--vx-accent) 55%, transparent); color: var(--vx-ink); }
+.vods-btn.is-primary { background: var(--vx-accent); border-color: var(--vx-accent); color: var(--vx-bg); font-weight: 600; backdrop-filter: none; }
+.vods-btn.is-sm { height: var(--vx-ctl-sm); padding: 0 9px; font-size: 12px; gap: 5px; }
