@@ -201,6 +201,8 @@ export interface RawFragment {
   text: string
   emote?: { emoteID: string } | null
   emoticon?: { emoticon_id: string } | null
+  /** A GIPHY GIF from Twitch's GIF picker (bot chat only). */
+  gif?: { id?: string; url?: string; still?: string; title?: string } | null
 }
 
 export interface RawUserBadge {
@@ -228,6 +230,11 @@ export interface RawBotEntry {
   /** What removed the message (the removal's own time is in `at`, epoch ms). */
   removal?: { type?: string; reason?: string | null; duration_s?: number | null; at?: number } | null
   reply_parent_id?: string | null
+  /** A notice's own chat message (a resub's) as the bot logged it, with the chatter's badges and colour. */
+  fragments?: RawFragment[] | null
+  badges?: RawUserBadge[] | null
+  color?: string | null
+  payload?: { system_message?: string | null; [key: string]: unknown } | null
   [key: string]: unknown
 }
 
