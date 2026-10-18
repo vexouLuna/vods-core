@@ -59,6 +59,10 @@ export interface RawTag {
   pattern: TagPattern | null
   patternColor: string | null
   patternSize: number | null
+  /** Missing from an archive older than tag types: the site's own (`site.tags`) are kept for it. */
+  page?: string | null
+  pageLabel?: string | null
+  homeCard?: boolean | null
 }
 
 export { isTagColor, TAG_COLOR_MAX, TAG_NAME } from './tagRules'
@@ -75,6 +79,19 @@ export const TAG_PATTERN_SIZE = { min: 2, max: 40 }
 /** Tags the site or the archive sets by itself: always listed on /manage/tags, and can't be removed there. */
 export const AUTO_TAGS: readonly string[] = ['new', 'updated', 'compilation']
 export const isAutoTag = (name: string) => AUTO_TAGS.includes(name)
+
+export const TAG_PAGE_LABEL_MAX = 40
+/** Paths of the site's own that a tag's page can't take. */
+export const RESERVED_PAGES: readonly string[] = ['vods', 'live', 'youtube', 'games', 'manage', 'admin', 'playthrough']
+
+/** A tag's type (page, its title, home card) from the archive, or the site's own for an archive without types. Only
+ * what's set: a tag without a page or card has neither key. */
+function typeOf(t: RawTag): Pick<TagStyle, 'page' | 'pageLabel' | 'homeCard'> {
+  const from = 'page' in t ? t : { page: null, pageLabel: null, homeCard: null, ...site.tags[t.name] }
+  const page = typeof from.page === 'string' && TAG_NAME.test(from.page) && !RESERVED_PAGES.includes(from.page) ? from.page : null
+  const label = typeof from.pageLabel === 'string' && from.pageLabel.trim() ? from.pageLabel.trim().slice(0, TAG_PAGE_LABEL_MAX) : undefined
+  return { ...(page && { page, pageLabel: label }), ...(from.homeCard === true && { homeCard: true }) }
+}
 
 /** The archive's list as tag styles: shapes resolved against the API, anything malformed dropped or defaulted. */
 export function fromRaw(raw: RawTag[], apiBase: string): Record<string, TagStyle> {
@@ -98,6 +115,7 @@ export function fromRaw(raw: RawTag[], apiBase: string): Record<string, TagStyle
       textX: within(t.textX, TAG_TEXT_NUDGE),
       textY: within(t.textY, TAG_TEXT_NUDGE),
       textRotate: within(t.textRotate, TAG_TEXT_ROTATE),
+      ...typeOf(t),
       ...(TAG_PATTERNS.includes(t.pattern as TagPattern) && {
         pattern: t.pattern as TagPattern,
         patternColor: color(t.patternColor),
@@ -109,7 +127,16 @@ export function fromRaw(raw: RawTag[], apiBase: string): Record<string, TagStyle
 }
 
 /** Takes the archive's tag config when it has one; on any failure (an archive without it answers 404) keeps what's there. */
-export async function loadTagConfig(fetcher: typeof fetch = (...a) => fetch(...a), apiBase = vodsConfig.apiBase): Promise<void> {
+export function loadTagConfig(fetcher: typeof fetch = (...a) => fetch(...a), apiBase = vodsConfig.apiBase): Promise<void> {
+  loading = fetchTagConfig(fetcher, apiBase)
+  return loading
+}
+
+let loading: Promise<void> = Promise.resolve()
+/** Settles once the latest loadTagConfig() has (the tag pages are only known then). */
+export const tagConfigReady = (): Promise<void> => loading
+
+async function fetchTagConfig(fetcher: typeof fetch, apiBase: string): Promise<void> {
   try {
     const res = await fetcher(`${apiBase.replace(/\/+$/, '')}/v1/site/tags`, { headers: { accept: 'application/json' } })
     if (!res.ok) return

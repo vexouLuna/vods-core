@@ -144,7 +144,7 @@ export function formatTime(seconds: number): string {
 export interface YoutubeDraft {
   key: number
   id: string
-  type: 'vod' | 'live'
+  type: RawUpload['type']
   part: number
   /** Seconds, or null to keep what the archive has (still processing). */
   duration: number | null

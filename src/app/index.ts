@@ -90,6 +90,7 @@ export function createVodsApp(options: VodsAppOptions): VodsApp {
         youtube: () => import('./pages/admin/AdminYoutubePage.vue'),
         settings: () => import('./pages/admin/AdminSettingsPage.vue'),
         tags: () => import('./pages/admin/AdminTagsPage.vue'),
+        home: () => import('./pages/admin/AdminHomePage.vue'),
         audit: () => import('./pages/admin/AdminAuditPage.vue'),
       },
     }),

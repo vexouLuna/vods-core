@@ -7,6 +7,7 @@ import { DEFAULT_TAGS, site } from '../../src/app/site'
 const raw = (o: Partial<RawTag> = {}): RawTag => ({ name: 'new', label: 'new', drawn: true, color: null, shape: null, width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN, ...o })
 const NO_TEXT = { text: null, textColor: null, textSize: null, textX: null, textY: null, textRotate: null }
 const NO_PATTERN = { pattern: null, patternColor: null, patternSize: null }
+const NO_TYPE = { page: null, pageLabel: null, homeCard: false }
 const json = (status: number, body: unknown) => vi.fn(async (_u: string, _i?: RequestInit) => new Response(JSON.stringify(body), { status }))
 
 afterEach(() => {
@@ -37,6 +38,38 @@ describe('fromRaw', () => {
     )
     expect(out.new).toMatchObject({ text: '100%', textColor: 'var(--vx-ink)', textSize: 12, textX: -3, textY: 2, textRotate: -15, rotate: 8 })
     expect(out.x).toMatchObject({ text: 'y'.repeat(24), textColor: undefined, textSize: undefined, textX: undefined, textY: undefined, textRotate: undefined, rotate: undefined })
+  })
+})
+
+describe('tag types', () => {
+  it('takes a page and home card from the archive, and drops a reserved or bad slug', () => {
+    const out = fromRaw(
+      [
+        raw({ name: 'highlight', page: 'highlights', pageLabel: ' Highlights ', homeCard: true }),
+        raw({ name: 'a', page: 'manage', pageLabel: 'x' }),
+        raw({ name: 'b', page: 'Bad', pageLabel: 'x' }),
+        raw({ name: 'compilation', page: null, pageLabel: null, homeCard: false }),
+      ],
+      '',
+    )
+    expect(out.highlight).toMatchObject({ page: 'highlights', pageLabel: 'Highlights', homeCard: true })
+    for (const t of ['a', 'b', 'compilation']) expect(out[t]!.page, t).toBeUndefined()
+  })
+  it("keeps the site's own types for an archive older than them", () => {
+    expect(fromRaw([raw({ name: 'compilation', label: 'pt', drawn: false })], '').compilation).toMatchObject({
+      page: 'playthroughs', pageLabel: 'Playthroughs', homeCard: true,
+    })
+  })
+  it('checks pages in the drafts and saves the type', () => {
+    const base = draftOf(raw({ name: 'clip' }))
+    const ok = Object.assign(draftOf(raw({ name: 'clip2' })), { page: ' clips ', pageLabel: ' Clips ', homeCard: true })
+    const dupe = Object.assign(draftOf(raw({ name: 'clip3' })), { page: 'clips', pageLabel: '' })
+    const reserved = Object.assign(draftOf(raw({ name: 'clip4' })), { page: 'games', pageLabel: 'G' })
+    const r = tagChanges([], [base, ok, dupe, reserved])
+    expect(r.body[0]).toMatchObject(NO_TYPE)
+    expect(r.body[1]).toMatchObject({ page: 'clips', pageLabel: 'Clips', homeCard: true })
+    expect(Object.keys(r.errors.get(dupe.key)!)).toEqual(['page', 'pageLabel'])
+    expect(r.errors.get(reserved.key)!.page).toMatch('/games')
   })
 })
 
@@ -91,8 +124,8 @@ describe('tagChanges', () => {
     const r = tagChanges(saved, drafts)
     expect(r.changed).toBe(true)
     expect(r.body).toEqual([
-      { name: 'new', label: 'new', drawn: true, color: 'var(--vx-accent)', width: 70, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN },
-      { name: 'compilation', label: 'playthrough', drawn: false, color: '#abcdef', width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN },
+      { name: 'new', label: 'new', drawn: true, color: 'var(--vx-accent)', width: 70, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN, ...NO_TYPE },
+      { name: 'compilation', label: 'playthrough', drawn: false, color: '#abcdef', width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN, ...NO_TYPE },
     ])
   })
   it('takes sizes as the number inputs give them', () => {
