@@ -123,7 +123,9 @@ account live playback tokens are asked for as, so a live recording has no stitch
   included. `q` matches the title, or is a VOD id; `hidden=true|false` filters; `before` is the last page's `next`
   (twitch-archive PR #30). The Manage VODs page uses it instead of the public list, which leaves hidden VODs out.
 - `PATCH /admin/vods/{id}` `{"title"?, "hidden"?, "thumbnailUrl"?: http(s) URL | null, "duration"?: "HH:MM:SS",
-  "createdAt"?: ISO}` → the updated VOD (with `hidden`). `thumbnailUrl: null` falls back to the first YouTube part's.
+  "createdAt"?: ISO, "cutReason"?: text | null}` → the updated VOD (with `hidden`). `thumbnailUrl: null` falls back
+  to the first YouTube part's. `cutReason` (trimmed, 500 characters at most; blank or null clears it) is why the VOD
+  was cut: the public VOD JSON carries it as `cut_reason` only when set, and the page for a VOD cut in full shows it.
   The duration can't end before the last chapter or games row. A merged VOD refuses everything but `hidden` (409).
   Audited with before and after (twitch-archive PR #30).
 - Hidden VODs are gone from the public API as if missing: not in `/vods` or `/games`, 404 on `/vods/{id}` and its

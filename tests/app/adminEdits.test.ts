@@ -129,6 +129,17 @@ describe('details draft', () => {
     expect(detailsPatch(d, v)).toEqual({ title: 'New', thumbnailUrl: null, duration: '01:02:05' })
   })
 
+  it('sends the cut reason trimmed, and empty as null', () => {
+    const v = vod({ cut_reason: 'Music claim' })
+    const d = detailsDraft(v)
+    expect(d.cutReason).toBe('Music claim')
+    d.cutReason = '  '
+    expect(detailsPatch(d, v)).toEqual({ cutReason: null })
+    d.cutReason = ' DMCA '
+    expect(detailsPatch(d, vod())).toEqual({ cutReason: 'DMCA' })
+    expect(detailsErrors({ ...d, cutReason: 'x'.repeat(501) }).get('cutReason')).toMatch(/500/)
+  })
+
   it('checks the title, URL, duration against the content, and the date', () => {
     const d = { ...detailsDraft(vod()), title: ' ', thumbnailUrl: 'ftp://x', createdAt: 'nope' }
     expect([...detailsErrors(d).keys()]).toEqual(['title', 'thumbnailUrl', 'createdAt'])

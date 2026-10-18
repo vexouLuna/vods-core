@@ -92,6 +92,8 @@ export interface RawVod {
   /** On a VOD that synthetic VODs (playthroughs) use without replacing it. */
   appears_in?: RawAppearsIn[] | null
   platform?: string | null
+  /** Why the VOD was cut, when an admin gave a reason (missing otherwise). */
+  cut_reason?: string | null
   createdAt: string
   updatedAt?: string
 }

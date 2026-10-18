@@ -256,6 +256,8 @@ export interface VodPatch {
   duration?: string
   /** ISO 8601 with an offset. */
   createdAt?: string
+  /** Why the VOD was cut (500 characters at most), or null for none. */
+  cutReason?: string | null
 }
 
 /** A games row (the public `/games` shape): which game was played when, for the games pages. */
