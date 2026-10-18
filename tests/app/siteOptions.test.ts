@@ -28,11 +28,14 @@ describe('loadSiteOptions', () => {
     const urls: string[] = []
     const ok = (async (url: string) => {
       urls.push(url)
-      return new Response(JSON.stringify({ homeCards: [{ kind: 'games' }] }))
+      return new Response(JSON.stringify({ homeCards: [{ kind: 'games' }], playDefault: 'compiled' }))
     }) as typeof fetch
     await loadSiteOptions(ok, 'https://api.test/')
     expect(urls).toEqual(['https://api.test/v1/site/options'])
-    expect(siteOptions.value.homeCards).toEqual([{ kind: 'games' }])
+    expect(siteOptions.value).toEqual({ homeCards: [{ kind: 'games' }], playDefault: 'compiled' })
+    await loadSiteOptions((async () => new Response(JSON.stringify({ playDefault: 'youtube' }))) as typeof fetch, 'https://api.test')
+    expect(siteOptions.value.playDefault).toBe('segments')
+    await loadSiteOptions((async () => new Response(JSON.stringify({ homeCards: [{ kind: 'games' }] }))) as typeof fetch, 'https://api.test')
     await loadSiteOptions((async () => new Response('', { status: 404 })) as typeof fetch, 'https://api.test')
     await loadSiteOptions((async () => Promise.reject(new Error('down'))) as typeof fetch, 'https://api.test')
     expect(siteOptions.value.homeCards).toEqual([{ kind: 'games' }])

@@ -1,6 +1,7 @@
 // Normalized shapes every page works with. Built from the raw API types by api/normalize.ts.
 
-export type UploadType = 'vod' | 'live'
+/** Which set of YouTube uploads: the VOD copy, the live recording, or (on a synthetic VOD) its compiled file. */
+export type UploadType = 'vod' | 'live' | 'compiled'
 
 export interface Chapter {
   name: string

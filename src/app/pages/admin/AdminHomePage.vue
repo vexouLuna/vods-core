@@ -1,29 +1,31 @@
 <script setup lang="ts">
 // /manage/home: which cards the homepage shows, in order (GET /admin/site/options). A tag card is any tag whose type
-// can be a home card (/manage/tags). One Save sends the list.
+// can be a home card (/manage/tags). Also which version of a compiled synthetic VOD plays first. One Save sends both.
 import { useToast } from '@vex/ui/utils'
 import { errorText } from '@vex/platform-web'
 import { computed, onMounted, ref } from 'vue'
 import ManageShell from '../../admin/ManageShell.vue'
 import { admin } from '../../admin/session'
-import { homeCardKey, homeCardLabel, siteOptions, type HomeCard } from '../../lib/siteOptions'
+import { homeCardKey, homeCardLabel, siteOptions, type HomeCard, type PlayDefault, type SiteOptions } from '../../lib/siteOptions'
 import { tagConfig } from '../../lib/vodTags'
 import { timeAgo } from '../../lib/time'
 import { site } from '../../site'
 
 const toast = useToast()
 
-const saved = ref<HomeCard[] | null>(null)
+const saved = ref<SiteOptions | null>(null)
 const changedAt = ref<{ at: string | null; by: string | null }>({ at: null, by: null })
 const cards = ref<HomeCard[]>([])
+const play = ref<PlayDefault>('segments')
 const loadError = ref<string | null>(null)
 const saving = ref(false)
 const saveError = ref<string | null>(null)
 const adding = ref('')
 
-function take(v: { homeCards: HomeCard[]; updatedAt: string | null; updatedBy: string | null }) {
-  saved.value = v.homeCards
+function take(v: SiteOptions & { updatedAt: string | null; updatedBy: string | null }) {
+  saved.value = { homeCards: v.homeCards, playDefault: v.playDefault }
   cards.value = [...v.homeCards]
+  play.value = v.playDefault
   changedAt.value = { at: v.updatedAt, by: v.updatedBy }
 }
 async function load() {
@@ -45,7 +47,7 @@ const addable = computed(() => {
   const have = new Set(cards.value.map(homeCardKey))
   return all.filter((c) => !have.has(homeCardKey(c)))
 })
-const dirty = computed(() => JSON.stringify(cards.value) !== JSON.stringify(saved.value))
+const dirty = computed(() => JSON.stringify(cards.value) !== JSON.stringify(saved.value?.homeCards) || play.value !== saved.value?.playDefault)
 
 function move(i: number, by: -1 | 1) {
   const next = [...cards.value]
@@ -62,9 +64,9 @@ async function save() {
   saving.value = true
   saveError.value = null
   try {
-    const v = await admin.saveSiteOptions({ homeCards: cards.value })
+    const v = await admin.saveSiteOptions({ homeCards: cards.value, playDefault: play.value })
     take(v)
-    siteOptions.value = { homeCards: v.homeCards }
+    siteOptions.value = { homeCards: v.homeCards, playDefault: v.playDefault }
     toast.show('Homepage saved', { duration: 3000 })
   } catch (e) {
     saveError.value = errorText(e)
@@ -107,10 +109,17 @@ onMounted(() => {
           <option v-for="c in addable" :key="homeCardKey(c)" :value="homeCardKey(c)">{{ homeCardLabel(c, tagConfig) }}</option>
         </select>
       </div>
+      <div class="add">
+        <label for="home-play" class="vods-muted">A synthetic VOD with a compiled upload plays</label>
+        <select id="home-play" v-model="play" class="vods-input">
+          <option value="segments">its segments (each source's own uploads)</option>
+          <option value="compiled">its compiled upload</option>
+        </select>
+      </div>
       <UiCallout v-if="saveError" tone="error" title="Couldn't save">{{ saveError }}</UiCallout>
       <div class="actions">
         <UiButton type="submit" :disabled="!dirty" :loading="saving">Save</UiButton>
-        <UiButton variant="ghost" :disabled="!dirty" @click="cards = [...(saved ?? [])]">Undo</UiButton>
+        <UiButton variant="ghost" :disabled="!dirty" @click="saved && take({ ...saved, updatedAt: changedAt.at, updatedBy: changedAt.by })">Undo</UiButton>
         <span v-if="changedAt.at" class="vods-muted">Saved {{ timeAgo(changedAt.at) }}{{ changedAt.by ? ` by ${changedAt.by}` : '' }}</span>
       </div>
     </form>

@@ -1,5 +1,5 @@
 import { ProblemError, parseRetryAfter } from '@vex/platform-web'
-import type { RawDrive, RawEmoteSets, RawVod } from '../../index'
+import type { RawDrive, RawEmoteSets, RawUpload, RawVod } from '../../index'
 import type { RawTag } from '../lib/vodTags'
 import type { SiteOptions } from '../lib/siteOptions'
 
@@ -502,7 +502,7 @@ export interface ChapterEdit {
 
 export interface YoutubeEdit {
   id: string
-  type: 'vod' | 'live'
+  type: RawUpload['type']
   part: number
   /** Seconds; omit to keep what the archive has. */
   duration?: number
@@ -783,7 +783,7 @@ export class AdminClient {
   reuploadPart(vodId: string, part: number, type: 'vod' | 'live' = 'vod'): Promise<ActionResult> {
     return this.request('POST', '/admin/reupload', { vodId, part, type })
   }
-  updateDescriptions(vodId: string, type: 'vod' | 'live' = 'vod'): Promise<ActionResult> {
+  updateDescriptions(vodId: string, type: RawUpload['type'] = 'vod'): Promise<ActionResult> {
     return this.request('POST', '/admin/youtube/parts', { vodId, type })
   }
   /** Removes the VOD with its chat, emotes and game uploads from the archive (not from YouTube). */

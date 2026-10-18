@@ -1,5 +1,5 @@
 // The site's own options from the archive (GET /v1/site/options; edited on /manage/home): which cards the homepage
-// shows, in order. Until the archive answers (or an archive without them), the defaults.
+// shows, in order, and which version of a compiled synthetic VOD plays first. Until the archive answers (or an archive without them), the defaults.
 import { shallowRef } from 'vue'
 import { vodsConfig } from '../site'
 import type { TagStyle } from '../site'
@@ -8,12 +8,17 @@ import { TAG_NAME } from './tagRules'
 /** One homepage card: the newest VOD (the stream while live), the newest VODs with a tag, or the most played games. */
 export type HomeCard = { kind: 'latest' } | { kind: 'tag'; tag: string } | { kind: 'games' }
 
+/** A synthetic VOD with a compiled upload plays its segments (each source's own uploads) or that one file. */
+export type PlayDefault = 'segments' | 'compiled'
+
 export interface SiteOptions {
   homeCards: HomeCard[]
+  playDefault: PlayDefault
 }
 
 export const DEFAULT_SITE_OPTIONS: SiteOptions = {
   homeCards: [{ kind: 'latest' }, { kind: 'tag', tag: 'compilation' }, { kind: 'games' }],
+  playDefault: 'segments',
 }
 
 export const siteOptions = shallowRef<SiteOptions>(DEFAULT_SITE_OPTIONS)
@@ -51,7 +56,7 @@ export async function loadSiteOptions(fetcher: typeof fetch = (...a) => fetch(..
     const res = await fetcher(`${apiBase.replace(/\/+$/, '')}/v1/site/options`, { headers: { accept: 'application/json' } })
     if (!res.ok) return
     const body = (await res.json()) as Partial<Record<keyof SiteOptions, unknown>>
-    siteOptions.value = { homeCards: homeCardsOf(body?.homeCards) }
+    siteOptions.value = { homeCards: homeCardsOf(body?.homeCards), playDefault: body?.playDefault === 'compiled' ? 'compiled' : 'segments' }
   } catch {
     // keep the defaults
   }

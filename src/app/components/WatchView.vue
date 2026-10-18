@@ -38,8 +38,10 @@ const props = withDefaults(
     download?: DriveFile | null
     /** Save the watch position in this browser. */
     track?: boolean
+    /** The other version of a synthetic VOD with a compiled upload (its segments, or that one file). */
+    switchTo?: { label: string; to: string } | null
   }>(),
-  { download: null, track: true, segments: null, sources: () => [] },
+  { download: null, track: true, segments: null, sources: () => [], switchTo: null },
 )
 
 const toast = useToast()
@@ -233,6 +235,7 @@ watchEffect(() => learnGameColors(posterGames.value))
               </div>
             </div>
 
+            <UiButton v-if="switchTo" size="sm" variant="ghost" :to="switchTo.to">{{ switchTo.label }}</UiButton>
             <slot name="parts" :part-index="partIndex">
               <UiPopover prefer="up" align="right" width="min(320px, calc(100vw - 24px))" :cap="360">
                 <template #trigger="{ toggle, open }">

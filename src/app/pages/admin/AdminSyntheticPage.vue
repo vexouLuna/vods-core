@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // /manage/synthetic/new and /manage/synthetic/:id: a VOD made of windows of real ones (GET/POST/PUT/DELETE
 // /api/v2/synthetic). A merge or split supersedes its sources (they leave the public lists and redirect into it); a
-// playthrough, built from a game's windows, is listed beside them and tagged `compilation`.
+// playthrough, built from a game's windows, is listed beside them and tagged `compilation`. Compile starts a job that
+// joins its windows into one file and uploads it as type `compiled` (the archive's compile_upload must be on).
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
@@ -12,6 +13,7 @@ import type { PlaythroughWindow, SyntheticInput, SyntheticVod } from '../../admi
 import ManageShell from '../../admin/ManageShell.vue'
 import PlaythroughBuilder from '../../admin/PlaythroughBuilder.vue'
 import { admin } from '../../admin/session'
+import { platform, vodSubject } from '../../admin/platform'
 import TimeInput from '../../admin/TimeInput.vue'
 import { COMPLETE_TAG } from '../../lib/vodTags'
 import { site } from '../../site'
@@ -140,6 +142,20 @@ async function save() {
   }
 }
 
+const compiling = ref(false)
+async function compile() {
+  compiling.value = true
+  try {
+    // `replace` swaps out the compiled uploads of an earlier run (none on the first).
+    const job = await platform.enqueue({ kind: 'compile', subject: vodSubject(props.id!), payload: { type: 'compiled', replace: true } })
+    router.push(`/manage/jobs/${job.id}`)
+  } catch (e) {
+    toast.show(errorText(e), { kind: 'error', duration: 6000 })
+  } finally {
+    compiling.value = false
+  }
+}
+
 const deleteOpen = ref(false)
 const deleting = ref(false)
 async function destroy() {
@@ -164,6 +180,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
   <ManageShell :title="isNew ? 'New synthetic VOD' : `Synthetic VOD ${id}`">
     <template #actions>
       <UiButton v-if="!isNew" :to="`/vods/${encodeURIComponent(id!)}`">Watch page</UiButton>
+      <UiButton v-if="!isNew" :loading="compiling" title="Join its windows into one file and upload it" @click="compile">Compile</UiButton>
       <UiButton v-if="!isNew" variant="danger" @click="deleteOpen = true">Delete</UiButton>
     </template>
     <p class="back"><RouterLink to="/manage/vods?synthetic=true">← Synthetic VODs</RouterLink></p>
