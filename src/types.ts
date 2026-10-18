@@ -1,6 +1,7 @@
 // Normalized shapes every page works with. Built from the raw API types by api/normalize.ts.
 
-export type UploadType = 'vod' | 'live'
+/** Which set of YouTube uploads: the VOD copy, the live recording, or (on a synthetic VOD) its compiled file. */
+export type UploadType = 'vod' | 'live' | 'compiled'
 
 export interface Chapter {
   name: string
@@ -94,6 +95,8 @@ export interface Vod {
   supersededBy?: SupersededBy[] | null
   /** Synthetic VODs (playthroughs) that use part of this one. */
   appearsIn?: AppearsIn[] | null
+  /** Why the VOD was cut, when an admin gave a reason: the page for a VOD cut in full shows it. */
+  cutReason?: string | null
 }
 
 /** Source seconds [start, end) of VOD `vodId`, playing from `at` on the synthetic VOD. */
@@ -133,6 +136,18 @@ export interface AppearsIn {
   id: string
   title: string
   tags: string[]
+}
+
+/** The channel's stream while it's live (`ArchiveClient.liveStatus`). */
+export interface LiveStatus {
+  /** Twitch's stream id. */
+  id: string
+  startedAt: Date | null
+  title: string | null
+  /** What's being played now, if Twitch or the VOD says. `image` is like `Chapter.image`. */
+  game: { name: string; image: string | null } | null
+  /** The VOD the archive is recording of it, once it has one. */
+  vod: Vod | null
 }
 
 /** A game that appears in the archive's chapters, for game pickers. */

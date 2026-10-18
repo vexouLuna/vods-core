@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // /manage/youtube: every problem the last YouTube check found (GET /admin/youtube/videos), the last two weeks' first and
 // then the older ones, which the overview leaves out. Some of those will never be fixed (a removed upload of an old VOD).
-import { timeAgo, VxButton, VxCallout, VxSkeleton, useToast } from '@vexoulz/ui'
+import { useToast } from '@vex/ui/utils'
+import { timeAgo } from '../../lib/time'
 import { computed, onMounted, ref } from 'vue'
-import { usePoll } from '@vexoulz/platform-web/vue'
-import { errorText } from '@vexoulz/platform-web'
+import { usePoll } from '@vex/platform-web/vue'
+import { errorText } from '@vex/platform-web'
 import { RECENT_PROBLEM_DAYS, splitProblems, youtubeCheckMessage } from '../../admin/health'
 import ManageShell from '../../admin/ManageShell.vue'
 import YoutubeProblems from '../../admin/YoutubeProblems.vue'
@@ -34,29 +35,29 @@ onMounted(() => (document.title = `YouTube uploads · Manage · ${site.name}`))
 <template>
   <ManageShell title="YouTube uploads">
     <template #actions>
-      <VxButton to="/manage">Overview</VxButton>
-      <VxButton :loading="checking || !!data?.running" title="Look up every upload on YouTube now (1 API unit per 50 videos)" @click="check">Check now</VxButton>
+      <UiButton to="/manage">Overview</UiButton>
+      <UiButton :loading="checking || !!data?.running" title="Look up every upload on YouTube now (1 API unit per 50 videos)" @click="check">Check now</UiButton>
     </template>
 
-    <VxCallout v-if="error" tone="error" title="Couldn't load the YouTube check">
+    <UiCallout v-if="error" tone="error" title="Couldn't load the YouTube check">
       {{ error }}
-      <template #actions><VxButton size="sm" :loading="loading" @click="refresh">Try again</VxButton></template>
-    </VxCallout>
-    <VxSkeleton v-else-if="!data" h="120px" />
-    <p v-else-if="!data.last" class="vx-muted small">Not checked yet.</p>
+      <template #actions><UiButton size="sm" :loading="loading" @click="refresh">Try again</UiButton></template>
+    </UiCallout>
+    <UiSkeleton v-else-if="!data" h="120px" />
+    <p v-else-if="!data.last" class="vods-muted small">Not checked yet.</p>
     <template v-else>
-      <p class="vx-muted small">
+      <p class="vods-muted small">
         Checked {{ timeAgo(data.last.checkedAt) }}: {{ data.last.videos }} uploads of {{ data.last.vods }} VODs.
       </p>
       <section>
-        <h2 class="vx-eyebrow">Last {{ RECENT_PROBLEM_DAYS }} days ({{ split.recent.length }})</h2>
+        <h2 class="vods-eyebrow">Last {{ RECENT_PROBLEM_DAYS }} days ({{ split.recent.length }})</h2>
         <YoutubeProblems v-if="split.recent.length" :problems="split.recent" />
-        <p v-else class="vx-muted small">No problems with VODs from the last {{ RECENT_PROBLEM_DAYS }} days.</p>
+        <p v-else class="vods-muted small">No problems with VODs from the last {{ RECENT_PROBLEM_DAYS }} days.</p>
       </section>
       <section>
-        <h2 class="vx-eyebrow">Older ({{ split.older.length }})</h2>
+        <h2 class="vods-eyebrow">Older ({{ split.older.length }})</h2>
         <YoutubeProblems v-if="split.older.length" :problems="split.older" />
-        <p v-else class="vx-muted small">No problems with older VODs.</p>
+        <p v-else class="vods-muted small">No problems with older VODs.</p>
       </section>
     </template>
   </ManageShell>

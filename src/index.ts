@@ -3,7 +3,7 @@ export { toSeconds, toHMS, toClock, parseTimestamp } from './time'
 export type * from './types'
 
 export { ArchiveClient, type ArchiveClientOptions, type Fetch } from './api/client'
-export { ProblemError } from '@vexoulz/platform-web'
+export { ProblemError } from '@vex/platform-web'
 export { normalizeVod, normalizeChapter, normalizeUploads, normalizeSynthetic, gamesOf, normalizeGamePlayed, NO_CATEGORY } from './api/normalize'
 export { vodThumbnail, watchPath, boxArt, youtubeThumb } from './links'
 export { previewFrame, type PreviewFrame } from './preview'
@@ -41,7 +41,7 @@ export {
   type LoadEmotesOptions,
   type ModifierEffect,
 } from './chat/emotes'
-export { tokenize, resolveBadges, toChatMessage, loginOf, chatName, removalNote, type ChatLine, type NameMode, type Removal, type Token, type EmoteToken, type EmoteLayer, type Modifier, type Badge, type ChatMessage } from './chat/message'
+export { tokenize, resolveBadges, toChatMessage, loginOf, chatName, removalNote, type ChatLine, type NameMode, type Removal, type Token, type EmoteToken, type GifToken, type EmoteLayer, type Modifier, type Badge, type ChatMessage } from './chat/message'
 export { ChatReplay, type CommentSource, type ReplayOptions, type ReplayUpdate } from './chat/replay'
 
 export { LocalProgressStore, isFinished, isResumable, resumeAt, resumeProgress, type Progress, type ResumeOptions, type ProgressStore, type KeyValueStorage, type LocalProgressOptions } from './progress'

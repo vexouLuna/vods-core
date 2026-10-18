@@ -17,6 +17,8 @@ export interface TagStyle {
   /** A drawn tag's size in px. Default 62 × 22. */
   width?: number
   height?: number
+  /** Turns a drawn tag, in degrees, clockwise (−180 to 180). Unset: −4, a slight tilt. */
+  rotate?: number
   /** Text written on a drawn tag (not the label, which stays for chips and screen readers). Unset: none. */
   text?: string
   /** The text's color (any CSS color) and size in px. Unset: the page background's color, and half the height. */
@@ -29,6 +31,12 @@ export interface TagStyle {
   textRotate?: number
   /** A pattern over the tag-colored parts: diagonal stripes or checks of `color` and `patternColor`. Unset: plain. */
   pattern?: 'stripes' | 'checks'
+  /** Its type: the slug of its own list page and header link (`/playthroughs`), or unset/null for none. */
+  page?: string | null
+  /** That page's title and link, e.g. "Playthroughs". Unset: the slug. */
+  pageLabel?: string
+  /** Whether the home page can show its newest VODs as a "latest" card. */
+  homeCard?: boolean
   /** The pattern's second color (any CSS color) and the width of one stripe or square in px. Unset: the page
    * background's color, and 4. */
   patternColor?: string
@@ -45,14 +53,14 @@ export const DEFAULT_TAGS: Record<string, TagStyle> = {
     new: { label: 'new', drawn: true, color: 'var(--vods-tag-new)', shape: null },
     updated: { label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', shape: null },
     complete: { label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', shape: null },
-    compilation: { label: 'playthrough', drawn: false },
+    compilation: { label: 'playthrough', drawn: false, page: 'playthroughs', pageLabel: 'Playthroughs', homeCard: true },
   }
 
 /** What tells one vods site from another. Everything else (the pages, the player, Manage) is the same. */
 export interface VodsSite {
   /**
-   * The site's id. For a site on vexoulz-ui (`createVodsApp()`), its entry in the network's `SITES`: its accent, sky,
-   * switcher entry and repo links. A site with its own UI (the `kit` entry) uses any id.
+   * The site's id. For a Deep Field site, its entry in the network's `SITES`: its accent, sky, switcher entry and
+   * repo links. A site with its own look uses any id.
    */
   id: string
   /** The site's name in page titles and on the sign-in page: its host, e.g. `vods.vexoul.net`. */

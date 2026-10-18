@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // Tag filter for the list page: the tags the open tab can be narrowed to (lib/listQuery, tagFilters), each drawn as
 // on the thumbnails at 2/3 size. Empty value = any tag.
-import { VxButton, VxMenuItem, VxPopover } from '@vexoulz/ui'
 import { computed } from 'vue'
 import TagMark from './TagMark.vue'
 import { tagFilters, type Tab } from '../lib/listQuery'
@@ -29,22 +28,22 @@ function pick(name: string, close: () => void) {
 </script>
 
 <template>
-  <VxPopover width="min(260px, calc(100vw - 24px))" :cap="400">
+  <UiPopover width="min(260px, calc(100vw - 24px))" :cap="400">
     <template #trigger="{ toggle, open }">
-      <VxButton class="trigger" :pressed="open || !!model" :label="current ? `Tag: ${current.label}` : 'Tag: any'" @click="toggle">
+      <UiButton class="trigger" :pressed="open || !!model" :label="current ? `Tag: ${current.label}` : 'Tag: any'" @click="toggle">
         <span v-if="current" class="mark" :style="box(current)"><TagMark :tag="current" /></span>
         <span class="label">{{ current?.label ?? 'Any tag' }}</span>
         <span aria-hidden="true">▾</span>
-      </VxButton>
+      </UiButton>
     </template>
     <template #default="{ close }">
-      <VxMenuItem :current="!model" @click="pick('', close)">Any tag</VxMenuItem>
-      <VxMenuItem v-for="t in tags" :key="t.name" :current="t.name === model" @click="pick(t.name, close)">
+      <UiMenuItem :current="!model" @click="pick('', close)">Any tag</UiMenuItem>
+      <UiMenuItem v-for="t in tags" :key="t.name" :current="t.name === model" @click="pick(t.name, close)">
         <template #lead><span class="mark" :style="box(t)"><TagMark :tag="t" /></span></template>
         {{ t.label }}
-      </VxMenuItem>
+      </UiMenuItem>
     </template>
-  </VxPopover>
+  </UiPopover>
 </template>
 
 <style scoped>

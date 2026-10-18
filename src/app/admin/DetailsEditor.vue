@@ -1,11 +1,11 @@
 <script setup lang="ts">
-// A VOD's details: title, thumbnail (a URL, or the default), duration and when it was streamed. Only what changed is
+// A VOD's details: title, thumbnail (a URL, or the default), duration, when it was streamed and why it was cut. Only what changed is
 // sent. A VOD merged into another keeps its details as they were.
-import { VxButton, VxCallout, VxField, VxInput, useToast } from '@vexoulz/ui'
+import { useToast } from '@vex/ui/utils'
 import { computed, ref, watch } from 'vue'
-import { errorText } from '@vexoulz/platform-web'
+import { errorText } from '@vex/platform-web'
 import type { AdminVod } from './api'
-import { detailsDraft, detailsErrors, detailsPatch, type DetailsDraft } from './edits'
+import { CUT_REASON_MAX, detailsDraft, detailsErrors, detailsPatch, type DetailsDraft } from './edits'
 import { admin } from './session'
 import TimeInput from './TimeInput.vue'
 
@@ -69,17 +69,17 @@ async function save() {
 
 <template>
   <form class="details" @submit.prevent="save">
-    <VxCallout v-if="merged" tone="info">Merged into another VOD: only its visibility can change.</VxCallout>
-    <VxField label="Title" :error="errors.get('title')">
-      <template #default="{ id }"><VxInput :id="id" v-model="draft.title" :disabled="merged" :invalid="errors.has('title')" /></template>
-    </VxField>
+    <UiCallout v-if="merged" tone="info">Merged into another VOD: only its visibility can change.</UiCallout>
+    <UiField label="Title" :error="errors.get('title')">
+      <template #default="{ id }"><UiInput :id="id" v-model="draft.title" :disabled="merged" :invalid="errors.has('title')" /></template>
+    </UiField>
 
     <div class="thumb">
       <div class="preview">
         <img v-if="preview && !previewBroken" :src="preview" alt="Thumbnail preview" @error="previewBroken = true" />
-        <span v-else class="none vx-muted">{{ previewBroken ? "Can't load this image" : 'No thumbnail' }}</span>
+        <span v-else class="none vods-muted">{{ previewBroken ? "Can't load this image" : 'No thumbnail' }}</span>
       </div>
-      <VxField
+      <UiField
         class="thumb-field"
         label="Thumbnail URL"
         :help="draft.thumbnailUrl.trim() ? undefined : 'Empty: the first YouTube part’s thumbnail.'"
@@ -87,33 +87,43 @@ async function save() {
       >
         <template #default="{ id }">
           <div class="inline">
-            <VxInput :id="id" v-model="draft.thumbnailUrl" type="url" mono placeholder="https://…" :disabled="merged" :invalid="errors.has('thumbnailUrl')" />
-            <VxButton :disabled="merged || !draft.thumbnailUrl" @click="draft.thumbnailUrl = ''">Use default</VxButton>
+            <UiInput :id="id" v-model="draft.thumbnailUrl" type="url" mono placeholder="https://…" :disabled="merged" :invalid="errors.has('thumbnailUrl')" />
+            <UiButton :disabled="merged || !draft.thumbnailUrl" @click="draft.thumbnailUrl = ''">Use default</UiButton>
           </div>
         </template>
-      </VxField>
+      </UiField>
     </div>
 
     <div class="grid">
-      <VxField label="Duration" :error="errors.get('duration')">
+      <UiField label="Duration" :error="errors.get('duration')">
         <template #default="{ id }">
           <TimeInput :id="id" v-model="draft.duration" :invalid="errors.has('duration')" />
         </template>
-      </VxField>
-      <VxField label="Streamed on" :help="`Your time (${zone}).`" :error="errors.get('createdAt')">
+      </UiField>
+      <UiField label="Streamed on" :help="`Your time (${zone}).`" :error="errors.get('createdAt')">
         <template #default="{ id }">
           <div class="inline">
-            <VxInput :id="id" v-model="date" type="date" :disabled="merged" :invalid="errors.has('createdAt')" />
-            <VxInput v-model="time" mono class="clock" aria-label="Time streamed (HH:MM:SS)" placeholder="20:00:00" :disabled="merged" :invalid="errors.has('createdAt')" />
+            <UiInput :id="id" v-model="date" type="date" :disabled="merged" :invalid="errors.has('createdAt')" />
+            <UiInput v-model="time" mono class="clock" aria-label="Time streamed (HH:MM:SS)" placeholder="20:00:00" :disabled="merged" :invalid="errors.has('createdAt')" />
           </div>
         </template>
-      </VxField>
+      </UiField>
     </div>
 
-    <VxCallout v-if="error" tone="error" title="Couldn't save the details">{{ error }}</VxCallout>
+    <UiField
+      label="Why it was cut"
+      help="Shown on its page once every chapter is cut. Empty: “cut from the YouTube uploads” and each chapter’s cut note."
+      :error="errors.get('cutReason')"
+    >
+      <template #default="{ id }">
+        <textarea :id="id" v-model="draft.cutReason" class="vods-input reason" rows="2" :maxlength="CUT_REASON_MAX" :disabled="merged" />
+      </template>
+    </UiField>
+
+    <UiCallout v-if="error" tone="error" title="Couldn't save the details">{{ error }}</UiCallout>
     <div class="foot">
-      <VxButton :disabled="!dirty || saving" @click="reset">Undo changes</VxButton>
-      <VxButton type="submit" variant="primary" :loading="saving" :disabled="merged || !dirty || errors.size > 0">Save details</VxButton>
+      <UiButton :disabled="!dirty || saving" @click="reset">Undo changes</UiButton>
+      <UiButton type="submit" variant="primary" :loading="saving" :disabled="merged || !dirty || errors.size > 0">Save details</UiButton>
     </div>
   </form>
 </template>
@@ -122,8 +132,8 @@ async function save() {
 .details { display: flex; flex-direction: column; gap: 12px; }
 .thumb { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
 .preview {
-  flex: none; width: 192px; aspect-ratio: 16 / 9; border-radius: var(--vx-radius); overflow: hidden;
-  background: var(--vx-line); display: grid; place-items: center;
+  flex: none; width: 192px; aspect-ratio: 16 / 9; border-radius: var(--vods-radius); overflow: hidden;
+  background: var(--vods-line); display: grid; place-items: center;
 }
 .preview img { width: 100%; height: 100%; object-fit: cover; }
 .none { font-size: 12px; padding: 8px; text-align: center; }
@@ -131,6 +141,7 @@ async function save() {
 .inline { display: flex; flex-wrap: wrap; gap: 8px; }
 .inline > :first-child { flex: 1 1 180px; min-width: 0; }
 .clock { flex: 0 0 110px; }
+.reason { width: 100%; box-sizing: border-box; height: auto; resize: vertical; padding: 6px 8px; font: inherit; }
 .grid { display: flex; flex-wrap: wrap; gap: 12px 24px; }
 .grid > * { flex: 1 1 240px; }
 .foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

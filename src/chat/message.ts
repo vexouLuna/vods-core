@@ -1,6 +1,6 @@
 // Archive comments → chat lines with their VOD time. The parsing (tokens, badges, modifiers) lives in
-// @vexoulz/platform-web, shared with doomtp-web; it is re-exported here so existing imports keep working.
-import { resolveBadges, tokenize, type ChatLine, type Removal } from '@vexoulz/platform-web/chat'
+// @vex/platform-web, shared with doomtp-web; it is re-exported here so existing imports keep working.
+import { resolveBadges, tokenize, type ChatLine, type Removal } from '@vex/platform-web/chat'
 import type { ChatSource, RawBadges, RawComment } from '../api/types'
 import type { EmoteSet } from './emotes'
 
@@ -13,11 +13,12 @@ export {
   type ChatLine,
   type EmoteLayer,
   type EmoteToken,
+  type GifToken,
   type Modifier,
   type NameMode,
   type Removal,
   type Token,
-} from '@vexoulz/platform-web/chat'
+} from '@vex/platform-web/chat'
 
 export interface ChatMessage extends ChatLine {
   /** VOD seconds. */
@@ -44,15 +45,21 @@ function removalOf(c: RawComment): Removal | null {
 }
 
 export function toChatMessage(c: RawComment, emotes?: EmoteSet | null, badges?: RawBadges | null): ChatMessage {
+  // A notice with the chatter's own message (a resub's) is its system line over a normal chat line, as on Twitch.
+  // Rows archived before the bot logged notice fragments stay text-only notices.
+  const notice = c.kind === 'notice' ? (c.bot ?? {}) : null
+  const said = notice?.type !== 'redemption' && notice?.fragments?.length ? notice : null
   return {
     id: c.id,
     at: c.content_offset_seconds,
     user: c.display_name,
     login: loginOf(c),
     userId: c.user_id ?? null,
-    color: c.user_color || null,
-    badges: resolveBadges(c.user_badges, badges),
-    tokens: tokenize(c.message, emotes),
+    color: (said ? said.color : null) || c.user_color || null,
+    badges: resolveBadges(said?.badges ?? c.user_badges, badges),
+    tokens: tokenize(said ? said.fragments : c.message, emotes),
+    system: said ? said.payload?.system_message || said.type || null : null,
+    messageType: c.message_type && c.message_type !== 'text' && c.message_type !== 'action' ? c.message_type : null,
     source: c.source ?? 'replay',
     kind: c.kind === 'notice' ? 'notice' : 'message',
     noticeType: c.kind === 'notice' ? (c.bot?.type ?? null) : null,

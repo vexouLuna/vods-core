@@ -1,9 +1,8 @@
 <script setup lang="ts">
-// One list of VODs, by tag, each its own page (lib/listQuery, TABS): /vods has the plain VODs (merges and splits
-// included), /playthroughs the playthroughs (one game across streams, as one video). One filter bar (All resets, title
+// One list of VODs, by tag, each its own page (lib/listQuery, tabs()): /vods has the plain VODs (merges and splits
+// included), each tag with a page its own (/playthroughs: one game across streams, as one video). One filter bar (All resets, title
 // search, game dropdown with every game in the archive, tag, date range; all combinable and kept in the URL), a grid
 // of cards, and "load more". On phones the bar wraps. A tag on a card links here narrowed to it (ThumbTags).
-import { VxButton, VxCallout, VxDateRange, VxEmptyState, VxInput, VxPopover, VxSkeleton } from '@vexoulz/ui'
 import { resumeProgress, type GamePlayed, type Progress, type Vod } from '../../index'
 import { useVods, useVodsContext } from '../../vue/index'
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
@@ -12,7 +11,7 @@ import GamePicker from '../components/GamePicker.vue'
 import TagPicker from '../components/TagPicker.vue'
 import VodCard from '../components/VodCard.vue'
 import { loadGamesPlayed } from '../lib/gamesPlayed'
-import { hasFilters, parseListQuery, toApiFilter, toListQuery, type ListState, type Tab } from '../lib/listQuery'
+import { hasFilters, parseListQuery, tabs, toApiFilter, toListQuery, type ListState, type Tab } from '../lib/listQuery'
 import { site, vodsConfig } from '../site'
 import VodsShell from '../components/VodsShell.vue'
 import { watchDebounced } from '../composables/watchDebounced'
@@ -76,7 +75,8 @@ function resetAll() {
   router.replace({ query: {} })
 }
 
-const playthroughs = computed(() => state.value.tab === 'playthroughs')
+/** A tag's page (null on the plain VODs): its title, and what its empty list says. */
+const tagPage = computed(() => tabs().find((t) => t.tag && t.value === state.value.tab) ?? null)
 
 // ---- tag ----
 const tag = computed({
@@ -128,56 +128,56 @@ const countText = computed(() => `${(shownFrom.value + vods.value.length).toLoca
   <VodsShell>
 
     <div ref="bar" class="bar">
-      <h1 class="vx-display">{{ playthroughs ? 'Playthroughs' : 'Past broadcasts' }}</h1>
+      <h1 class="vods-display">{{ tagPage ? tagPage.label : 'Past broadcasts' }}</h1>
       <div class="filters">
-        <VxButton :pressed="!hasFilters(state)" label="Clear every filter" @click="resetAll">All</VxButton>
-        <VxInput v-model="titleDraft" class="search" type="search" placeholder="Search titles…" clearable>
+        <UiButton :pressed="!hasFilters(state)" label="Clear every filter" @click="resetAll">All</UiButton>
+        <UiInput v-model="titleDraft" class="search" type="search" placeholder="Search titles…" clearable>
           <template #icon>⌕</template>
-        </VxInput>
+        </UiInput>
         <GamePicker v-model="game" :games="games" :error="gamesError" @retry="fetchGames(true)" />
         <TagPicker v-model="tag" :tab="state.tab" />
-        <VxPopover width="min(320px, calc(100vw - 32px))" role="dialog">
+        <UiPopover width="min(320px, calc(100vw - 32px))" role="dialog">
           <template #trigger="{ toggle, open }">
-            <VxButton :pressed="open || !!(state.from || state.to)" @click="toggle">{{ dateLabel }} ▾</VxButton>
+            <UiButton :pressed="open || !!(state.from || state.to)" @click="toggle">{{ dateLabel }} ▾</UiButton>
           </template>
           <div class="date-pop">
-            <div class="vx-eyebrow">Streamed between</div>
-            <VxDateRange v-model:from="dateFrom" v-model:to="dateTo" :min="minDay" />
+            <div class="vods-eyebrow">Streamed between</div>
+            <UiDateRange v-model:from="dateFrom" v-model:to="dateTo" :min="minDay" />
           </div>
-        </VxPopover>
+        </UiPopover>
       </div>
     </div>
 
-    <VxCallout v-if="error" tone="error" title="Couldn't load the VODs">
+    <UiCallout v-if="error" tone="error" title="Couldn't load the VODs">
       {{ error.message || 'Something went wrong' }}
-      <template #actions><VxButton size="sm" @click="refresh">Try again</VxButton></template>
-    </VxCallout>
+      <template #actions><UiButton size="sm" @click="refresh">Try again</UiButton></template>
+    </UiCallout>
 
     <div v-else-if="loading && !vods.length" class="grid" aria-busy="true">
       <div v-for="i in 8" :key="i" class="sk">
-        <VxSkeleton ratio="16 / 9" h="auto" />
-        <VxSkeleton w="80%" />
-        <VxSkeleton w="45%" h="0.8em" />
+        <UiSkeleton ratio="16 / 9" h="auto" />
+        <UiSkeleton w="80%" />
+        <UiSkeleton w="45%" h="0.8em" />
       </div>
     </div>
 
-    <VxEmptyState
+    <UiEmptyState
       v-else-if="!vods.length"
-      :title="playthroughs ? 'No playthroughs match' : 'No VODs match'"
-      :text="hasFilters(state) ? 'Try another search, tag or date range.' : playthroughs ? 'No playthroughs have been put together yet.' : 'Nothing archived yet.'"
+      :title="tagPage ? `No ${tagPage.label.toLowerCase()} match` : 'No VODs match'"
+      :text="hasFilters(state) ? 'Try another search, tag or date range.' : tagPage ? `No ${tagPage.label.toLowerCase()} yet.` : 'Nothing archived yet.'"
     >
       <template v-if="hasFilters(state)" #actions>
-        <VxButton @click="resetAll">Clear filters</VxButton>
+        <UiButton @click="resetAll">Clear filters</UiButton>
       </template>
-    </VxEmptyState>
+    </UiEmptyState>
 
     <template v-else>
       <div class="grid">
         <VodCard v-for="v in vods" :key="v.id" :vod="v" :progress="resume.get(v.id)" />
       </div>
       <div class="more">
-        <VxButton v-if="hasMore" :loading="loading" @click="loadMore">Load {{ site.perPage }} more</VxButton>
-        <span class="vx-muted vx-mono small">{{ countText }}</span>
+        <UiButton v-if="hasMore" :loading="loading" @click="loadMore">Load {{ site.perPage }} more</UiButton>
+        <span class="vods-muted vods-mono small">{{ countText }}</span>
       </div>
     </template>
   </VodsShell>
@@ -188,7 +188,7 @@ const countText = computed(() => `${(shownFrom.value + vods.value.length).toLoca
 .bar h1 { font-size: 28px; }
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .search { flex: 1 1 220px; max-width: 360px; }
-@container vx-site (max-width: 700px) {
+@container vods (max-width: 700px) {
   /* Search gets its own full-width line; All, game and dates share the next. */
   .search { order: -1; flex-basis: 100%; max-width: none; }
 }

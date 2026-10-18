@@ -1,41 +1,47 @@
 // The vods site itself: its pages, the Manage dashboard, the router and the wiring between them. A site is this plus
-// its own config and branding: its main.ts calls createVodsApp() and mounts what it returns.
-import { VxBuild, useToast } from '@vexoulz/ui'
-import { createAccount } from '@vexoulz/ui/account'
-import { twitchUserLookup } from '@vexoulz/platform-web/chat'
-import { createPlatformUi } from '@vexoulz/platform-web/vue'
+// its own config, branding and look (`ui`): its main.ts calls createVodsApp() and mounts what it returns.
+import { useToast } from '@vex/ui/utils'
+import { createAccount } from '@vex/ui/account'
+import { twitchUserLookup } from '@vex/platform-web/chat'
+import { createPlatformUi } from '@vex/platform-web/vue'
 import { createApp, type App as VueApp } from 'vue'
 import { createRouter, createWebHistory, RouterLink, type Router } from 'vue-router'
 
 import type { VodsConfig } from '../config'
 import { createVods } from '../vue'
 
-import '@vexoulz/ui/platform.css'
-import './styles/tags.css'
+import './styles/tokens.css'
 
 import App from './App.vue'
 import { configureArt, type VodsArt } from './art'
-import { setupVodsSite } from './kit'
+import { setupVodsSite } from './setup'
 import { installVodsSession, vodsRoutes } from './router'
 import type { VodsSite } from './site'
+import { installUi, type VodsUi } from './ui'
 
 export { DEFAULT_TAGS, site, type TagStyle, type VodsSite } from './site'
 export { art, type VodsArt } from './art'
+export type { UiShellComponent, VodsUi, VodsUiComponents } from './ui'
 
 export interface VodsAppOptions {
   /** The channel and its archive API (`defineVodsConfig`). */
   config: VodsConfig
   /** What tells this site from the other vods sites: its network id, name, Twitch link, and tags. */
   site: Partial<VodsSite> & Pick<VodsSite, 'id' | 'name' | 'twitchUrl'>
+  /**
+   * The site's look: the controls the pages are built from (registered as Ui*) and its shell. `deepField` from
+   * `@vex/vods-core/deep-field` for a Deep Field site, with its `deep-field.css`.
+   */
+  ui: VodsUi
   /** The worker's admin API, for the Manage pages. Default `/backend-admin` on the same origin. */
   adminBase?: string
   /**
-   * vexoulz-auth's URL, the shared *.vexoul.net sign-in. Empty turns sign-in off (the menu's "Sign in" is greyed
-   * out); a site that isn't registered with vexoulz-auth leaves it empty.
+   * vex-auth's URL, the shared *.vexoul.net sign-in. Empty turns sign-in off (the menu's "Sign in" is greyed
+   * out); a site that isn't registered with vex-auth leaves it empty.
    */
   authBase?: string
   /**
-   * The archive's client id at vexoulz-auth, for the quiet admin check: the worker's ARCHIVE_ADMIN_AUTH_CLIENT_ID.
+   * The archive's client id at vex-auth, for the quiet admin check: the worker's ARCHIVE_ADMIN_AUTH_CLIENT_ID.
    * Default `vods-admin`.
    */
   adminClientId?: string
@@ -43,7 +49,7 @@ export interface VodsAppOptions {
   commit?: string
   /**
    * The site's own art for the app's stand-ins (a VOD with no thumbnail, the Twitch mark). Unset, plain placeholders:
-   * e.g. `{ noThumbnail: VxNoThumbnail, twitchGlyph: VxTwitchGlyph }` from vexoulz-ui.
+   * e.g. vex-ui's `{ noThumbnail: VxNoThumbnail, twitchGlyph: VxTwitchGlyph }`.
    */
   art?: VodsArt
   /**
@@ -84,6 +90,7 @@ export function createVodsApp(options: VodsAppOptions): VodsApp {
         youtube: () => import('./pages/admin/AdminYoutubePage.vue'),
         settings: () => import('./pages/admin/AdminSettingsPage.vue'),
         tags: () => import('./pages/admin/AdminTagsPage.vue'),
+        home: () => import('./pages/admin/AdminHomePage.vue'),
         audit: () => import('./pages/admin/AdminAuditPage.vue'),
       },
     }),
@@ -93,8 +100,9 @@ export function createVodsApp(options: VodsAppOptions): VodsApp {
   const { progress } = installVodsSession(router, account, { adminClientId: options.adminClientId })
 
   const app = createApp(App)
+  installUi(app, options.ui, options.commit ?? '')
+  app
     .use(router)
-    .use(VxBuild, { commit: options.commit ?? '' })
     .use(account)
     .use(createVods(options.config, { progress }))
     // The shared jobs, audit and chat-line components: where a job or a subject (vod:<id>, job:<id>) lives, and toasts.

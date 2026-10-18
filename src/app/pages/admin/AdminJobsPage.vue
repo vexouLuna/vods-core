@@ -1,9 +1,8 @@
 <script setup lang="ts">
 // /manage/jobs?state=&kind=&subject=: the worker's job runs (/api/v2/jobs), refreshed every few seconds. Filters live
 // in the URL; the old `?vodId=` and `state=done` links still work.
-import type { JobKindOut } from '@vexoulz/platform-web'
-import { JobsBrowser, type JobFilters } from '@vexoulz/platform-web/vue'
-import { VxButton } from '@vexoulz/ui'
+import type { JobKindOut } from '@vex/platform-web'
+import { JobsBrowser, type JobFilters } from '@vex/platform-web/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ManageShell from '../../admin/ManageShell.vue'
@@ -58,7 +57,7 @@ onMounted(async () => {
 <template>
   <ManageShell title="Jobs">
     <template #actions>
-      <VxButton variant="primary" @click="starting = true">Start a job</VxButton>
+      <UiButton variant="primary" @click="starting = true">Start a job</UiButton>
     </template>
 
     <JobsBrowser v-if="kinds" v-model:filters="filters" :client="platform" :kinds="kinds" subject-hint="vod:2345678901" />

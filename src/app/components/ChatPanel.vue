@@ -3,9 +3,8 @@
 // back down. Settings (which recording, delay, timestamps, badges, names, name colours, emote sources, size) are
 // the viewer's own. The live recording (doomtp-bot's) also has notices (subs, raids, redemptions), rewards, bits and
 // removed messages; the VOD recording (Twitch's replay) has none of those. A chatter's name opens their user card.
-import { VxButton, VxChip, VxPopover, VxSegmented, VxSlider, VxStepper, VxSwitch } from '@vexoulz/ui'
 import { toClock, type ChatLine as Line, type ChatMessage, type ChatSource, type ChatSources, type EmoteToken } from '../../index'
-import { ChatLine, UserCard } from '@vexoulz/platform-web/vue'
+import { ChatLine, UserCard } from '@vex/platform-web/vue'
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
 import EmoteMenu from './EmoteMenu.vue'
 import { DELAY_LIMIT, WIDTH_DEFAULT, WIDTH_MAX, WIDTH_MIN, type ChatSettings } from '../composables/useChatSettings'
@@ -104,65 +103,65 @@ const sizeOpts = [
 <template>
   <aside class="chat" :class="`size-${settings.size}`" aria-label="Chat replay">
     <div class="head">
-      <VxButton size="sm" variant="ghost" icon label="Hide chat" @click="emit('hide')">⇥</VxButton>
-      <span class="vx-eyebrow">Chat replay</span>
+      <UiButton size="sm" variant="ghost" icon label="Hide chat" @click="emit('hide')">⇥</UiButton>
+      <span class="vods-eyebrow">Chat replay</span>
       <span class="spacer"></span>
-      <VxChip v-if="settings.delay" clickable tone="accent" class="vx-mono" title="Chat delay: click to reset" @click="settings.delay = 0">
+      <UiChip v-if="settings.delay" clickable tone="accent" class="vods-mono" title="Chat delay: click to reset" @click="settings.delay = 0">
         {{ fmtDelay(settings.delay) }}
-      </VxChip>
-      <VxPopover align="right" width="min(300px, calc(100vw - 24px))" role="dialog">
+      </UiChip>
+      <UiPopover align="right" width="min(300px, calc(100vw - 24px))" role="dialog">
         <template #trigger="{ toggle, open }">
-          <VxButton size="sm" variant="ghost" icon label="Chat settings" class="cog" :pressed="open" @click="toggle">⚙</VxButton>
+          <UiButton size="sm" variant="ghost" icon label="Chat settings" class="cog" :pressed="open" @click="toggle">⚙</UiButton>
         </template>
         <div class="settings">
-          <div class="vx-eyebrow">Chat settings</div>
+          <div class="vods-eyebrow">Chat settings</div>
           <div class="set col">
             <span>Chat recording</span>
-            <VxSegmented v-model="source" :options="sourceOpts" label="Chat recording" />
-            <span v-for="l in missing" :key="l" class="vx-muted small">No {{ l.toLowerCase() }} chat for this VOD.</span>
+            <UiSegmented v-model="source" :options="sourceOpts" label="Chat recording" />
+            <span v-for="l in missing" :key="l" class="vods-muted small">No {{ l.toLowerCase() }} chat for this VOD.</span>
             <span v-if="vodChat" class="warn small" role="note"
               >VOD chat has less: no subs, raids, redemptions, bits or removed messages, and display names only.</span
             >
           </div>
           <div class="set col">
-            <span>Chat delay <span class="vx-muted small">shift-click for ±1s</span></span>
+            <span>Chat delay <span class="vods-muted small">shift-click for ±1s</span></span>
             <span class="row">
-              <VxStepper v-model="settings.delay" :step="0.1" :min="-DELAY_LIMIT" :max="DELAY_LIMIT" size="sm" unit="s" label="Chat delay in seconds" />
-              <VxButton size="sm" variant="ghost" :disabled="!settings.delay" @click="settings.delay = 0">reset</VxButton>
+              <UiStepper v-model="settings.delay" :step="0.1" :min="-DELAY_LIMIT" :max="DELAY_LIMIT" size="sm" unit="s" label="Chat delay in seconds" />
+              <UiButton size="sm" variant="ghost" :disabled="!settings.delay" @click="settings.delay = 0">reset</UiButton>
             </span>
           </div>
-          <div class="set"><label for="chat-ts">Timestamps</label><VxSwitch id="chat-ts" v-model="settings.timestamps" /></div>
-          <div class="set"><label for="chat-badges">Badges</label><VxSwitch id="chat-badges" v-model="settings.badges" /></div>
+          <div class="set"><label for="chat-ts">Timestamps</label><UiSwitch id="chat-ts" v-model="settings.timestamps" /></div>
+          <div class="set"><label for="chat-badges">Badges</label><UiSwitch id="chat-badges" v-model="settings.badges" /></div>
           <div class="set col">
             <span>Names</span>
-            <VxSegmented v-model="names" :options="nameOpts" label="Names" />
+            <UiSegmented v-model="names" :options="nameOpts" label="Names" />
           </div>
           <div class="set col">
-            <span>Name colours <span class="vx-muted small">as chosen by each chatter</span></span>
-            <VxSegmented v-model="settings.colors" :options="colorOpts" label="Name colours" />
+            <span>Name colours <span class="vods-muted small">as chosen by each chatter</span></span>
+            <UiSegmented v-model="settings.colors" :options="colorOpts" label="Name colours" />
           </div>
           <div class="set">
             <span>Emotes</span>
             <span class="row">
-              <VxChip v-for="(on, k) in settings.emotes" :key="k" clickable :active="on" @click="settings.emotes[k] = !on">{{ k }}</VxChip>
+              <UiChip v-for="(on, k) in settings.emotes" :key="k" clickable :active="on" @click="settings.emotes[k] = !on">{{ k }}</UiChip>
             </span>
           </div>
-          <div class="set"><span>Text size</span><VxSegmented v-model="settings.size" :options="sizeOpts" label="Text size" /></div>
+          <div class="set"><span>Text size</span><UiSegmented v-model="settings.size" :options="sizeOpts" label="Text size" /></div>
           <div class="set col">
-            <span>Chat width <span class="vx-muted small">on phones chat sits below</span></span>
+            <span>Chat width <span class="vods-muted small">on phones chat sits below</span></span>
             <span class="row wide">
-              <VxSlider v-model="settings.width" :min="WIDTH_MIN" :max="WIDTH_MAX" :step="10" label="Chat width in pixels" class="grow" />
-              <span class="vx-mono small pct">{{ settings.width }}px</span>
-              <VxButton size="sm" variant="ghost" :disabled="settings.width === WIDTH_DEFAULT" @click="settings.width = WIDTH_DEFAULT">reset</VxButton>
+              <UiSlider v-model="settings.width" :min="WIDTH_MIN" :max="WIDTH_MAX" :step="10" label="Chat width in pixels" class="grow" />
+              <span class="vods-mono small pct">{{ settings.width }}px</span>
+              <UiButton size="sm" variant="ghost" :disabled="settings.width === WIDTH_DEFAULT" @click="settings.width = WIDTH_DEFAULT">reset</UiButton>
             </span>
           </div>
         </div>
-      </VxPopover>
+      </UiPopover>
     </div>
 
     <div ref="lines" class="lines" aria-live="off" @scroll.passive="onScroll">
-      <p v-if="error" class="note vx-muted">Chat couldn't load: {{ error }}</p>
-      <p v-else-if="!messages.length" class="note vx-muted">{{ playing ? 'No chat here yet.' : 'Chat plays along with the video.' }}</p>
+      <p v-if="error" class="note vods-muted">Chat couldn't load: {{ error }}</p>
+      <p v-else-if="!messages.length" class="note vods-muted">{{ playing ? 'No chat here yet.' : 'Chat plays along with the video.' }}</p>
       <ChatLine
         v-for="m in messages"
         :key="m.id"
@@ -178,18 +177,18 @@ const sizeOpts = [
         @emote-menu="toggleMenu"
         @user="toggleCard"
       >
-        <template v-if="settings.timestamps" #before><span class="ts vx-mono">{{ toClock(m.at) }}</span></template>
+        <template v-if="settings.timestamps" #before><span class="ts vods-mono">{{ toClock(m.at) }}</span></template>
       </ChatLine>
     </div>
     <EmoteMenu v-if="menu" :token="menu.token" :anchor="menu.anchor" :enabled="settings.emotes" @close="menu = null" />
     <UserCard v-if="card" :line="card.line" :anchor="card.anchor" :colors="settings.colors" @close="card = null" />
-    <VxButton v-if="!following" class="jump" size="sm" variant="primary" @click="toBottom">↓ Latest messages</VxButton>
+    <UiButton v-if="!following" class="jump" size="sm" variant="primary" @click="toBottom">↓ Latest messages</UiButton>
   </aside>
 </template>
 
 <style scoped>
 .chat { position: relative; display: flex; flex-direction: column; min-height: 0; background: #0b0b0d; }
-.head { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 6px; border-bottom: 1px solid var(--vx-line); flex: none; }
+.head { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 6px; border-bottom: 1px solid var(--vods-line); flex: none; }
 .spacer { flex: 1; }
 .settings { display: flex; flex-direction: column; padding: 8px; gap: 2px; }
 .set { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
@@ -199,15 +198,15 @@ const sizeOpts = [
 .grow { flex: 1; min-width: 0; }
 .pct { width: 5.5ch; text-align: right; }
 .small { font-size: 11px; }
-.warn { color: var(--vx-warn); line-height: 1.4; }
-.cog { color: var(--vx-ink); font-size: 17px; }
+.warn { color: var(--vods-warn); line-height: 1.4; }
+.cog { color: var(--vods-ink); font-size: 17px; }
 .lines {
   flex: 1; min-height: 0; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 3px;
-  font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; scrollbar-width: thin; scrollbar-color: var(--vx-line) transparent;
+  font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; scrollbar-width: thin; scrollbar-color: var(--vods-line) transparent;
 }
 .size-s .lines { font-size: 12px; }
 .size-l .lines { font-size: 15px; }
 .note { margin: auto; text-align: center; font-size: 13px; }
-.ts { color: var(--vx-muted); font-size: 10px; margin-right: 6px; opacity: 0.7; }
+.ts { color: var(--vods-muted); font-size: 10px; margin-right: 6px; opacity: 0.7; }
 .jump { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); }
 </style>

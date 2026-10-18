@@ -1,9 +1,9 @@
 <script setup lang="ts">
 // Start any job kind the worker knows (GET /api/v2/job-kinds): pick the kind, the VOD, where to start and where to
 // pause. Queued with POST /api/v2/jobs, the VOD as its `vod:<id>` subject.
-import { VxButton, VxCallout, VxCheckbox, VxDialog, VxField, VxInput, VxSelect, type Option } from '@vexoulz/ui'
+import type { Option } from '@vex/ui'
 import { computed, ref, watch } from 'vue'
-import { ProblemError, errorText, type JobKindOut } from '@vexoulz/platform-web'
+import { ProblemError, errorText, type JobKindOut } from '@vex/platform-web'
 import { platform, vodSubject } from './platform'
 
 const props = defineProps<{ kinds: JobKindOut[]; vodId?: string }>()
@@ -95,48 +95,48 @@ async function submit() {
 </script>
 
 <template>
-  <VxDialog v-model:open="open" title="Start a job" width="480px">
+  <UiDialog v-model:open="open" title="Start a job" width="480px">
     <form id="start-job" class="form" @submit.prevent="submit">
-      <VxCallout v-if="!kindOptions.length" tone="warn">Couldn't load the job kinds from the worker.</VxCallout>
+      <UiCallout v-if="!kindOptions.length" tone="warn">Couldn't load the job kinds from the worker.</UiCallout>
       <div class="row">
-        <VxField label="Kind">
-          <template #default="{ id }"><VxSelect :id="id" v-model="kind" :options="kindOptions" width="100%" /></template>
-        </VxField>
-        <VxField label="VOD id" help="Empty for jobs that aren't about one VOD.">
-          <template #default="{ id }"><VxInput :id="id" v-model="vodId" mono placeholder="2345678901" /></template>
-        </VxField>
+        <UiField label="Kind">
+          <template #default="{ id }"><UiSelect :id="id" v-model="kind" :options="kindOptions" width="100%" /></template>
+        </UiField>
+        <UiField label="VOD id" help="Empty for jobs that aren't about one VOD.">
+          <template #default="{ id }"><UiInput :id="id" v-model="vodId" mono placeholder="2345678901" /></template>
+        </UiField>
       </div>
-      <VxField label="Start at">
-        <template #default="{ id }"><VxSelect :id="id" v-model="fromStep" :options="stepOptions" width="100%" /></template>
-      </VxField>
+      <UiField label="Start at">
+        <template #default="{ id }"><UiSelect :id="id" v-model="fromStep" :options="stepOptions" width="100%" /></template>
+      </UiField>
       <fieldset v-if="steps.length" class="steps">
-        <legend class="vx-eyebrow">Pause before</legend>
-        <VxCheckbox v-for="s in steps" :key="s" :model-value="pauseBefore.includes(s)" @update:model-value="togglePause(s, $event)">
-          <span class="vx-mono">{{ s }}</span>
-        </VxCheckbox>
+        <legend class="vods-eyebrow">Pause before</legend>
+        <UiCheckbox v-for="s in steps" :key="s" :model-value="pauseBefore.includes(s)" @update:model-value="togglePause(s, $event)">
+          <span class="vods-mono">{{ s }}</span>
+        </UiCheckbox>
       </fieldset>
-      <VxCheckbox v-model="paused">Create it paused (resume it by hand)</VxCheckbox>
-      <VxField label="Payload (JSON, optional)" :error="payloadError ?? undefined">
+      <UiCheckbox v-model="paused">Create it paused (resume it by hand)</UiCheckbox>
+      <UiField label="Payload (JSON, optional)" :error="payloadError ?? undefined">
         <template #default="{ id }">
-          <textarea :id="id" v-model="payload" class="vx-input vx-mono payload" rows="3" placeholder='{"force": true}' />
+          <textarea :id="id" v-model="payload" class="vods-input vods-mono payload" rows="3" placeholder='{"force": true}' />
         </template>
-      </VxField>
-      <VxCallout v-if="missingVod" tone="warn">
+      </UiField>
+      <UiCallout v-if="missingVod" tone="warn">
         VOD {{ missingVod }} isn't in the archive yet. Add it from Twitch first: that archives it, or with
         “Details only”, adds it for jobs like this one.
-        <template #actions><VxButton size="sm" :to="`/manage/vods?add=${missingVod}`">Add from Twitch</VxButton></template>
-      </VxCallout>
-      <VxCallout v-if="error" tone="error">{{ error }}</VxCallout>
+        <template #actions><UiButton size="sm" :to="`/manage/vods?add=${missingVod}`">Add from Twitch</UiButton></template>
+      </UiCallout>
+      <UiCallout v-if="error" tone="error">{{ error }}</UiCallout>
     </form>
     <template #actions="{ close }">
-      <VxButton @click="close">Cancel</VxButton>
-      <VxButton type="submit" form="start-job" variant="primary" :loading="busy" :disabled="!kind || !!payloadError">Start</VxButton>
+      <UiButton @click="close">Cancel</UiButton>
+      <UiButton type="submit" form="start-job" variant="primary" :loading="busy" :disabled="!kind || !!payloadError">Start</UiButton>
     </template>
-  </VxDialog>
+  </UiDialog>
 </template>
 
 <style scoped>
-.form { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; color: var(--vx-text, inherit); }
+.form { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; color: var(--vods-text, inherit); }
 .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
 .steps { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .steps legend { margin-bottom: 6px; padding: 0; }

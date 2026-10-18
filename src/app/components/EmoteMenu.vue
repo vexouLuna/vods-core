@@ -3,7 +3,7 @@
 // the modifiers on each), linking to the emote's page on its provider's site. Twitch emotes have no such page, and
 // the channel one belongs to isn't saved with chat, so their row says so instead of linking.
 // One menu serves the whole chat. It follows its emote while chat scrolls and closes once the emote scrolls away.
-import { clampX, place, VxMenuItem } from '@vexoulz/ui'
+import { clampX, place } from '@vex/ui/utils'
 import type { EmoteToken } from '../../index'
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { emoteMenuRows, type EmoteSources } from '../lib/emoteMenu'
@@ -56,7 +56,7 @@ watch(
     cancelAnimationFrame(frame)
     await nextTick()
     loop()
-    panel.value?.querySelector<HTMLElement>('.vx-menu-item')?.focus({ preventScroll: true })
+    panel.value?.querySelector<HTMLElement>(':scope > *')?.focus({ preventScroll: true })
   },
   { immediate: true },
 )
@@ -73,12 +73,12 @@ onUnmounted(() => {
   <Teleport to="body">
     <div
       ref="panel"
-      class="emote-menu vx-overlay vx-pop"
+      class="emote-menu vods-overlay vods-pop"
       role="menu"
       :aria-label="`Emotes in ${token.emote.code}`"
       :style="{ top: `${pos.top}px`, left: `${pos.left}px`, maxHeight: `${pos.maxHeight}px` }"
     >
-      <VxMenuItem
+      <UiMenuItem
         v-for="r in rows"
         :key="r.key"
         :href="r.href ?? undefined"
@@ -92,9 +92,9 @@ onUnmounted(() => {
         <template #lead>
           <span class="icon"><img :src="r.src" :srcset="r.srcset" alt="" loading="lazy" /></span>
         </template>
-        {{ r.code }}<span v-if="r.effect" class="effect vx-muted"> · {{ r.effect }}</span>
-      </VxMenuItem>
-      <p v-if="unknown" class="note vx-muted">Which channel a Twitch emote is from isn't saved with the chat, so it has no link.</p>
+        {{ r.code }}<span v-if="r.effect" class="effect vods-muted"> · {{ r.effect }}</span>
+      </UiMenuItem>
+      <p v-if="unknown" class="note vods-muted">Which channel a Twitch emote is from isn't saved with the chat, so it has no link.</p>
     </div>
   </Teleport>
 </template>

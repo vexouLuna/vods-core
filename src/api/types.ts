@@ -26,7 +26,7 @@ export interface RawChapter {
 
 export interface RawUpload {
   id: string
-  type: 'vod' | 'live'
+  type: 'vod' | 'live' | 'compiled'
   /** Seconds; missing while YouTube is still processing. */
   duration?: number | null
   part?: number | null
@@ -92,6 +92,8 @@ export interface RawVod {
   /** On a VOD that synthetic VODs (playthroughs) use without replacing it. */
   appears_in?: RawAppearsIn[] | null
   platform?: string | null
+  /** Why the VOD was cut, when an admin gave a reason (missing otherwise). */
+  cut_reason?: string | null
   createdAt: string
   updatedAt?: string
 }
@@ -138,6 +140,18 @@ export interface RawStream {
   started_at: string | null
   platform: string
   is_live: boolean | null
+}
+
+/** `/v1/status`: the live stream (title and game from Twitch, else from its VOD row) and its VOD, or the latest VOD. */
+export interface RawStatus {
+  live: boolean
+  stream: {
+    id: string
+    started_at: string | null
+    title?: string | null
+    game?: { name: string | null; gameId?: string | null; image?: string | null; imageTemplate?: string | null } | null
+  } | null
+  vod: RawVod | null
 }
 
 /** `/v1/games-played`: one entry per distinct game across every VOD's chapters. */
@@ -189,6 +203,8 @@ export interface RawFragment {
   text: string
   emote?: { emoteID: string } | null
   emoticon?: { emoticon_id: string } | null
+  /** A GIPHY GIF from Twitch's GIF picker (bot chat only). */
+  gif?: { id?: string; url?: string; still?: string; title?: string } | null
 }
 
 export interface RawUserBadge {
@@ -216,6 +232,11 @@ export interface RawBotEntry {
   /** What removed the message (the removal's own time is in `at`, epoch ms). */
   removal?: { type?: string; reason?: string | null; duration_s?: number | null; at?: number } | null
   reply_parent_id?: string | null
+  /** A notice's own chat message (a resub's) as the bot logged it, with the chatter's badges and colour. */
+  fragments?: RawFragment[] | null
+  badges?: RawUserBadge[] | null
+  color?: string | null
+  payload?: { system_message?: string | null; [key: string]: unknown } | null
   [key: string]: unknown
 }
 

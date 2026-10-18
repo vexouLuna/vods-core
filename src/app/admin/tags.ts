@@ -2,8 +2,8 @@
 // the list PUT /admin/site/tags takes.
 import type { TagInput } from './api'
 import {
-  AUTO_TAGS, isAutoTag, isTagColor, TAG_LABEL_MAX, TAG_NAME, TAG_SIZE, TAG_TEXT_MAX, TAG_TEXT_NUDGE, TAG_TEXT_ROTATE, TAG_TEXT_SIZE,
-  TAG_PATTERN_SIZE, TAG_PATTERNS, type RawTag, type TagPattern,
+  AUTO_TAGS, isAutoTag, isTagColor, TAG_LABEL_MAX, TAG_NAME, TAG_SIZE, TAG_TEXT_MAX, TAG_TEXT_NUDGE, TAG_TEXT_ROTATE, TAG_TEXT_SIZE, TAG_ROTATE,
+  TAG_PATTERN_SIZE, TAG_PATTERNS, TAG_PAGE_LABEL_MAX, RESERVED_PAGES, type RawTag, type TagPattern,
 } from '../lib/vodTags'
 import { site, type TagStyle } from '../site'
 
@@ -19,6 +19,7 @@ export interface TagDraft {
   color: string
   width: Typed
   height: Typed
+  rotate: Typed
   /** Text written on the drawn tag; off keeps what was typed but saves none. */
   textOn: boolean
   text: string
@@ -31,6 +32,11 @@ export interface TagDraft {
   pattern: TagPattern | ''
   patternColor: string
   patternSize: Typed
+  /** Its own list page and header link: the slug ('' for none) and the page's title. */
+  page: string
+  pageLabel: string
+  /** Can feed a "latest" card on the home page. */
+  homeCard: boolean
   /** The shape as saved (a path under the public API); uploads and removals apply straight away. */
   shape: string | null
   /** Saved in the archive: its name is fixed and it can take a shape. */
@@ -39,12 +45,13 @@ export interface TagDraft {
   auto: boolean
 }
 
-export type TagField = 'name' | 'label' | 'color' | 'width' | 'height' | 'text' | 'textColor' | 'textSize' | 'textX' | 'textY' | 'textRotate' | 'patternColor' | 'patternSize'
+export type TagField = 'name' | 'label' | 'color' | 'width' | 'height' | 'rotate' | 'text' | 'textColor' | 'textSize' | 'textX' | 'textY' | 'textRotate' | 'patternColor' | 'patternSize' | 'page' | 'pageLabel'
 
 const NO_TEXT = { text: null, textColor: null, textSize: null, textX: null, textY: null, textRotate: null }
 const NO_PATTERN = { pattern: null, patternColor: null, patternSize: null }
+const NO_TYPE = { page: null, pageLabel: null, homeCard: false }
 const bare = (name: string, label: string, drawn: boolean): RawTag => ({
-  name, label, drawn, color: null, shape: null, width: null, height: null, ...NO_TEXT, ...NO_PATTERN,
+  name, label, drawn, color: null, shape: null, width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN, ...NO_TYPE,
 })
 const typed = (n: number | null) => (n == null ? '' : String(n))
 
@@ -57,6 +64,7 @@ export const draftOf = (t: RawTag, saved = true): TagDraft => ({
   color: t.color ?? '',
   width: typed(t.width),
   height: typed(t.height),
+  rotate: typed(t.rotate),
   textOn: !!t.text,
   text: t.text ?? '',
   textColor: t.textColor ?? '',
@@ -67,6 +75,9 @@ export const draftOf = (t: RawTag, saved = true): TagDraft => ({
   pattern: t.pattern ?? '',
   patternColor: t.patternColor ?? '',
   patternSize: typed(t.patternSize),
+  page: t.page ?? '',
+  pageLabel: t.pageLabel ?? '',
+  homeCard: t.homeCard === true,
   shape: t.shape,
   saved,
   auto: isAutoTag(t.name),
@@ -76,9 +87,10 @@ export const blankDraft = (): TagDraft => draftOf(bare('', '', true), false)
 /** `site.tags` as the archive's list: what the page starts from while the archive has none. */
 export const rawOf = (tags: Record<string, TagStyle>): RawTag[] =>
   Object.entries(tags).map(([name, s]) => ({
-    name, label: s.label, drawn: s.drawn, color: s.color ?? null, shape: null, width: s.width ?? null, height: s.height ?? null,
+    name, label: s.label, drawn: s.drawn, color: s.color ?? null, shape: null, width: s.width ?? null, height: s.height ?? null, rotate: s.rotate ?? null,
     text: s.text ?? null, textColor: s.textColor ?? null, textSize: s.textSize ?? null, textX: s.textX ?? null, textY: s.textY ?? null, textRotate: s.textRotate ?? null,
     pattern: s.pattern ?? null, patternColor: s.patternColor ?? null, patternSize: s.patternSize ?? null,
+    page: s.page ?? null, pageLabel: s.pageLabel ?? null, homeCard: s.homeCard ?? false,
   }))
 
 /** The archive's list as drafts, with any auto tag it lacks added from `site.tags` (unsaved, so Save adds it). */
@@ -91,9 +103,10 @@ export function draftsOf(list: RawTag[]): TagDraft[] {
 }
 
 const inputOf = (t: RawTag): TagInput => ({
-  name: t.name, label: t.label, drawn: t.drawn, color: t.color, width: t.width, height: t.height,
+  name: t.name, label: t.label, drawn: t.drawn, color: t.color, width: t.width, height: t.height, rotate: t.rotate ?? null,
   text: t.text ?? null, textColor: t.textColor ?? null, textSize: t.textSize ?? null, textX: t.textX ?? null, textY: t.textY ?? null, textRotate: t.textRotate ?? null,
   pattern: t.pattern ?? null, patternColor: t.patternColor ?? null, patternSize: t.patternSize ?? null,
+  page: t.page ?? null, pageLabel: t.page ? (t.pageLabel ?? null) : null, homeCard: t.homeCard === true,
 })
 
 /** A whole number in `range`, or null when empty; `bad` hears about anything else. */
@@ -110,10 +123,24 @@ export function tagChanges(saved: RawTag[], drafts: TagDraft[]) {
   const errors = new Map<number, Partial<Record<TagField, string>>>()
   const flag = (key: number, field: TagField, msg: string) => errors.set(key, { ...errors.get(key), [field]: msg })
   const seen = new Set<string>()
+  const pages = new Set<string>()
   const colorOf = (key: number, field: 'color' | 'textColor' | 'patternColor', value: string) => {
     const c = value.trim()
-    if (c && !isTagColor(c)) flag(key, field, 'A hex, a theme token like var(--vx-ok), a color name, or a color function: oklch(from var(--vx-ok) calc(l - 0.1) c h)')
+    if (c && !isTagColor(c)) flag(key, field, 'A hex, a theme token like var(--vods-ok), a color name, or a color function: oklch(from var(--vods-ok) calc(l - 0.1) c h)')
     return c || null
+  }
+  const typeOf = (d: TagDraft) => {
+    const page = d.page.trim()
+    const homeCard = d.homeCard
+    if (!page) return { page: null, pageLabel: null, homeCard }
+    const pageLabel = d.pageLabel.trim()
+    if (!TAG_NAME.test(page)) flag(d.key, 'page', 'Lowercase letters, digits and dashes, up to 32')
+    else if (RESERVED_PAGES.includes(page)) flag(d.key, 'page', `The site has its own /${page}`)
+    else if (pages.has(page)) flag(d.key, 'page', 'Another tag has this page')
+    pages.add(page)
+    if (!pageLabel) flag(d.key, 'pageLabel', 'Needs a title, or no page')
+    else if (pageLabel.length > TAG_PAGE_LABEL_MAX) flag(d.key, 'pageLabel', `Up to ${TAG_PAGE_LABEL_MAX} characters`)
+    return { page, pageLabel, homeCard }
   }
   const body: TagInput[] = drafts.map((d) => {
     const name = d.name.trim()
@@ -126,7 +153,8 @@ export function tagChanges(saved: RawTag[], drafts: TagDraft[]) {
     const px = (f: 'width' | 'height') => whole(d[f], TAG_SIZE, () => flag(d.key, f, `${TAG_SIZE.min}–${TAG_SIZE.max} px`))
     const tag: TagInput = {
       name, label, drawn: d.drawn, color: colorOf(d.key, 'color', d.color), width: px('width'), height: px('height'),
-      ...NO_TEXT, ...NO_PATTERN,
+      rotate: whole(d.rotate, TAG_ROTATE, () => flag(d.key, 'rotate', `${TAG_ROTATE.min} to ${TAG_ROTATE.max}°`)),
+      ...NO_TEXT, ...NO_PATTERN, ...typeOf(d),
     }
     if (d.pattern && TAG_PATTERNS.includes(d.pattern)) {
       Object.assign(tag, {
@@ -169,6 +197,7 @@ export function previewOf(d: TagDraft, apiBase: string): TagStyle {
     shape: d.shape ? `${apiBase.replace(/\/+$/, '')}/${d.shape}` : null,
     width: n(d.width, TAG_SIZE),
     height: n(d.height, TAG_SIZE),
+    rotate: n(d.rotate, TAG_ROTATE),
     ...(d.pattern && { pattern: d.pattern, patternColor: color(d.patternColor), patternSize: n(d.patternSize, TAG_PATTERN_SIZE) }),
     ...(text && {
       text,

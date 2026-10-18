@@ -1,6 +1,7 @@
-import { ProblemError, parseRetryAfter } from '@vexoulz/platform-web'
-import type { RawDrive, RawEmoteSets, RawVod } from '../../index'
+import { ProblemError, parseRetryAfter } from '@vex/platform-web'
+import type { RawDrive, RawEmoteSets, RawUpload, RawVod } from '../../index'
 import type { RawTag } from '../lib/vodTags'
+import type { SiteOptions } from '../lib/siteOptions'
 
 // Client for twitch-archive's worker admin API, as described in docs/admin-api.md. The browser holds no key: a
 // password login gives it an HttpOnly session cookie, and every change carries the session's CSRF token.
@@ -17,14 +18,14 @@ export interface Session {
    * address is outside ARCHIVE_ADMIN_PASSWORD_NETWORKS (the local network by default).
    */
   passwordLogin: boolean
-  /** Whether "Sign in with Twitch" (through vexoulz-auth) is set up on the worker. Older workers omit it. */
+  /** Whether "Sign in with Twitch" (through vex-auth) is set up on the worker. Older workers omit it. */
   twitchLogin?: boolean
   /** The signed-in Twitch user; null for a password login. */
   user?: AdminUser | null
 }
 
 /**
- * POST /admin/session {code}: the worker's answer to a vexoulz-auth code (admin/quiet.ts). An admin gets the dashboard
+ * POST /admin/session {code}: the worker's answer to a vex-auth code (admin/quiet.ts). An admin gets the dashboard
  * session (the same as GET /admin/session's, with `admin: true`); anyone else `{admin: false}` and no cookie.
  */
 export type CodeSession = (Session & { admin: true }) | { admin: false }
@@ -255,6 +256,8 @@ export interface VodPatch {
   duration?: string
   /** ISO 8601 with an offset. */
   createdAt?: string
+  /** Why the VOD was cut (500 characters at most), or null for none. */
+  cutReason?: string | null
 }
 
 /** A games row (the public `/games` shape): which game was played when, for the games pages. */
@@ -275,6 +278,11 @@ export interface GameRow {
 /** GET /admin/site/tags: how each VOD tag shows on the site, in order (docs/admin-api.md, "Site tags"). */
 export interface SiteTags {
   tags: RawTag[]
+  updatedAt: string | null
+  updatedBy: string | null
+}
+/** GET /admin/site/options: the site's own options (docs/admin-api.md, "Site options"). */
+export interface SiteOptionsView extends SiteOptions {
   updatedAt: string | null
   updatedBy: string | null
 }
@@ -452,7 +460,29 @@ export interface SyntheticVod {
   /** When it was made, and when its segments, title or tags last changed. */
   made_at: string | null
   changed_at: string | null
+  /** A game it follows: its segments are every window of it, kept so by the archive. Null: by hand. */
+  auto: { game_id: string } | null
   segments: SyntheticSegment[]
+  /** Set when it has compiled uploads; outdated: its segments changed since they were made. Absent from older archives. */
+  compiled?: { outdated: boolean } | null
+}
+
+/** A source's DMCA claims from one of its done DMCA jobs. */
+export interface SourceDmcaClaim {
+  vod_id: string
+  /** The part the claims are on; null: the whole VOD. Ranges are seconds of that part or VOD. */
+  part: number | null
+  mute: [number, number][]
+  blackout: [number, number][]
+  /** False: a live copy's claims, which couldn't be placed on the VOD's time, so they count as overlapping. */
+  placed: boolean
+}
+
+/** GET /api/v2/synthetic/{id}/dmca: `overlapping` are ranges in a window the synthetic VOD plays (a compile copies
+ * them), `other` the rest of those sources' claims. */
+export interface SyntheticDmca {
+  overlapping: SourceDmcaClaim[]
+  other: SourceDmcaClaim[]
 }
 
 /** POST /api/v2/synthetic (with `id`) or PUT /api/v2/synthetic/{id} (only the fields sent change). */
@@ -464,6 +494,8 @@ export interface SyntheticInput {
   supersedes?: boolean
   tags?: string[]
   segments?: Partial<SyntheticSegment>[]
+  /** Follow a game (its windows replace `segments`); null stops. Segments sent without it stop it too. */
+  auto?: { game_id: string } | null
 }
 
 /** GET /api/v2/playthrough-candidates: a window of a real, shown VOD playing the game, oldest first. */
@@ -492,7 +524,7 @@ export interface ChapterEdit {
 
 export interface YoutubeEdit {
   id: string
-  type: 'vod' | 'live'
+  type: RawUpload['type']
   part: number
   /** Seconds; omit to keep what the archive has. */
   duration?: number
@@ -604,7 +636,7 @@ export class AdminClient {
   logout(): Promise<void> {
     return this.request('DELETE', '/admin/session')
   }
-  /** Trades a vexoulz-auth code (POST /v1/codes) for a dashboard session, if the account is one of the admins. */
+  /** Trades a vex-auth code (POST /v1/codes) for a dashboard session, if the account is one of the admins. */
   codeSession(code: string): Promise<CodeSession> {
     return this.request('POST', '/admin/session', { code }, undefined, 'include')
   }
@@ -671,6 +703,11 @@ export class AdminClient {
   saveCensor(id: string, censor: CensorRange[]): Promise<AdminVod> {
     return this.request('PUT', `/admin/vods/${enc(id)}/censor`, { censor })
   }
+  /** Answers a job the censor check paused: "upload" resumes it (with the censor ranges set by now), "cut" first
+   * leaves the flagged games' chapters out of the uploads (marks them restricted, locks the chapters). */
+  censorReview(jobId: number, decision: 'upload' | 'cut'): Promise<{ message: string }> {
+    return this.request('POST', `/admin/jobs/${jobId}/censor-review`, { decision })
+  }
   /** Deletes uploads (ids from the VOD's list) from YouTube, 50 quota units each, and takes them off the VOD. */
   deleteUploads(id: string, videos: string[]): Promise<DeleteUploadsResult> {
     return this.request('POST', `/admin/vods/${enc(id)}/youtube/delete`, { videos })
@@ -732,6 +769,10 @@ export class AdminClient {
   synthetic(id: string, signal?: AbortSignal): Promise<SyntheticVod> {
     return this.request('GET', `/api/v2/synthetic/${enc(id)}`, undefined, signal)
   }
+  /** Compiling a synthetic VOD with any of these (in either list) needs `accept_dmca: true` in the job's payload. */
+  syntheticDmca(id: string, signal?: AbortSignal): Promise<SyntheticDmca> {
+    return this.request('GET', `/api/v2/synthetic/${enc(id)}/dmca`, undefined, signal)
+  }
   createSynthetic(body: SyntheticInput & { id: string }): Promise<SyntheticVod> {
     return this.request('POST', '/api/v2/synthetic', body)
   }
@@ -768,7 +809,7 @@ export class AdminClient {
   reuploadPart(vodId: string, part: number, type: 'vod' | 'live' = 'vod'): Promise<ActionResult> {
     return this.request('POST', '/admin/reupload', { vodId, part, type })
   }
-  updateDescriptions(vodId: string, type: 'vod' | 'live' = 'vod'): Promise<ActionResult> {
+  updateDescriptions(vodId: string, type: RawUpload['type'] = 'vod'): Promise<ActionResult> {
     return this.request('POST', '/admin/youtube/parts', { vodId, type })
   }
   /** Removes the VOD with its chat, emotes and game uploads from the archive (not from YouTube). */
@@ -814,6 +855,14 @@ export class AdminClient {
   }
   resetSetting(key: string): Promise<{ data: RuntimeSetting[] }> {
     return this.request('DELETE', `/admin/settings/${enc(key)}`)
+  }
+  // ---- site options ----
+  siteOptions(signal?: AbortSignal): Promise<SiteOptionsView> {
+    return this.request('GET', '/admin/site/options', undefined, signal)
+  }
+  /** The options sent change (all or none); the others keep their value. */
+  saveSiteOptions(changes: Partial<SiteOptions>): Promise<SiteOptionsView> {
+    return this.request('PUT', '/admin/site/options', changes)
   }
   // ---- site tags ----
   siteTags(signal?: AbortSignal): Promise<SiteTags> {

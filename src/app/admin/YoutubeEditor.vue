@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // A VOD's YouTube parts: video id (paste a URL or the id), vod/live set, part number, duration. Existing videos keep
 // their thumbnail; leave duration empty to keep the archive's (or while YouTube is processing).
-import { VxInput, VxButton, VxCallout, VxCheckbox, VxDialog, VxSelect, useToast, type Option } from '@vexoulz/ui'
-import { errorText } from '@vexoulz/platform-web'
+import { useToast } from '@vex/ui/utils'
+import type { Option } from '@vex/ui'
+import { errorText } from '@vex/platform-web'
 import { computed, ref } from 'vue'
 import type { RawUpload } from '../../index'
 import type { AdminVod } from './api'
@@ -69,14 +70,14 @@ function setId(r: YoutubeDraft, value: string) {
 
 <template>
   <div class="uploads">
-    <p v-if="!rows.length" class="vx-muted empty">No YouTube parts.</p>
+    <p v-if="!rows.length" class="vods-muted empty">No YouTube parts.</p>
     <ol class="rows">
       <li v-for="(r, i) in rows" :key="r.key" class="row" :class="{ 'has-error': errors.has(r.key) }">
         <a v-if="r.id && r.thumbnail" :href="`https://youtu.be/${r.id}`" target="_blank" rel="noopener" class="thumb">
           <img :src="r.thumbnail" alt="" loading="lazy" />
         </a>
         <span v-else class="thumb ph" aria-hidden="true" />
-        <VxInput
+        <UiInput
           class="id"
           mono
           :model-value="r.id"
@@ -84,41 +85,41 @@ function setId(r: YoutubeDraft, value: string) {
           placeholder="Video id or YouTube URL"
           @change="setId(r, ($event.target as HTMLInputElement).value)"
         />
-        <VxSelect v-model="r.type" :options="TYPES" width="96px" />
+        <UiSelect v-model="r.type" :options="TYPES" width="96px" />
         <label class="part">
-          <span class="vx-muted">Part</span>
-          <VxInput v-model.number="r.part" class="num" mono type="number" min="1" step="1" :aria-label="`Row ${i + 1} part number`" />
+          <span class="vods-muted">Part</span>
+          <UiInput v-model.number="r.part" class="num" mono type="number" min="1" step="1" :aria-label="`Row ${i + 1} part number`" />
         </label>
         <TimeInput v-model="r.duration" optional placeholder="duration" :label="`Part ${i + 1} duration`" />
-        <VxButton variant="ghost" icon :label="`Remove row ${i + 1}`" @click="remove(r)">×</VxButton>
+        <UiButton variant="ghost" icon :label="`Remove row ${i + 1}`" @click="remove(r)">×</UiButton>
         <p v-if="errors.has(r.key)" class="err">{{ errors.get(r.key) }}</p>
       </li>
     </ol>
-    <VxCallout v-if="error" tone="error" title="Couldn't save the YouTube parts">{{ error }}</VxCallout>
+    <UiCallout v-if="error" tone="error" title="Couldn't save the YouTube parts">{{ error }}</UiCallout>
     <div class="foot">
-      <VxButton @click="add">+ Add part</VxButton>
-      <VxButton variant="danger" :disabled="!saved.length || dirty" :title="dirty ? 'Save or undo the changes first' : undefined" @click="openDelete">Delete from YouTube…</VxButton>
+      <UiButton @click="add">+ Add part</UiButton>
+      <UiButton variant="danger" :disabled="!saved.length || dirty" :title="dirty ? 'Save or undo the changes first' : undefined" @click="openDelete">Delete from YouTube…</UiButton>
       <span class="spacer" />
-      <VxButton :disabled="!dirty || saving" @click="reset">Undo changes</VxButton>
-      <VxButton variant="primary" :loading="saving" :disabled="!dirty || errors.size > 0" @click="save">Save parts</VxButton>
+      <UiButton :disabled="!dirty || saving" @click="reset">Undo changes</UiButton>
+      <UiButton variant="primary" :loading="saving" :disabled="!dirty || errors.size > 0" @click="save">Save parts</UiButton>
     </div>
 
-    <VxDialog v-model:open="delOpen" title="Delete from YouTube">
+    <UiDialog v-model:open="delOpen" title="Delete from YouTube">
       Deletes the ticked videos from YouTube and takes them off this VOD; the other parts' descriptions are rewritten.
       Each delete costs 50 units of the daily YouTube quota. This can't be undone; to replace uploads instead, use
       Re-archive in the actions.
       <ul class="pick">
         <li v-for="u in saved" :key="u.id">
-          <VxCheckbox :model-value="delPick.includes(u.id)" @update:model-value="pick(u.id, $event)">{{ label(u) }}</VxCheckbox>
+          <UiCheckbox :model-value="delPick.includes(u.id)" @update:model-value="pick(u.id, $event)">{{ label(u) }}</UiCheckbox>
         </li>
       </ul>
       <template #actions="{ close }">
-        <VxButton @click="close">Keep them</VxButton>
-        <VxButton variant="danger-solid" :loading="deleting" :disabled="!delPick.length" @click="deleteUploads">
+        <UiButton @click="close">Keep them</UiButton>
+        <UiButton variant="danger-solid" :loading="deleting" :disabled="!delPick.length" @click="deleteUploads">
           Delete {{ delPick.length || '' }}
-        </VxButton>
+        </UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
   </div>
 </template>
 
@@ -128,16 +129,16 @@ function setId(r: YoutubeDraft, value: string) {
 .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .row {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 8px;
-  border-radius: var(--vx-radius); background: rgb(255 255 255 / 0.03);
+  border-radius: var(--vods-radius); background: rgb(255 255 255 / 0.03);
 }
-.row.has-error { box-shadow: inset 0 0 0 1px var(--vx-bad); }
+.row.has-error { box-shadow: inset 0 0 0 1px var(--vods-bad); }
 .thumb { width: 64px; aspect-ratio: 16 / 9; border-radius: 3px; overflow: hidden; flex: none; }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.ph { background: var(--vx-line); }
+.ph { background: var(--vods-line); }
 .id { flex: 1 1 180px; }
 .part { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .num { width: 60px; }
-.err { flex-basis: 100%; margin: 0; color: var(--vx-bad); font-size: 12px; }
+.err { flex-basis: 100%; margin: 0; color: var(--vods-bad); font-size: 12px; }
 .foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .spacer { flex: 1; }
 .pick { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }

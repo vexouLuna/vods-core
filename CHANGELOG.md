@@ -1,4 +1,74 @@
-# @vexoulz/vods-core
+# @vex/vods-core
+
+## 0.36.2
+
+### Patch Changes
+
+- 049a035: Deep Field panels use vex-ui v0.28.0's shared glass instead of copying it: `.vods-panel` takes `--vx-glass-panel`, and every panel carries vex-ui's `.vx-glass-rim` class for the lit rim (inert off Deep Field). The page sky now stays put on screen while scrolling (from vex-ui v0.28.0). No other visual change.
+
+## 0.36.1
+
+### Patch Changes
+
+- c9464b8: Deep Field panels, headings and buttons match vex-ui v0.27.0 again: panels get the window reflection and the lit rim, headings take the accent-tinted gradient, and buttons have the glass edge instead of a blur. A test now checks each copied rule against the installed @vex/ui, so a vex-ui change can't drift unnoticed. Solid buttons ("See all", "Stop timer") drop the glass edge.
+- 383fef1: Manage is only in the account menu now, with the Twitch mark beside it, as on dtp.vexoul.net: the header's Manage button is gone. An admin signed in with the dashboard password alone still gets the menu, as "admin", with Manage in it. The Twitch mark now sits inline beside its text in every site's controls.
+
+## 0.36.0
+
+### Minor Changes
+
+- bc6b163: A playthrough can keep itself up to date: on the synthetic VOD page, "Keep up to date" (offered once it was built from a game) has the archive keep its segments to every window of that game. `SyntheticVod` and `SyntheticInput` gained `auto`.
+- 4841978: A synthetic VOD can be compiled into one file: "Compile" on its manage page starts the archive's `compile` job, whose uploads have the new upload type `compiled`. The watch page plays the segments or that file (`?play=segments|compiled`, with a switcher beside the parts menu), defaulting to the new site option `playDefault`, set on /manage/home. `UploadType` and `RawUpload.type` gained `'compiled'`; `useWatch` takes a third `play` argument and returns `hasCompiled`, and `segments` stays set on a synthetic VOD while its compiled file plays. When the segments change after (by hand or a playthrough following its game), the manage page shows the compiled uploads as outdated and offers Recompile (`SyntheticVod.compiled`). A gap between segments no longer stops a compile: the file plays the runs back to back and each upload's `gaps` keeps the timeline right. Compile first checks the sources for DMCA claims (`AdminClient.syntheticDmca`, `SourceDmcaClaim`): when there are some, a warning lists each VOD and its claimed ranges in the windows used (`SyntheticDmca.overlapping`), with the rest of those sources' claims in a collapsed "Other claims in stitched videos" (`other`), and needs "I understand the risks" before the job is queued with `accept_dmca`.
+- 072ce56: Removes the `kit` entry (`@vex/vods-core/kit`). Its only user, keeki-vods, now runs `createVodsApp()` with its own controls.
+- cb5d5b4: Homepage cards come from the archive (`GET /v1/site/options`): which cards show and in what order (the latest VOD, the newest VODs with a tag, the most played games). The new Manage page `/manage/home` edits them, and `pages.manage` takes an optional `home` page for it. `LatestPlaythroughs` became `LatestTagged`, which takes a `tag`.
+- 2600cef: - Tag types: a tag on /manage/tags can have its own page and menu entry (`page`, `pageLabel`) and can feed a
+    homepage card (`homeCard`). Playthroughs is now the `compilation` tag's page; a new type (highlights, say) needs
+    only its tag set up. A path no tag has is "not found".
+  - Breaking for kit users: `TABS` is gone; `tabs()` lists the list pages from the tag config.
+- be4d1b1: A VOD can carry why it was cut (`cut_reason` from the archive, `Vod.cutReason`). Manage's Details form edits it, and
+  the page for a VOD cut in full shows it instead of the generic text when set. Needs twitch-archive with `cutReason`.
+
+### Patch Changes
+
+- f8a80c6: Sign in stays greyed out until the account check finishes, with the tooltip "Checking sign-in…" (UiAccountMenu gets a `checking` prop; keeki-vods' KAccountMenu has it); Space plays and pauses after a click on the timeline; the Manage tag color picker highlights the swatch for colors saved as `var(--vx-*)` or `var(--k-*)`.
+- 62260f6: Depends on `@vex/platform-web` v0.11.0 (batch retry of succeeded runs behind a confirm, `admin` for the password sign-in) and builds against `@vex/ui` v0.27.0.
+- 2a0790a: - The admin 🔧 on VOD cards, the latest VOD and the live card is back at the thumbnail's top-right corner.
+- 5264712: Manage: the merge note says either VOD may have no uploads (a lost first or last section).
+
+## 0.35.0
+
+### Minor Changes
+
+- b01eb4f: Bot-chat notices that carry the chatter's own message (a resub's) now show their system line over a normal chat line,
+  with the chatter's colour, badges and emotes. Chat lines carry Twitch's message type (`messageType`: highlighted,
+  intro, gigantified emote, message effect), and GIFs come through as `gif` tokens (`GifToken`). Needs
+  @vex/platform-web with chat message types.
+- d9f8215: The app is look-neutral: its pages use `Ui*` controls that the site hands to `createVodsApp({ ui })`, and style
+  themselves with `--vods-*` tokens and `vods-*` utility classes (`styles/tokens.css`). Deep Field moves to the new
+  `@vex/vods-core/deep-field` entry (`deepField`, plus `@vex/vods-core/deep-field.css`). Breaking: `ui` is required, and
+  the app no longer imports `@vex/ui/platform.css` or styles `vx-*` classes itself.
+  
+  `art.playhead` swaps the timeline's snail for the site's own playhead.
+- d2edd1c: Manage: a job paused by the worker's IGDB censor check shows the flagged games on its page, with a link to the censor ranges and "Cut these games" (`admin.censorReview`); the merge panel says a VOD whose footage was lost can take the rest. The dev mock has the check's job, route and settings.
+- 655cfaa: - A VOD cut in full gets its own page (what was cut and why) instead of "no VOD uploads yet".
+  - While the channel is live, the home page shows the stream (Twitch preview, LIVE tag, its VOD page) in the latest
+    VOD's place. New `ArchiveClient.liveStatus()` and `LiveStatus` type (`/v1/status`).
+  - Signed-in admins get a 🔧 on each VOD card, the latest VOD and the watch page, to that VOD's Manage page.
+  - Tags take a `rotate` (degrees; unset keeps the −4° tilt), set on /manage/tags. Needs twitch-archive to store it;
+    an archive without it drops the field.
+  - /manage/storage's disk bar splits the archive's folders, stale folders and everything else.
+  - adminMock: `MOCK_LIVE=yes` and `MOCK_FULLY_CUT=<vod id>`.
+
+## 0.34.0
+
+### Minor Changes
+
+- 0374a9e: The package is now `@vex/vods-core`, installed from `github:vexouLuna/vods-core`, on `@vex/ui` 0.25.0 and
+  `@vex/platform-web` 0.9.0. Sites change their imports from `@vexoulz/vods-core` (and `/vue`, `/app`, `/kit`, the CSS)
+  to `@vex/vods-core` when they bump, together with `@vex/ui` and `@vex/platform-web`; the build keeps both as externals
+  under their new names, so a site still gets one copy of each. The quiet admin check sends `X-Vex-CSRF` (vex-auth
+  accepts both names), and the dev mock's fake auth checks the same header. Docs, the mock's Twitch admin and the
+  example config use the new names and the `vexouluna` login.
 
 ## 0.33.0
 

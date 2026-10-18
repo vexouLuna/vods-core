@@ -1,11 +1,13 @@
 <script setup lang="ts">
-// The header's account control, wired to the shared sign-in (@vexoulz/ui/account, set up by createVodsApp()). A dashboard session signed in
-// with the admin password (no account) shows as "admin". Signing out ends both.
-import { VxAccountMenu, VxMenuItem, type AccountUser } from '@vexoulz/ui'
-import { useAccount } from '@vexoulz/ui/account'
+// The header's account control, wired to the shared sign-in (@vex/ui/account, set up by createVodsApp()). A dashboard session signed in
+// with the admin password (no account) shows as "admin", so it has Manage here too (the only way in, as on dtp). Sign in
+// waits for the account check; signing out ends both, and every account session.
+import type { AccountUser } from '@vex/ui'
+import { useAccount } from '@vex/ui/account'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { logout, session } from '../admin/session'
+import TwitchMark from './TwitchMark.vue'
 
 const account = useAccount()
 const route = useRoute()
@@ -29,16 +31,17 @@ async function signOut() {
 </script>
 
 <template>
-  <VxAccountMenu
+  <UiAccountMenu
     :user="user"
     :note="note"
-    :disabled="!account.enabled"
+    :disabled="!account.enabled || !account.ready.value"
+    :checking="account.enabled && !account.ready.value"
     @sign-in="account.signIn()"
     @sign-out="signOut"
   >
     <template #default="{ close }">
-      <VxMenuItem v-if="session.authenticated" to="/manage" @click="close()">Manage</VxMenuItem>
+      <UiMenuItem v-if="session.authenticated" to="/manage" @click="close()"><TwitchMark /> Manage</UiMenuItem>
       <slot :close="close"></slot>
     </template>
-  </VxAccountMenu>
+  </UiAccountMenu>
 </template>

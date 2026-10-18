@@ -1,16 +1,19 @@
 <script setup lang="ts">
 // /manage/synthetic/new and /manage/synthetic/:id: a VOD made of windows of real ones (GET/POST/PUT/DELETE
 // /api/v2/synthetic). A merge or split supersedes its sources (they leave the public lists and redirect into it); a
-// playthrough, built from a game's windows, is listed beside them and tagged `compilation`.
-import { VxButton, VxCallout, VxCheckbox, VxChip, VxDialog, VxField, VxInput, VxSkeleton, timeAgo, useToast } from '@vexoulz/ui'
+// playthrough, built from a game's windows, is listed beside them and tagged `compilation`. Compile starts a job that
+// joins its windows into one file and uploads it as type `compiled` (the archive's compile_youtube_upload must be on).
+import { useToast } from '@vex/ui/utils'
+import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
-import { errorText } from '@vexoulz/platform-web'
-import type { PlaythroughWindow, SyntheticInput, SyntheticVod } from '../../admin/api'
+import { errorText } from '@vex/platform-web'
+import type { PlaythroughWindow, SyntheticDmca, SyntheticInput, SyntheticVod } from '../../admin/api'
 import ManageShell from '../../admin/ManageShell.vue'
 import PlaythroughBuilder from '../../admin/PlaythroughBuilder.vue'
 import { admin } from '../../admin/session'
+import { platform, vodSubject } from '../../admin/platform'
 import TimeInput from '../../admin/TimeInput.vue'
 import { COMPLETE_TAG } from '../../lib/vodTags'
 import { site } from '../../site'
@@ -29,12 +32,17 @@ const loadError = ref<string | null>(null)
 const notFound = ref(false)
 const form = ref({ id: '', title: '', tags: '', supersedes: false })
 const segments = ref<Row[]>([])
+// The game a playthrough follows (the archive keeps its segments to that game's windows), or the one it was just built from.
+const follow = ref<{ id: string; name: string | null } | null>(null)
+const keepUp = ref(false)
 
 function fill(v: SyntheticVod | null) {
   vod.value = v
   form.value = { id: v?.id ?? '', title: v?.title ?? '', tags: (v?.tags ?? []).join(', '), supersedes: v?.supersedes ?? false }
   segments.value = (v?.segments ?? []).map((s) => row({ vod_id: s.vod_id, start: s.start, end: s.end, at: s.at, label: s.label ?? '' }))
   if (!segments.value.length) segments.value = [row()]
+  follow.value = v?.auto ? { id: v.auto.game_id, name: null } : null
+  keepUp.value = !!v?.auto
 }
 async function load() {
   loadError.value = null
@@ -58,7 +66,8 @@ const move = (i: number, by: -1 | 1) => {
 }
 const remove = (i: number) => (segments.value = segments.value.filter((_, j) => j !== i))
 const addRow = () => (segments.value = [...segments.value, row()])
-function addWindows(windows: PlaythroughWindow[], game: string | null) {
+function addWindows(windows: PlaythroughWindow[], game: string | null, gameId: string | null) {
+  if (gameId) follow.value = { id: gameId, name: game }
   const kept = segments.value.filter((s) => s.vod_id.trim())
   segments.value = [...kept, ...windows.map((w) => row({ vod_id: w.segment.vod_id, start: w.segment.start, end: w.segment.end, label: w.segment.label }))]
   // A playthrough stands beside its sources and is tagged so.
@@ -115,6 +124,8 @@ async function save() {
       ...(s.label.trim() ? { label: s.label.trim() } : {}),
     })),
   }
+  // Following a game, the archive makes the segments (it ignores these); without, they are a hand edit, which stops it.
+  if (keepUp.value && follow.value) body.auto = { game_id: follow.value.id }
   try {
     if (isNew.value) {
       const made = await admin.createSynthetic({ ...body, id: form.value.id.trim() })
@@ -128,6 +139,43 @@ async function save() {
     saveError.value = errorText(e)
   } finally {
     saving.value = false
+  }
+}
+
+const compiling = ref(false)
+/** The sources' DMCA claims, when Compile found some: the warning is open until it's accepted or cancelled. */
+const claims = ref<SyntheticDmca | null>(null)
+const accepted = ref(false)
+const claimsOpen = computed({ get: () => claims.value !== null, set: (open) => { if (!open) claims.value = null } })
+const ranges = (r: [number, number][]) => r.map(([a, b]) => `${toClock(a)}–${toClock(b)}`).join(', ')
+async function compile() {
+  compiling.value = true
+  try {
+    const found = await admin.syntheticDmca(props.id!)
+    // Any claim warns, also one outside the windows it plays.
+    if (found.overlapping.length || found.other.length) {
+      accepted.value = false
+      claims.value = found
+    } else await enqueueCompile(false)
+  } catch (e) {
+    toast.show(errorText(e), { kind: 'error', duration: 6000 })
+  } finally {
+    compiling.value = false
+  }
+}
+async function enqueueCompile(acceptDmca: boolean) {
+  compiling.value = true
+  try {
+    // `replace` swaps out the compiled uploads of an earlier run (none on the first); the archive refuses
+    // sources with DMCA claims unless `accept_dmca`.
+    const payload = { type: 'compiled', replace: true, ...(acceptDmca ? { accept_dmca: true } : {}) }
+    const job = await platform.enqueue({ kind: 'compile', subject: vodSubject(props.id!), payload })
+    claims.value = null
+    router.push(`/manage/jobs/${job.id}`)
+  } catch (e) {
+    toast.show(errorText(e), { kind: 'error', duration: 6000 })
+  } finally {
+    compiling.value = false
   }
 }
 
@@ -154,94 +202,133 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
 <template>
   <ManageShell :title="isNew ? 'New synthetic VOD' : `Synthetic VOD ${id}`">
     <template #actions>
-      <VxButton v-if="!isNew" :to="`/vods/${encodeURIComponent(id!)}`">Watch page</VxButton>
-      <VxButton v-if="!isNew" variant="danger" @click="deleteOpen = true">Delete</VxButton>
+      <UiButton v-if="!isNew" :to="`/vods/${encodeURIComponent(id!)}`">Watch page</UiButton>
+      <UiButton v-if="!isNew" :loading="compiling" title="Join its windows into one file and upload it" @click="compile">{{ vod?.compiled ? 'Recompile' : 'Compile' }}</UiButton>
+      <UiButton v-if="!isNew" variant="danger" @click="deleteOpen = true">Delete</UiButton>
     </template>
     <p class="back"><RouterLink to="/manage/vods?synthetic=true">← Synthetic VODs</RouterLink></p>
 
-    <VxCallout v-if="notFound" tone="warn" title="No such synthetic VOD">The archive has no synthetic VOD {{ id }}.</VxCallout>
-    <VxCallout v-else-if="loadError" tone="error" title="Couldn't load it">
+    <UiCallout v-if="notFound" tone="warn" title="No such synthetic VOD">The archive has no synthetic VOD {{ id }}.</UiCallout>
+    <UiCallout v-else-if="loadError" tone="error" title="Couldn't load it">
       {{ loadError }}
-      <template #actions><VxButton size="sm" @click="load">Try again</VxButton></template>
-    </VxCallout>
-    <div v-else-if="!isNew && !vod" class="sk" aria-busy="true"><VxSkeleton h="90px" /><VxSkeleton h="200px" /></div>
+      <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
+    </UiCallout>
+    <div v-else-if="!isNew && !vod" class="sk" aria-busy="true"><UiSkeleton h="90px" /><UiSkeleton h="200px" /></div>
 
     <form v-else @submit.prevent="save">
-      <section v-if="vod" class="panel vx-panel">
+      <section v-if="vod" class="panel vods-panel vx-glass-rim">
         <dl class="facts">
-          <div><dt>Length</dt><dd class="vx-mono">{{ vod.duration ?? '—' }}</dd></div>
+          <div><dt>Length</dt><dd class="vods-mono">{{ vod.duration ?? '—' }}</dd></div>
           <div><dt>Streamed</dt><dd>{{ when(vod.created_at) }}</dd></div>
           <div><dt>Made</dt><dd :title="when(vod.made_at)">{{ vod.made_at ? timeAgo(vod.made_at) : '—' }}</dd></div>
           <div><dt>Changed</dt><dd :title="when(vod.changed_at)">{{ vod.changed_at ? timeAgo(vod.changed_at) : '—' }}</dd></div>
-          <div><dt>Visibility</dt><dd><VxChip :tone="vod.hidden ? 'warn' : 'ok'">{{ vod.hidden ? 'hidden' : 'public' }}</VxChip></dd></div>
+          <div v-if="vod.compiled"><dt>Compiled</dt><dd><UiChip :tone="vod.compiled.outdated ? 'warn' : 'ok'">{{ vod.compiled.outdated ? 'outdated: the segments changed' : 'up to date' }}</UiChip></dd></div>
+          <div><dt>Visibility</dt><dd><UiChip :tone="vod.hidden ? 'warn' : 'ok'">{{ vod.hidden ? 'hidden' : 'public' }}</UiChip></dd></div>
         </dl>
-        <p class="vx-muted small">Hiding it, and its chapters and the like, are on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>
+        <p class="vods-muted small">Hiding it, and its chapters and the like, are on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>
       </section>
 
-      <section class="panel vx-panel">
-        <h2 class="vx-eyebrow sec">Details</h2>
+      <section class="panel vods-panel vx-glass-rim">
+        <h2 class="vods-eyebrow sec">Details</h2>
         <div class="fields">
-          <VxField v-if="isNew" label="Id" :error="form.id && idError ? idError : undefined" help="In its link: /vods/<id>. Can't change later.">
-            <template #default="{ id: fid }"><VxInput :id="fid" v-model="form.id" mono placeholder="elden-ring" /></template>
-          </VxField>
-          <VxField label="Title" help="Empty: the first source's.">
-            <template #default="{ id: fid }"><VxInput :id="fid" v-model="form.title" /></template>
-          </VxField>
-          <VxField label="Tags" help="Comma-separated; a playthrough is tagged compilation, and complete once played to the end.">
-            <template #default="{ id: fid }"><VxInput :id="fid" v-model="form.tags" placeholder="compilation" /></template>
-          </VxField>
+          <UiField v-if="isNew" label="Id" :error="form.id && idError ? idError : undefined" help="In its link: /vods/<id>. Can't change later.">
+            <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.id" mono placeholder="elden-ring" /></template>
+          </UiField>
+          <UiField label="Title" help="Empty: the first source's.">
+            <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.title" /></template>
+          </UiField>
+          <UiField label="Tags" help="Comma-separated; a playthrough is tagged compilation, and complete once played to the end.">
+            <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.tags" placeholder="compilation" /></template>
+          </UiField>
         </div>
-        <VxCheckbox v-model="complete" label="Played to the end: shows a complete tag on its thumbnail" />
-        <VxCheckbox v-model="form.supersedes" label="Stands in for its sources (a merge or split): they leave the public lists and redirect here" />
+        <UiCheckbox v-model="complete" label="Played to the end: shows a complete tag on its thumbnail" />
+        <UiCheckbox v-model="form.supersedes" label="Stands in for its sources (a merge or split): they leave the public lists and redirect here" />
+        <UiCheckbox
+          v-if="follow"
+          v-model="keepUp"
+          :label="`Keep up to date: every window of ${follow.name ?? `game ${follow.id}`}, new streams included (the segments below then aren't saved)`"
+        />
       </section>
 
-      <section class="panel vx-panel">
+      <section class="panel vods-panel vx-glass-rim">
         <div class="head">
-          <h2 class="vx-eyebrow sec">Segments</h2>
-          <span class="vx-muted small">{{ segments.length }} · {{ total == null ? 'some run to their source’s end' : toClock(total) }}</span>
-          <VxButton size="sm" class="push" @click="builderOpen = !builderOpen">{{ builderOpen ? 'Close builder' : 'Build a playthrough…' }}</VxButton>
+          <h2 class="vods-eyebrow sec">Segments</h2>
+          <span class="vods-muted small">{{ segments.length }} · {{ total == null ? 'some run to their source’s end' : toClock(total) }}</span>
+          <UiButton size="sm" class="push" @click="builderOpen = !builderOpen">{{ builderOpen ? 'Close builder' : 'Build a playthrough…' }}</UiButton>
         </div>
         <div v-if="builderOpen" class="builder"><PlaythroughBuilder @add="addWindows" /></div>
-        <p class="vx-muted small">
+        <p class="vods-muted small">
           Each is a window of a Twitch VOD, played one after another. Empty start or end: the source's own; empty
           “at”: right after the one before.
         </p>
         <ol class="segs">
           <li v-for="(s, i) in segments" :key="s.key" class="seg">
-            <span class="n vx-mono">{{ i + 1 }}</span>
-            <VxField label="VOD" :error="s.vod_id && segErrors[i] ? segErrors[i]! : undefined">
-              <template #default="{ id: fid }"><VxInput :id="fid" v-model="s.vod_id" mono placeholder="2200000000" class="vodid" /></template>
-            </VxField>
-            <VxField label="Start"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.start" optional placeholder="start" /></template></VxField>
-            <VxField label="End"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.end" optional placeholder="end" /></template></VxField>
-            <VxField label="At"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.at" optional placeholder="next" /></template></VxField>
-            <VxField label="Label" class="grow">
-              <template #default="{ id: fid }"><VxInput :id="fid" v-model="s.label" placeholder="Part 1" /></template>
-            </VxField>
+            <span class="n vods-mono">{{ i + 1 }}</span>
+            <UiField label="VOD" :error="s.vod_id && segErrors[i] ? segErrors[i]! : undefined">
+              <template #default="{ id: fid }"><UiInput :id="fid" v-model="s.vod_id" mono placeholder="2200000000" class="vodid" /></template>
+            </UiField>
+            <UiField label="Start"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.start" optional placeholder="start" /></template></UiField>
+            <UiField label="End"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.end" optional placeholder="end" /></template></UiField>
+            <UiField label="At"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.at" optional placeholder="next" /></template></UiField>
+            <UiField label="Label" class="grow">
+              <template #default="{ id: fid }"><UiInput :id="fid" v-model="s.label" placeholder="Part 1" /></template>
+            </UiField>
             <span class="acts">
-              <VxButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move segment ${i + 1} up`" @click="move(i, -1)">↑</VxButton>
-              <VxButton size="sm" variant="ghost" :disabled="i === segments.length - 1" :aria-label="`Move segment ${i + 1} down`" @click="move(i, 1)">↓</VxButton>
-              <VxButton size="sm" variant="ghost" :aria-label="`Remove segment ${i + 1}`" @click="remove(i)">✕</VxButton>
+              <UiButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move segment ${i + 1} up`" @click="move(i, -1)">↑</UiButton>
+              <UiButton size="sm" variant="ghost" :disabled="i === segments.length - 1" :aria-label="`Move segment ${i + 1} down`" @click="move(i, 1)">↓</UiButton>
+              <UiButton size="sm" variant="ghost" :aria-label="`Remove segment ${i + 1}`" @click="remove(i)">✕</UiButton>
             </span>
           </li>
         </ol>
-        <VxButton size="sm" @click="addRow">Add a segment</VxButton>
+        <UiButton size="sm" @click="addRow">Add a segment</UiButton>
       </section>
 
-      <VxCallout v-if="saveError" tone="error" title="Couldn't save">{{ saveError }}</VxCallout>
+      <UiCallout v-if="saveError" tone="error" title="Couldn't save">{{ saveError }}</UiCallout>
       <div class="save">
-        <VxButton type="submit" variant="primary" :loading="saving" :disabled="!valid">{{ isNew ? 'Make it' : 'Save' }}</VxButton>
-        <VxButton v-if="!isNew" :disabled="saving" @click="fill(vod)">Undo changes</VxButton>
+        <UiButton type="submit" variant="primary" :loading="saving" :disabled="!valid">{{ isNew ? 'Make it' : 'Save' }}</UiButton>
+        <UiButton v-if="!isNew" :disabled="saving" @click="fill(vod)">Undo changes</UiButton>
       </div>
     </form>
 
-    <VxDialog v-model:open="deleteOpen" :title="`Delete ${id}?`">
+    <UiDialog v-model:open="claimsOpen" title="Its sources have DMCA claims">
+      <UiCallout tone="error" title="The compiled file copies the claimed content">
+        These sources were claimed on YouTube. Their claimed ranges go into the compiled upload as they are, and it
+        can be claimed, blocked or get the channel a strike.
+      </UiCallout>
+      <p class="small"><strong>In the windows this video uses</strong></p>
+      <ul v-if="claims?.overlapping.length" class="claims">
+        <li v-for="(c, i) in claims.overlapping" :key="i">
+          <strong>VOD {{ c.vod_id }}</strong>{{ c.part !== null ? `, part ${c.part}` : '' }}:
+          <span v-if="c.mute.length">muted {{ ranges(c.mute) }}</span><span v-if="c.mute.length && c.blackout.length">; </span>
+          <span v-if="c.blackout.length">blacked out {{ ranges(c.blackout) }}</span>
+          <span v-if="!c.placed" class="vods-muted"> (a live copy's times: couldn't be matched to the windows)</span>
+        </li>
+      </ul>
+      <p v-else class="small vods-muted">None: every claim is outside the windows used.</p>
+      <details v-if="claims?.other.length" class="other">
+        <summary>Other claims in stitched videos ({{ claims.other.length }})</summary>
+        <ul class="claims">
+          <li v-for="(c, i) in claims.other" :key="i">
+            <strong>VOD {{ c.vod_id }}</strong>{{ c.part !== null ? `, part ${c.part}` : '' }}:
+            <span v-if="c.mute.length">muted {{ ranges(c.mute) }}</span><span v-if="c.mute.length && c.blackout.length">; </span>
+            <span v-if="c.blackout.length">blacked out {{ ranges(c.blackout) }}</span>
+          </li>
+        </ul>
+      </details>
+      <UiCheckbox v-model="accepted" label="I understand the risks" />
+      <template #actions="{ close }">
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton variant="danger-solid" :disabled="!accepted" :loading="compiling" @click="enqueueCompile(true)">Compile anyway</UiButton>
+      </template>
+    </UiDialog>
+
+    <UiDialog v-model:open="deleteOpen" :title="`Delete ${id}?`">
       Its link stops working and, if it stood in for its sources, they come back. The sources themselves aren't touched.
       <template #actions="{ close }">
-        <VxButton @click="close">Cancel</VxButton>
-        <VxButton variant="danger-solid" :loading="deleting" @click="destroy">Delete</VxButton>
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton variant="danger-solid" :loading="deleting" @click="destroy">Delete</UiButton>
       </template>
-    </VxDialog>
+    </UiDialog>
   </ManageShell>
 </template>
 
@@ -259,13 +346,16 @@ dd { margin: 0; }
 .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .head .sec { margin: 0; }
 .push { margin-left: auto; }
-.builder { margin: 10px 0; padding: 12px; border: 1px solid var(--vx-line); border-radius: var(--vx-radius, 8px); }
+.builder { margin: 10px 0; padding: 12px; border: 1px solid var(--vods-line); border-radius: var(--vods-radius, 8px); }
 .segs { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
-.seg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 10px; padding-top: 8px; border-top: 1px solid var(--vx-line); }
-.seg :deep(.vx-field) { margin: 0; }
+.seg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 10px; padding-top: 8px; border-top: 1px solid var(--vods-line); }
+.seg > * { margin: 0; }
 .n { align-self: center; min-width: 1.5em; opacity: 0.6; }
 .vodid { width: 9.5rem; }
 .grow { flex: 1 1 10rem; }
+.claims { margin: 8px 0 12px; padding-left: 1.2em; display: grid; gap: 4px; }
+.other { margin-bottom: 12px; }
+.other summary { cursor: pointer; }
 .acts { display: flex; gap: 2px; }
 .save { display: flex; flex-wrap: wrap; gap: 8px; }
 </style>

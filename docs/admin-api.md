@@ -33,13 +33,13 @@ The existing `Authorization: Bearer <admin api key>` keeps working for scripts. 
   header, only trust it from a configured proxy address (setting, no default addresses in the repo).
 - `GET /admin/refreshtoken` stays as it is (Google's redirect target, proven by its signed `state`).
 
-### 1b. Twitch sign-in through vexoulz-auth (twitch-archive PR #22)
+### 1b. Twitch sign-in through vex-auth (twitch-archive PR #22)
 
 - The password only works from `ARCHIVE_ADMIN_PASSWORD_NETWORKS` (the local networks by default); `passwordLogin` in
   `GET /admin/session` says whether it is offered to the caller's address.
-- `GET /admin/session` also returns `twitchLogin: bool` (vexoulz-auth is configured) and `user` (the Twitch
+- `GET /admin/session` also returns `twitchLogin: bool` (vex-auth is configured) and `user` (the Twitch
   `{id, login, displayName, avatar, color}`, null for a password session).
-- `GET /admin/signin?next=/manage/...` → vexoulz-auth → `GET /admin/signin/callback`, which sets the same `archive_admin`
+- `GET /admin/signin?next=/manage/...` → vex-auth → `GET /admin/signin/callback`, which sets the same `archive_admin`
   cookie and redirects to `next`. Only `ARCHIVE_ADMIN_TWITCH_IDS` get a session. On failure it redirects to
   `/admin/login?auth_error=<denied|expired|twitch|not_allowed|unavailable|misconfigured>&next=...`.
 - Audit entries from a Twitch session record the actor as `twitch:<id>`, and carry `actorLogin` (the Twitch login;
@@ -51,8 +51,8 @@ The existing `Authorization: Bearer <admin api key>` keeps working for scripts. 
 For someone already signed in to the account, `installVodsSession` asks once per page load whether they're an
 admin, with two requests and no redirect (`src/app/admin/quiet.ts`):
 
-1. vexoulz-auth (≥ v0.3.0): `GET /v1/me` for the CSRF token, then `POST /v1/codes {client_id}` with credentials and
-   `X-Vexoulz-CSRF`. The client id is the worker's `ARCHIVE_ADMIN_AUTH_CLIENT_ID` (`vods-admin` by default; the
+1. vex-auth (≥ v0.3.0): `GET /v1/me` for the CSRF token, then `POST /v1/codes {client_id}` with credentials and
+   `X-Vex-CSRF`. The client id is the worker's `ARCHIVE_ADMIN_AUTH_CLIENT_ID` (`vods-admin` by default; the
    site's `adminClientId` option). `200 {code}`, or `401 signed_out`.
 2. The worker: `POST /admin/session {code}`, credentialed. `200 {admin: true, ...the session}` sets the
    `archive_admin` cookie (its `csrf` goes as `X-CSRF-Token`); `200 {admin: false}` is a signed-in viewer.
@@ -123,7 +123,9 @@ account live playback tokens are asked for as, so a live recording has no stitch
   included. `q` matches the title, or is a VOD id; `hidden=true|false` filters; `before` is the last page's `next`
   (twitch-archive PR #30). The Manage VODs page uses it instead of the public list, which leaves hidden VODs out.
 - `PATCH /admin/vods/{id}` `{"title"?, "hidden"?, "thumbnailUrl"?: http(s) URL | null, "duration"?: "HH:MM:SS",
-  "createdAt"?: ISO}` → the updated VOD (with `hidden`). `thumbnailUrl: null` falls back to the first YouTube part's.
+  "createdAt"?: ISO, "cutReason"?: text | null}` → the updated VOD (with `hidden`). `thumbnailUrl: null` falls back
+  to the first YouTube part's. `cutReason` (trimmed, 500 characters at most; blank or null clears it) is why the VOD
+  was cut: the public VOD JSON carries it as `cut_reason` only when set, and the page for a VOD cut in full shows it.
   The duration can't end before the last chapter or games row. A merged VOD refuses everything but `hidden` (409).
   Audited with before and after (twitch-archive PR #30).
 - Hidden VODs are gone from the public API as if missing: not in `/vods` or `/games`, 404 on `/vods/{id}` and its
@@ -200,8 +202,8 @@ How each VOD tag shows on the site, edited on `/manage/tags`. Until the archive 
 built-in `site.tags` (`createVodsApp()`'s `site.tags`, or `DEFAULT_TAGS`) (the public GET answering 404 or failing means "none saved"), and
 `/manage/tags` shows those read-only. The dev mock implements all of it (`MOCK_SITE_TAGS=no` makes it answer 404).
 
-A tag: `{name, label, drawn, color, shape, width, height, text, textColor, textSize, textX, textY, textRotate,
-pattern, patternColor, patternSize}`. The text and pattern fields are newer than the rest: until the archive keeps them, it may
+A tag: `{name, label, drawn, color, shape, width, height, rotate, text, textColor, textSize, textX, textY, textRotate,
+pattern, patternColor, patternSize}`. The rotate, text and pattern fields are newer than the rest: until the archive keeps them, it may
 leave them out (the site reads them as `null`).
 
 - `name`: the VOD tag it styles, `^[a-z0-9][a-z0-9-]{0,31}$`, unique. `new` and `updated` come from the dates;
@@ -222,6 +224,7 @@ leave them out (the site reads them as `null`).
 - `shape`: `null` (a placeholder is drawn) or the uploaded SVG's path relative to the public API,
   `v1/site/tags/{name}.svg?v=<content hash>`. Read-only here: set by the shape routes below.
 - `width`, `height`: `null` or a whole number of px, 8–200.
+- `rotate`: `null` (the site's slight tilt, −4) or a whole number of degrees, −180 to 180, turning the drawn tag clockwise.
 - `text`: `null` or 1–24 characters written on the drawn tag (trimmed). Not the label: the label stays as it is.
 - `textColor`: `null` (the page background) or a color, as `color`.
 - `textSize`: `null` (half the tag's height) or a whole number of px, 6–48.
@@ -245,7 +248,7 @@ Admin (session + CSRF as everywhere else; every change audited with before and a
 
 - `GET /admin/site/tags` → `{"tags": [tag, ...], "updatedAt", "updatedBy"}`; 404 while the feature isn't deployed
   (the page then shows the built-in tags read-only). Never saved → `{"tags": [], "updatedAt": null, ...}` is fine too.
-- `PUT /admin/site/tags` `{"tags": [{name, label, drawn, color, width, height, text, textColor, textSize, textX, textY, textRotate, pattern, patternColor, patternSize}, ...]}` → the same as the GET. Replaces
+- `PUT /admin/site/tags` `{"tags": [{name, label, drawn, color, width, height, rotate, text, textColor, textSize, textX, textY, textRotate, pattern, patternColor, patternSize}, ...]}` → the same as the GET. Replaces
   the whole list, in order, all or nothing: at most 32 tags, and all three auto tags present; a 400 `{error, msg}`
   names the first refused tag and field (or the missing auto tag). `shape` in the body is ignored (shapes stay with their tag's name); a tag no longer listed loses its shape.
 - `PUT /admin/site/tags/{name}/shape` with the raw SVG as the body, `content-type: image/svg+xml` → the same as the

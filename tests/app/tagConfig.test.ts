@@ -4,9 +4,10 @@ import { blankDraft, draftOf, draftsOf, previewOf, rawOf, tagChanges } from '../
 import { fromRaw, isTagColor, loadTagConfig, tagConfig, type RawTag } from '../../src/app/lib/vodTags'
 import { DEFAULT_TAGS, site } from '../../src/app/site'
 
-const raw = (o: Partial<RawTag> = {}): RawTag => ({ name: 'new', label: 'new', drawn: true, color: null, shape: null, width: null, height: null, ...NO_TEXT, ...NO_PATTERN, ...o })
+const raw = (o: Partial<RawTag> = {}): RawTag => ({ name: 'new', label: 'new', drawn: true, color: null, shape: null, width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN, ...o })
 const NO_TEXT = { text: null, textColor: null, textSize: null, textX: null, textY: null, textRotate: null }
 const NO_PATTERN = { pattern: null, patternColor: null, patternSize: null }
+const NO_TYPE = { page: null, pageLabel: null, homeCard: false }
 const json = (status: number, body: unknown) => vi.fn(async (_u: string, _i?: RequestInit) => new Response(JSON.stringify(body), { status }))
 
 afterEach(() => {
@@ -30,13 +31,45 @@ describe('fromRaw', () => {
   it('takes the text on a tag, within its limits', () => {
     const out = fromRaw(
       [
-        raw({ text: '  100%  ', textColor: 'var(--vx-ink)', textSize: 12, textX: -3, textY: 2, textRotate: -15 }),
-        raw({ name: 'x', text: 'y'.repeat(30), textColor: 'url(x)', textSize: 99, textX: 1.5, textY: 500, textRotate: 181 }),
+        raw({ text: '  100%  ', textColor: 'var(--vx-ink)', textSize: 12, textX: -3, textY: 2, textRotate: -15, rotate: 8 }),
+        raw({ name: 'x', text: 'y'.repeat(30), textColor: 'url(x)', textSize: 99, textX: 1.5, textY: 500, textRotate: 181, rotate: 2.5 }),
       ],
       '',
     )
-    expect(out.new).toMatchObject({ text: '100%', textColor: 'var(--vx-ink)', textSize: 12, textX: -3, textY: 2, textRotate: -15 })
-    expect(out.x).toMatchObject({ text: 'y'.repeat(24), textColor: undefined, textSize: undefined, textX: undefined, textY: undefined, textRotate: undefined })
+    expect(out.new).toMatchObject({ text: '100%', textColor: 'var(--vx-ink)', textSize: 12, textX: -3, textY: 2, textRotate: -15, rotate: 8 })
+    expect(out.x).toMatchObject({ text: 'y'.repeat(24), textColor: undefined, textSize: undefined, textX: undefined, textY: undefined, textRotate: undefined, rotate: undefined })
+  })
+})
+
+describe('tag types', () => {
+  it('takes a page and home card from the archive, and drops a reserved or bad slug', () => {
+    const out = fromRaw(
+      [
+        raw({ name: 'highlight', page: 'highlights', pageLabel: ' Highlights ', homeCard: true }),
+        raw({ name: 'a', page: 'manage', pageLabel: 'x' }),
+        raw({ name: 'b', page: 'Bad', pageLabel: 'x' }),
+        raw({ name: 'compilation', page: null, pageLabel: null, homeCard: false }),
+      ],
+      '',
+    )
+    expect(out.highlight).toMatchObject({ page: 'highlights', pageLabel: 'Highlights', homeCard: true })
+    for (const t of ['a', 'b', 'compilation']) expect(out[t]!.page, t).toBeUndefined()
+  })
+  it("keeps the site's own types for an archive older than them", () => {
+    expect(fromRaw([raw({ name: 'compilation', label: 'pt', drawn: false })], '').compilation).toMatchObject({
+      page: 'playthroughs', pageLabel: 'Playthroughs', homeCard: true,
+    })
+  })
+  it('checks pages in the drafts and saves the type', () => {
+    const base = draftOf(raw({ name: 'clip' }))
+    const ok = Object.assign(draftOf(raw({ name: 'clip2' })), { page: ' clips ', pageLabel: ' Clips ', homeCard: true })
+    const dupe = Object.assign(draftOf(raw({ name: 'clip3' })), { page: 'clips', pageLabel: '' })
+    const reserved = Object.assign(draftOf(raw({ name: 'clip4' })), { page: 'games', pageLabel: 'G' })
+    const r = tagChanges([], [base, ok, dupe, reserved])
+    expect(r.body[0]).toMatchObject(NO_TYPE)
+    expect(r.body[1]).toMatchObject({ page: 'clips', pageLabel: 'Clips', homeCard: true })
+    expect(Object.keys(r.errors.get(dupe.key)!)).toEqual(['page', 'pageLabel'])
+    expect(r.errors.get(reserved.key)!.page).toMatch('/games')
   })
 })
 
@@ -47,7 +80,7 @@ describe('isTagColor', () => {
       'oklch(from var(--vx-accent) calc(l - 0.15) c h)', 'color-mix(in oklch, var(--vx-ok) 60%, white)',
       'rgb(from var(--vx-bad) r g b / 0.5)', 'oklch(from #f00 clamp(0.2, l * 0.8, 0.9) c calc(h + 30))',
       'color-mix(in srgb, oklch(from var(--vx-info) l c h) 50%, transparent)',
-      // Any site's theme tokens, not only @vexoulz/ui's.
+      // Any site's theme tokens, not only @vex/ui's.
       'var(--k-accent)', 'oklch(from var(--k-ok) calc(l - 0.1) c h)', 'color-mix(in oklch, var(--k-bad) 60%, var(--accent-2))',
     ]) expect(isTagColor(c), c).toBe(true)
   })
@@ -91,8 +124,8 @@ describe('tagChanges', () => {
     const r = tagChanges(saved, drafts)
     expect(r.changed).toBe(true)
     expect(r.body).toEqual([
-      { name: 'new', label: 'new', drawn: true, color: 'var(--vx-accent)', width: 70, height: null, ...NO_TEXT, ...NO_PATTERN },
-      { name: 'compilation', label: 'playthrough', drawn: false, color: '#abcdef', width: null, height: null, ...NO_TEXT, ...NO_PATTERN },
+      { name: 'new', label: 'new', drawn: true, color: 'var(--vx-accent)', width: 70, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN, ...NO_TYPE },
+      { name: 'compilation', label: 'playthrough', drawn: false, color: '#abcdef', width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN, ...NO_TYPE },
     ])
   })
   it('takes sizes as the number inputs give them', () => {
@@ -114,11 +147,11 @@ describe('tagChanges', () => {
   })
   it('saves text only while it is on', () => {
     const drafts = saved.map((t) => draftOf(t))
-    Object.assign(drafts[0]!, { textOn: true, text: ' 100% ', textColor: 'var(--vx-ink)', textSize: 12, textX: '-4', textY: '', textRotate: '30' })
+    Object.assign(drafts[0]!, { textOn: true, text: ' 100% ', textColor: 'var(--vx-ink)', textSize: 12, textX: '-4', textY: '', textRotate: '30', rotate: '-10' })
     Object.assign(drafts[1]!, { textOn: false, text: 'kept', textSize: '999' })
     const r = tagChanges(saved, drafts)
     expect(r.errors.size).toBe(0)
-    expect(r.body[0]).toMatchObject({ text: '100%', textColor: 'var(--vx-ink)', textSize: 12, textX: -4, textY: null, textRotate: 30 })
+    expect(r.body[0]).toMatchObject({ text: '100%', textColor: 'var(--vx-ink)', textSize: 12, textX: -4, textY: null, textRotate: 30, rotate: -10 })
     expect(r.body[1]).toMatchObject(NO_TEXT)
     expect(previewOf(drafts[0]!, '').text).toBe('100%')
     expect(previewOf(drafts[1]!, '').text).toBeUndefined()
@@ -143,9 +176,9 @@ describe('tagChanges', () => {
     expect([out.x!.pattern, out.x!.patternSize]).toEqual([undefined, undefined])
   })
   it('flags bad text fields', () => {
-    const d = Object.assign(draftOf(saved[0]!), { textOn: true, text: ' ', textColor: 'url(x)', textSize: 5, textX: 101, textY: '1.5', textRotate: -181 })
+    const d = Object.assign(draftOf(saved[0]!), { textOn: true, text: ' ', textColor: 'url(x)', textSize: 5, textX: 101, textY: '1.5', textRotate: -181, rotate: 200 })
     const r = tagChanges(saved, [d, draftOf(saved[1]!)])
-    expect(Object.keys(r.errors.get(d.key)!)).toEqual(['text', 'textColor', 'textSize', 'textX', 'textY', 'textRotate'])
+    expect(Object.keys(r.errors.get(d.key)!)).toEqual(['rotate', 'text', 'textColor', 'textSize', 'textX', 'textY', 'textRotate'])
   })
   it('starts from site.tags and previews a draft', () => {
     const list = rawOf(site.tags)

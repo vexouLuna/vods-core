@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  type DoomtpStatus,
-  type YoutubeCheck,
   RECENT_PROBLEM_DAYS,
   diskLine,
   doomtpLine,
@@ -15,7 +13,8 @@ import {
   stuckVods,
   youtubeCheckLine,
   youtubeCheckMessage,
-} from '../../src/app/kit'
+} from '../../src/app/admin/health'
+import type { DoomtpStatus, YoutubeCheck } from '../../src/app/admin/api'
 import { admin } from '../../src/app/admin/session'
 
 afterEach(() => vi.restoreAllMocks())
@@ -104,7 +103,7 @@ describe('recent upload problems', () => {
 
 describe('doomtp-bot tile', () => {
   const base: DoomtpStatus = {
-    configured: true, keyed: true, login: 'vexoulz', ok: true, listening: true, since: '2026-10-15T10:00:00Z', error: null, checkedAt: '2026-10-15T12:00:00Z',
+    configured: true, keyed: true, login: 'vexouluna', ok: true, listening: true, since: '2026-10-15T10:00:00Z', error: null, checkedAt: '2026-10-15T12:00:00Z',
   }
   const ago = (iso: string) => `@${iso.slice(11, 16)}`
 

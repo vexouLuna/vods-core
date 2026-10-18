@@ -1,10 +1,9 @@
 <script setup lang="ts">
 // Pick a chapter's game from Twitch's categories (GET /admin/twitch/games). Shows the current game with its box art;
 // typing searches, arrows + Enter pick, "No category" clears it.
-import { VxButton, VxInput, VxSpinner } from '@vexoulz/ui'
 import { boxArt, NO_CATEGORY } from '../../index'
 import { computed, nextTick, ref, useId, watch } from 'vue'
-import { errorText } from '@vexoulz/platform-web'
+import { errorText } from '@vex/platform-web'
 import type { TwitchGame } from './api'
 import type { GameValue } from './edits'
 import { admin } from './session'
@@ -18,7 +17,7 @@ const results = ref<TwitchGame[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const active = ref(0)
-const input = ref<InstanceType<typeof VxInput> | null>(null)
+const input = ref<{ focus(): void } | null>(null)
 const listId = useId()
 
 const options = computed<GameValue[]>(() => [
@@ -91,13 +90,13 @@ function onBlur(e: FocusEvent) {
 
 <template>
   <div class="game" :class="{ 'is-invalid': props.invalid }" @focusout="onBlur">
-    <button v-if="!open" type="button" class="current vx-input" :aria-label="`${label ?? 'Game'}: ${model.name ?? NO_CATEGORY}. Change`" @click="start">
+    <button v-if="!open" type="button" class="current vods-input" :aria-label="`${label ?? 'Game'}: ${model.name ?? NO_CATEGORY}. Change`" @click="start">
       <img v-if="boxArt(model.imageTemplate, 30)" :src="boxArt(model.imageTemplate, 30)!" alt="" class="art" />
       <span v-else class="art ph" aria-hidden="true" />
-      <span class="name" :class="{ 'vx-muted': !model.name }">{{ model.name ?? NO_CATEGORY }}</span>
+      <span class="name" :class="{ 'vods-muted': !model.name }">{{ model.name ?? NO_CATEGORY }}</span>
     </button>
     <template v-else>
-      <VxInput
+      <UiInput
         ref="input"
         v-model="query"
         class="search"
@@ -111,10 +110,10 @@ function onBlur(e: FocusEvent) {
         placeholder="Search Twitch categories…"
         @keydown="onKey"
       />
-      <ul :id="listId" class="results vx-pop" role="listbox" tabindex="-1">
-        <li v-if="loading" class="note"><VxSpinner :size="12" /> Searching…</li>
+      <ul :id="listId" class="results vods-pop" role="listbox" tabindex="-1">
+        <li v-if="loading" class="note"><UiSpinner :size="12" /> Searching…</li>
         <li v-else-if="error" class="note bad">{{ error }}</li>
-        <li v-else-if="query.trim() && !results.length" class="note vx-muted">No categories match.</li>
+        <li v-else-if="query.trim() && !results.length" class="note vods-muted">No categories match.</li>
         <li
           v-for="(g, i) in options"
           :id="`${listId}-${i}`"
@@ -127,10 +126,10 @@ function onBlur(e: FocusEvent) {
         >
           <img v-if="boxArt(g.imageTemplate, 30)" :src="boxArt(g.imageTemplate, 30)!" alt="" class="art" loading="lazy" />
           <span v-else class="art ph" aria-hidden="true" />
-          <span :class="{ 'vx-muted': !g.name }">{{ g.name ?? NO_CATEGORY }}</span>
+          <span :class="{ 'vods-muted': !g.name }">{{ g.name ?? NO_CATEGORY }}</span>
         </li>
       </ul>
-      <VxButton class="cancel" variant="ghost" icon label="Cancel" @click="close">×</VxButton>
+      <UiButton class="cancel" variant="ghost" icon label="Cancel" @click="close">×</UiButton>
     </template>
   </div>
 </template>
@@ -138,17 +137,17 @@ function onBlur(e: FocusEvent) {
 <style scoped>
 .game { position: relative; display: flex; align-items: center; gap: 4px; min-width: 0; }
 .current { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; cursor: pointer; }
-.is-invalid .current { border-color: var(--vx-bad); }
+.is-invalid .current { border-color: var(--vods-bad); }
 .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .art { width: 18px; height: 24px; border-radius: 2px; flex: none; object-fit: cover; }
-.ph { background: var(--vx-line); }
+.ph { background: var(--vods-line); }
 .search { flex: 1; min-width: 0; }
 .results {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30; min-width: 220px;
   list-style: none; margin: 0; padding: 4px; max-height: 280px; overflow: auto;
 }
 .results li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 4px; cursor: pointer; font-size: 13px; }
-.results li.is-active { background: var(--vx-hover); }
+.results li.is-active { background: var(--vods-hover); }
 .results .note { cursor: default; font-size: 12px; }
-.bad { color: var(--vx-bad); }
+.bad { color: var(--vods-bad); }
 </style>

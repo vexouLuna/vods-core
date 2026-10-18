@@ -1,13 +1,16 @@
 <script setup lang="ts">
 // /manage/jobs/:id: one job run (/api/v2/jobs/:id): its steps, controls and log, polled while it can still change.
-import { JobDetail } from '@vexoulz/platform-web/vue'
-import { computed, onMounted } from 'vue'
+import { JobDetail } from '@vex/platform-web/vue'
+import { computed, onMounted, ref } from 'vue'
+import CensorReview from '../../admin/CensorReview.vue'
 import ManageShell from '../../admin/ManageShell.vue'
 import { platform } from '../../admin/platform'
 import { site } from '../../site'
 
 const props = defineProps<{ id: string }>()
 const jobId = computed(() => Number(props.id))
+// A paused run isn't polled: remount the detail after a censor review resumes it.
+const reloads = ref(0)
 
 onMounted(() => (document.title = `Job ${props.id} · Manage · ${site.name}`))
 </script>
@@ -15,7 +18,10 @@ onMounted(() => (document.title = `Job ${props.id} · Manage · ${site.name}`))
 <template>
   <ManageShell :title="`Job ${id}`">
     <p class="back"><RouterLink to="/manage/jobs">← All jobs</RouterLink></p>
-    <JobDetail :key="jobId" :client="platform" :id="jobId">
+    <JobDetail :key="`${jobId}-${reloads}`" :client="platform" :id="jobId">
+      <template #actions="{ job }">
+        <CensorReview :job="job" @resumed="reloads++" />
+      </template>
       <template #subject="{ job }">
         <RouterLink v-if="job.subject" class="small" :to="{ path: '/manage/jobs', query: { subject: job.subject } }">its jobs</RouterLink>
       </template>

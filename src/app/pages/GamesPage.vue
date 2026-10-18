@@ -2,7 +2,7 @@
 // /games/:id?part=N: a VOD's per-game uploads (one YouTube video per game). Each game plays on its own timeline that
 // keeps VOD time, so the bar, chapters and chat line up with the full VOD. `?part=` is the 1-based game (old URLs).
 // On a synthetic VOD the games keep its time too, and chat follows the source VOD each moment comes from.
-import { VxButton, VxCallout, VxChip, VxEmptyState, VxMenuItem, VxPopover, VxSkeleton, clamp } from '@vexoulz/ui'
+import { clamp } from '@vex/ui/utils'
 import { parseTimestamp, toClock, toHMS, type GameUpload } from '../../index'
 import { useVodsContext, useWatch } from '../../vue/index'
 import { computed, watchEffect } from 'vue'
@@ -57,15 +57,15 @@ watchEffect(() => {
     :track="false"
   >
     <template #parts>
-      <VxPopover prefer="up" align="right" width="min(340px, calc(100vw - 24px))" :cap="360">
+      <UiPopover prefer="up" align="right" width="min(340px, calc(100vw - 24px))" :cap="360">
         <template #trigger="{ toggle, open }">
-          <VxButton class="vx-mono" :pressed="open" label="Game" @click="toggle">
-            Game {{ index + 1 }}<span class="vx-muted">/{{ games.length }}</span> ▾
-          </VxButton>
+          <UiButton class="vods-mono" :pressed="open" label="Game" @click="toggle">
+            Game {{ index + 1 }}<span class="vods-muted">/{{ games.length }}</span> ▾
+          </UiButton>
         </template>
         <template #default="{ close }">
-          <div class="vx-eyebrow menu-head">Games in this VOD · {{ games.length }}</div>
-          <VxMenuItem
+          <div class="vods-eyebrow menu-head">Games in this VOD · {{ games.length }}</div>
+          <UiMenuItem
             v-for="(g, i) in games"
             :key="g.id"
             :current="i === index"
@@ -73,28 +73,28 @@ watchEffect(() => {
             @click="pick(i); close()"
           >
             {{ gameName(g) }}
-          </VxMenuItem>
-          <VxMenuItem :to="`/vods/${encodeURIComponent(vod.id)}`" @click="close()">
-            Full VOD<template #trail><VxChip>all parts</VxChip></template>
-          </VxMenuItem>
+          </UiMenuItem>
+          <UiMenuItem :to="`/vods/${encodeURIComponent(vod.id)}`" @click="close()">
+            Full VOD<template #trail><UiChip>all parts</UiChip></template>
+          </UiMenuItem>
         </template>
-      </VxPopover>
+      </UiPopover>
     </template>
   </WatchView>
   <VodsShell v-else>
-    <VxCallout v-if="error" tone="error" title="Couldn't load this VOD">
+    <UiCallout v-if="error" tone="error" title="Couldn't load this VOD">
       {{ error.message }}
-      <template #actions><VxButton size="sm" @click="reload">Try again</VxButton></template>
-    </VxCallout>
-    <VxEmptyState v-else-if="notFound" code="404" title="No VOD with that id" text="It may never have been archived, or the link is mistyped.">
-      <template #actions><VxButton to="/vods" variant="primary">Browse VODs</VxButton></template>
-    </VxEmptyState>
-    <VxEmptyState v-else-if="vod && !games.length" title="No per-game uploads" :text="`“${vod.title}” wasn't split into games.`">
-      <template #actions><VxButton :to="`/vods/${encodeURIComponent(vod.id)}`" variant="primary">Watch the full VOD</VxButton></template>
-    </VxEmptyState>
+      <template #actions><UiButton size="sm" @click="reload">Try again</UiButton></template>
+    </UiCallout>
+    <UiEmptyState v-else-if="notFound" code="404" title="No VOD with that id" text="It may never have been archived, or the link is mistyped.">
+      <template #actions><UiButton to="/vods" variant="primary">Browse VODs</UiButton></template>
+    </UiEmptyState>
+    <UiEmptyState v-else-if="vod && !games.length" title="No per-game uploads" :text="`“${vod.title}” wasn't split into games.`">
+      <template #actions><UiButton :to="`/vods/${encodeURIComponent(vod.id)}`" variant="primary">Watch the full VOD</UiButton></template>
+    </UiEmptyState>
     <div v-else-if="loading" class="loading" aria-busy="true">
-      <VxSkeleton ratio="16 / 9" h="auto" />
-      <VxSkeleton w="60%" />
+      <UiSkeleton ratio="16 / 9" h="auto" />
+      <UiSkeleton w="60%" />
     </div>
   </VodsShell>
 </template>

@@ -2,7 +2,6 @@
 // One drawn tag (ThumbTags; the preview on /manage/tags): its SVG in its own colors, with the currentColor (or black)
 // parts in the tag's color (lib/tagShape), or until it has one, a placeholder of the same size in that color (README,
 // "Assets still needed"). Its text, if it has any, sits on top; the label stays for screen readers.
-import { VxPlaceholder } from '@vexoulz/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { shapeText, svgDataUrl, tintSvg } from '../lib/tagShape'
 import type { TagStyle } from '../site'
@@ -35,7 +34,7 @@ watch(
 )
 watch(() => [props.tag.color, props.tag.pattern, props.tag.patternColor], () => requestAnimationFrame(resolve))
 
-// The theme can change the tag's color (a var(--vx-…)), by the OS setting or the site's own switch.
+// The theme can change the tag's color (a var(--vods-…), or another theme token a site saved), by the OS setting or the site's own switch.
 let dark: MediaQueryList | undefined
 let themeAttr: MutationObserver | undefined
 onMounted(() => {
@@ -70,12 +69,12 @@ const textStyle = computed(() => ({
     ref="root"
     class="tag-mark"
     :class="[{ 'has-text': tag.text }, tag.pattern && `is-${tag.pattern}`]"
-    :style="{ '--tag-color': tag.color, '--tag-pattern': tag.patternColor, '--tag-pattern-size': `${patternSize}px` }"
+    :style="{ '--tag-rotate': tag.rotate != null ? `${tag.rotate}deg` : undefined, '--tag-color': tag.color, '--tag-pattern': tag.patternColor, '--tag-pattern-size': `${patternSize}px` }"
   >
     <span v-if="tag.pattern" ref="probe" class="probe" hidden></span>
     <img v-if="tag.shape && src" class="shape" :src="src" alt="" :width="w" :height="h" />
     <span v-else-if="tag.shape && svg !== null" class="shape" aria-hidden="true" :style="{ width: `${w}px`, height: `${h}px` }"></span>
-    <span v-else class="ph" aria-hidden="true"><VxPlaceholder :label="tag.label" :w="w" :h="h" /></span>
+    <span v-else class="ph" aria-hidden="true"><UiPlaceholder :label="tag.label" :w="w" :h="h" /></span>
     <span v-if="tag.text" class="text" aria-hidden="true" :style="textStyle">{{ tag.text }}</span>
     <span class="sr">{{ tag.label }}</span>
   </span>
@@ -83,28 +82,28 @@ const textStyle = computed(() => ({
 
 <style scoped>
 .tag-mark {
-  position: relative; display: inline-flex; color: var(--tag-color, var(--vx-surface-2));
-  transform: rotate(-4deg); transform-origin: 0 50%; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.5));
+  position: relative; display: inline-flex; color: var(--tag-color, var(--vods-surface-2));
+  transform: rotate(var(--tag-rotate, -4deg)); transform-origin: 0 50%; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.5));
 }
 .shape { display: block; object-fit: contain; }
 /* The placeholder takes the tag's color, so the config shows before the image exists. */
-.ph { display: flex; border-radius: var(--vx-radius-sm); background: var(--tag-color, var(--vx-surface-2)); }
+.ph { display: flex; border-radius: var(--vods-radius-sm); background: var(--tag-color, var(--vods-surface-2)); }
 /* The same patterns as lib/tagShape, for the placeholder. */
 .is-stripes .ph {
-  background: repeating-linear-gradient(45deg, var(--tag-color, var(--vx-surface-2)) 0 var(--tag-pattern-size),
-    var(--tag-pattern, var(--vx-bg)) 0 calc(2 * var(--tag-pattern-size)));
+  background: repeating-linear-gradient(45deg, var(--tag-color, var(--vods-surface-2)) 0 var(--tag-pattern-size),
+    var(--tag-pattern, var(--vods-bg)) 0 calc(2 * var(--tag-pattern-size)));
 }
 .is-checks .ph {
-  background: conic-gradient(var(--tag-pattern, var(--vx-bg)) 25%, var(--tag-color, var(--vx-surface-2)) 0 50%,
-    var(--tag-pattern, var(--vx-bg)) 0 75%, var(--tag-color, var(--vx-surface-2)) 0) 0 0 / calc(2 * var(--tag-pattern-size)) calc(2 * var(--tag-pattern-size));
+  background: conic-gradient(var(--tag-pattern, var(--vods-bg)) 25%, var(--tag-color, var(--vods-surface-2)) 0 50%,
+    var(--tag-pattern, var(--vods-bg)) 0 75%, var(--tag-color, var(--vods-surface-2)) 0) 0 0 / calc(2 * var(--tag-pattern-size)) calc(2 * var(--tag-pattern-size));
 }
-.probe { color: var(--tag-pattern, var(--vx-bg)); }
-.ph :deep(.vx-ph) { font-size: 10px; color: var(--vx-bg); border-color: color-mix(in srgb, var(--vx-bg) 45%, transparent); }
+.probe { color: var(--tag-pattern, var(--vods-bg)); }
+.ph > * { font-size: 10px; color: var(--vods-bg); border-color: color-mix(in srgb, var(--vods-bg) 45%, transparent); }
 /* Its text takes the placeholder's place. */
-.has-text .ph :deep(.vx-ph) { color: transparent; }
+.has-text .ph > * { color: transparent; }
 .text {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  color: var(--vx-bg); font-weight: 700; line-height: 1; white-space: nowrap; pointer-events: none;
+  color: var(--vods-bg); font-weight: 700; line-height: 1; white-space: nowrap; pointer-events: none;
 }
 .sr {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;

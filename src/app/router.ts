@@ -7,6 +7,8 @@ import type { Router, RouteRecordRaw, RouteRecordSingleView } from 'vue-router'
 import { AccountProgressStore } from '../index'
 import { ADMIN_CLIENT_ID, quietAdminCheck, type AdminCheck } from './admin/quiet'
 import { ensure, session, setExpiredHandler, twitchLoginUrl } from './admin/session'
+import { tabs } from './lib/listQuery'
+import { tagConfigReady } from './lib/vodTags'
 import { site } from './site'
 
 /** A page: a component, or a function that imports one. */
@@ -15,33 +17,42 @@ export type VodsPage = RouteRecordSingleView['component']
 /** The site's pages, at the same URLs on every vods site. */
 export interface VodsPages {
   home: VodsPage
-  /** The lists: /vods and /playthroughs (it takes `tab`). */
+  /** The lists: /vods and each tag type's page, e.g. /playthroughs (it takes `tab`). */
   list: VodsPage
   /** The watch page (it takes `id`, and `type`: 'vod', 'live', or null for whichever set exists). */
   watch: VodsPage
   games: VodsPage
   notFound: VodsPage
-  /** Manage: the archive's admin pages. Every one but `login` needs a dashboard session (installVodsSession). */
-  manage: Record<'login' | 'overview' | 'jobs' | 'job' | 'vods' | 'vod' | 'synthetic' | 'storage' | 'youtube' | 'settings' | 'tags' | 'audit', VodsPage>
+  /** Manage: the archive's admin pages. Every one but `login` needs a dashboard session (installVodsSession). `home`
+   * (the homepage cards) is optional: a site without it has no /manage/home. */
+  manage: Record<'login' | 'overview' | 'jobs' | 'job' | 'vods' | 'vod' | 'synthetic' | 'storage' | 'youtube' | 'settings' | 'tags' | 'audit', VodsPage> & {
+    home?: VodsPage
+  }
 }
+
+const NOT_FOUND = 'not-found'
 
 /** The routes of a vods site, with its own pages. */
 export function vodsRoutes(pages: VodsPages): RouteRecordRaw[] {
   const m = pages.manage
   return [
     { path: '/', component: pages.home },
-    // The lists. /vods?tab=playthroughs is the old link to the playthroughs.
+    // The lists. /vods?tab=playthroughs is the old link to a tag's page.
     {
       path: '/vods',
       component: pages.list,
       props: { tab: 'vods' },
-      beforeEnter: (to) => {
+      beforeEnter: async (to) => {
         if (to.query.tab === undefined) return true
         const { tab, ...query } = to.query
-        return { path: tab === 'playthroughs' ? '/playthroughs' : '/vods', query, hash: to.hash }
+        await tagConfigReady()
+        const page = tabs().find((t) => t.value === tab)
+        return { path: page?.path ?? '/vods', query, hash: to.hash }
       },
     },
-    { path: '/playthroughs', component: pages.list, props: { tab: 'playthroughs' } },
+    // A tag's page (its `page` on /manage/tags); a path no tag has is "not found" (installVodsSession checks, since
+    // beforeEnter skips /a -> /b on the same route). Static paths rank above this one.
+    { path: '/:tab([a-z0-9][a-z0-9-]*)', component: pages.list, props: true, meta: { tagPage: true } },
     // Same URLs as the old site: /vods/:id plays the VOD uploads, /live/:id the live-recorded ones,
     // /youtube/:id whichever set exists (live first).
     { path: '/vods/:id', component: pages.watch, props: (r) => ({ id: r.params.id, type: 'vod' }) },
@@ -61,10 +72,11 @@ export function vodsRoutes(pages: VodsPages): RouteRecordRaw[] {
     { path: '/manage/youtube', component: m.youtube },
     { path: '/manage/settings', component: m.settings },
     { path: '/manage/tags', component: m.tags },
+    ...(m.home ? [{ path: '/manage/home', component: m.home }] : []),
     { path: '/manage/audit', component: m.audit },
     // The old admin URLs, for bookmarks and the worker's sign-in errors (it sends those to /admin/login).
     { path: '/admin/:rest(.*)*', redirect: (to) => ({ path: `/manage${to.path.slice('/admin'.length)}`, query: to.query, hash: to.hash }) },
-    { path: '/:pathMatch(.*)*', component: pages.notFound },
+    { path: '/:pathMatch(.*)*', name: NOT_FOUND, component: pages.notFound },
   ]
 }
 
@@ -73,12 +85,12 @@ export function isManagePath(path: string): boolean {
   return path === '/manage' || path.startsWith('/manage/')
 }
 
-/** The site's account (vexoulz-auth), as `@vexoulz/ui/account`'s Account provides it. */
+/** The site's account (vex-auth), as `@vex/ui/account`'s Account provides it. */
 export interface VodsAccount {
   readonly user: Readonly<Ref<{ readonly id: string } | null>>
   /** True once the account knows who is signed in (or that no one is). */
   readonly ready: Readonly<Ref<boolean>>
-  /** A credentialed request to vexoulz-auth. */
+  /** A credentialed request to vex-auth. */
   request(path: string, init?: RequestInit): Promise<Response>
 }
 
@@ -88,7 +100,7 @@ export interface VodsSessionOptions {
   /** How the page leaves for the worker's sign-in. Default `window.location.assign` (tests replace it). */
   navigate?: (url: string) => void
   /**
-   * The archive's client id at vexoulz-auth, for the quiet admin check: the worker's ARCHIVE_ADMIN_AUTH_CLIENT_ID.
+   * The archive's client id at vex-auth, for the quiet admin check: the worker's ARCHIVE_ADMIN_AUTH_CLIENT_ID.
    * Default `vods-admin`.
    */
   adminClientId?: string
@@ -150,6 +162,13 @@ export function installVodsSession(router: Router, account: VodsAccount, options
     toSignIn()
   })
 
+  router.beforeEach(async (to) => {
+    if (!to.meta.tagPage) return true
+    await tagConfigReady()
+    if (tabs().some((t) => t.value === to.params.tab)) return true
+    return { name: NOT_FOUND, params: { pathMatch: [String(to.params.tab)] }, query: to.query, hash: to.hash }
+  })
+
   // Manage pages need a dashboard session. Without one, the visitor goes through the worker's Twitch sign-in (which
   // signs in to the account on the way) and comes back to the page; with that off, or after a session ended, to the
   // sign-in page.
@@ -188,7 +207,7 @@ export function installVodsSession(router: Router, account: VodsAccount, options
     { immediate: true },
   )
 
-  // Watch progress follows the signed-in account (vexoulz-auth); signed out it stays in this browser, and signing in
+  // Watch progress follows the signed-in account (vex-auth); signed out it stays in this browser, and signing in
   // moves what this browser has into the account.
   const progress = new AccountProgressStore({ signedIn: () => !!account.user.value, request: (p, i) => account.request(p, i) })
   watch(account.user, (user, before) => {

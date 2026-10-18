@@ -1,5 +1,4 @@
-// Number and placement helpers the pages' logic needs, the same as vexoulz-ui's `clamp` and `clampX`, kept here so the
-// kit stays free of vexoulz-ui.
+// Number and placement helpers the pages' logic needs, the same as vex-ui's `clamp` and `clampX`.
 
 /** `value` within [min, max]. */
 export function clamp(value: number, min = -Infinity, max = Infinity): number {

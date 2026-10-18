@@ -1,6 +1,6 @@
 // Dev-only stand-in for the worker admin API (docs/admin-api.md), so `npm run dev` can show /manage without a real
 // archive. Fake data, in memory; jobs advance on their own. Password: "admin"; "Sign in with Twitch" signs in a fake
-// Twitch admin at once. It also serves a fake vexoulz-auth (at `/auth-mock`, for a site whose VITE_AUTH_BASE points
+// Twitch admin at once. It also serves a fake vex-auth (at `/auth-mock`, for a site whose VITE_AUTH_BASE points
 // there), so the quiet admin check runs without the real one. The `dev` entry: only a site's vite config imports it,
 // never its build.
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -12,10 +12,10 @@ type State = 'queued' | 'running' | 'paused' | 'done' | 'failed' | 'cancelled'
 const STATES: State[] = ['queued', 'running', 'paused', 'done', 'failed', 'cancelled']
 // Same kinds and steps as the worker (twitch-archive README, "Job kinds"). manualSteps are the kind's default pause gates.
 const KINDS: Record<string, { steps: string[]; manualSteps: string[]; description?: string; cooperative?: boolean }> = {
-  archive: { steps: ['capture', 'finalize', 'chapters', 'chat', 'emotes', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: [], description: 'Record a live stream and publish it', cooperative: true },
-  download: { steps: ['ensure_source', 'chapters', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: [], description: 'Download a Twitch VOD and upload it to YouTube' },
-  reupload: { steps: ['ensure_source', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: ['upload'] },
-  dmca: { steps: ['ensure_source', 'dmca_edit', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: ['upload'] },
+  archive: { steps: ['capture', 'finalize', 'chapters', 'chat', 'emotes', 'censor_check', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: [], description: 'Record a live stream and publish it', cooperative: true },
+  download: { steps: ['ensure_source', 'chapters', 'censor_check', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: [], description: 'Download a Twitch VOD and upload it to YouTube' },
+  reupload: { steps: ['ensure_source', 'censor_check', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: ['upload'] },
+  dmca: { steps: ['ensure_source', 'dmca_edit', 'censor_check', 'censor', 'split', 'upload', 'describe', 'cleanup'], manualSteps: ['upload'] },
   chat: { steps: ['chat'], manualSteps: [] },
   chapters: { steps: ['chapters'], manualSteps: [] },
   emotes: { steps: ['emotes'], manualSteps: [] },
@@ -64,6 +64,10 @@ for (let i = 0; i < 70; i++) add(i % 3 ? 'archive' : 'chapters', String(23000000
 add('dmca', '2301234567', 'cancelled', 1, 60 * 30)
 add('reupload', '2309876543', 'failed', 1, 60 * 5, { lastError: 'YouTube quota exceeded (403 quotaExceeded); retry after midnight Pacific.' })
 add('download', '2311111111', 'paused', 2, 90, { pauseBefore: ['upload'] })
+// Paused by the censor check (POST /admin/jobs/{id}/censor-review answers it).
+add('download', '2309876543', 'paused', 3, 70, {
+  payload: { censor_review: { games: [{ gameId: '1469308723', name: "Baldur's Gate 3", igdbId: 119171, matched: ['Partial Nudity', 'Sexual Content'] }] } },
+})
 add('archive', '2312345678', 'running', 6, 40)
 add('emotes', '2312345678', 'queued', 0, 1)
 // A backfill and the bot_chat runs it queued (GET /api/v2/jobs/{id}/related shows them as a tree).
@@ -147,7 +151,7 @@ const counts = () => Object.fromEntries(STATES.map((s) => [s, jobs.filter((j) =>
 // ---- sessions ----
 type User = { id: string; login: string; displayName: string; avatar: null; color: string }
 const sessions = new Map<string, { csrf: string; expires: number; user: User | null }>()
-const TWITCH_ADMIN: User = { id: '42', login: 'vexoulz', displayName: 'vexoulz', avatar: null, color: '#9146FF' }
+const TWITCH_ADMIN: User = { id: '42', login: 'vexouluna', displayName: 'vexouLuna', avatar: null, color: '#9146FF' }
 const COOKIE = 'archive_admin'
 const failures: number[] = []
 
@@ -157,7 +161,7 @@ function sessionOf(req: IncomingMessage) {
   return s && s.expires > Date.now() ? { token: m![1]!, ...s } : null
 }
 
-// ---- a fake vexoulz-auth: its session, /v1/me and /v1/codes, and the codes the worker takes back ----
+// ---- a fake vex-auth: its session, /v1/me and /v1/codes, and the codes the worker takes back ----
 // /login signs in the fake admin (id 42), or a plain viewer with ?as=viewer or MOCK_ACCOUNT=viewer.
 const VIEWER: User = { id: '7', login: 'viewer', displayName: 'viewer', avatar: null, color: '#1E90FF' }
 const AUTH_COOKIE = 'mock_auth'
@@ -249,7 +253,29 @@ async function publicJson(api: string, path: string): Promise<unknown> {
   return res.json()
 }
 
-/** The list's `firstLiveAt` / `lastLiveAt` filters (vEXOULZ/twitch-archive#57) until the public API has them: the
+async function mockLive(api: string, res: ServerResponse) {
+  try {
+    const { vod } = (await publicJson(api, '/v1/status')) as { vod: Json | null }
+    const startedAt = new Date(Date.now() - 83 * 60_000).toISOString()
+    const game = { name: 'Celeste', gameId: '504461', image: null, imageTemplate: 'https://static-cdn.jtvnw.net/ttv-boxart/504461-{width}x{height}.jpg' }
+    send(res, 200, { live: true, stream: { id: '1', started_at: startedAt, title: 'Mock stream: strawberries all the way down', game }, vod })
+  } catch (e) {
+    send(res, 502, { name: 'BadGateway', message: String(e), code: 502 })
+  }
+}
+async function mockFullyCut(api: string, id: string, res: ServerResponse) {
+  try {
+    const vod = (await publicJson(api, `/vods/${encodeURIComponent(id)}`)) as Json
+    // The reason set on Manage, as the archive's public JSON carries it (only when there is one).
+    const reason = vods.get(id)?.cut_reason
+    const chapters = ((vod.chapters ?? []) as Json[]).map((c) => ({ ...c, restricted: true }))
+    send(res, 200, { ...vod, chapters, ...(reason ? { cut_reason: reason } : {}) })
+  } catch (e) {
+    send(res, 404, { name: 'NotFound', message: String(e), code: 404 })
+  }
+}
+
+/** The list's `firstLiveAt` / `lastLiveAt` filters (vexouLuna/twitch-archive#57) until the public API has them: the
  * rest of the query from the public API, unpaged, then filtered and paged here. A regular VOD's are its createdAt. */
 async function liveFiltered(api: string, rawUrl: string, res: ServerResponse) {
   const url = new URL(rawUrl, 'http://x')
@@ -370,7 +396,13 @@ async function twitchVideos(api: string): Promise<TwitchVideo[]> {
 type Synth = { id: string; title: string | null; supersedes: boolean; tags: string[]; created_at: string | null; made_at: string; changed_at: string; segments: Json[] }
 const synthetics = new Map<string, Synth>()
 const synthLen = (sv: Synth) => sv.segments.reduce((n, g) => Math.max(n, g.at + g.end - g.start), 0)
-const syntheticView = (sv: Synth) => ({ ...sv, hidden: hidden.has(sv.id), duration: hms(synthLen(sv)) })
+// The game each follows (the mock keeps it, but doesn't recompute the segments from it).
+const autos = new Map<string, { game_id: string }>()
+const keepAuto = (id: string, b: Json) => {
+  if (b.auto) autos.set(id, b.auto as { game_id: string })
+  else if ('auto' in b || 'segments' in b) autos.delete(id)
+}
+const syntheticView = (sv: Synth) => ({ ...sv, auto: autos.get(sv.id) ?? null, hidden: hidden.has(sv.id), duration: hms(synthLen(sv)) })
 /** The synthetic VOD as /admin/vods/{id} and the v2 list show it. */
 const synthVod = (sv: Synth): Json => ({
   id: sv.id, title: sv.title, createdAt: sv.created_at, duration: hms(synthLen(sv)), duration_seconds: synthLen(sv),
@@ -614,6 +646,8 @@ const SETTINGS: SettingSpec[] = [
   { key: 'youtube_description', type: 'text', group: 'YouTube', applies: 'next job', help: 'Last line of every description', default: 'Archived by vods.vexoul.net' },
   { key: 'youtube_keepalive_hours', type: 'float', group: 'YouTube', applies: 'now', help: 'How often the YouTube token is refreshed (from the next refresh)', default: 72, min: 1, max: 720 },
   { key: 'restricted_games', type: 'list', group: 'Pipeline', applies: 'next job', help: 'Chapters of these games are left out of uploads', default: ['Music'] },
+  { key: 'censor_descriptors', type: 'list', group: 'Pipeline', applies: 'next job', help: 'A game whose IGDB content descriptors or themes contain one of these pauses the job for a censor review before upload (empty: no check)', default: ['Sexual Content', 'Nudity'] },
+  { key: 'censor_allow_games', type: 'list', group: 'Pipeline', applies: 'next job', help: 'Games uploaded without the IGDB check (restricted games are still cut)', default: [] },
   { key: 'split_duration', type: 'int', group: 'Pipeline', applies: 'next job', help: 'Maximum YouTube part length in seconds', default: 43200, min: 600, max: 43200 },
   { key: 'keep_hls', type: 'bool', group: 'Pipeline', applies: 'next job', help: 'Keep the HLS segments after upload', default: false },
   { key: 'keep_mp4', type: 'bool', group: 'Pipeline', applies: 'next job', help: 'Keep the MP4 after upload', default: false },
@@ -657,20 +691,23 @@ function checkSetting(key: string, v: unknown): string | null {
 
 // ---- site tags (docs/admin-api.md, "Site tags"); MOCK_SITE_TAGS=no answers 404, like an archive without them ----
 interface SiteTag {
-  name: string; label: string; drawn: boolean; color: string | null; width: number | null; height: number | null
+  name: string; label: string; drawn: boolean; color: string | null; width: number | null; height: number | null; rotate: number | null
   text: string | null; textColor: string | null; textSize: number | null; textX: number | null; textY: number | null; textRotate: number | null
   pattern: 'stripes' | 'checks' | null; patternColor: string | null; patternSize: number | null
 }
 const NO_TEXT = { text: null, textColor: null, textSize: null, textX: null, textY: null, textRotate: null, pattern: null, patternColor: null, patternSize: null }
 let siteTags: SiteTag[] = [
-  { name: 'new', label: 'new', drawn: true, color: 'var(--vods-tag-new)', width: null, height: null, ...NO_TEXT },
-  { name: 'updated', label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', width: null, height: null, ...NO_TEXT },
-  { name: 'complete', label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', width: null, height: null, ...NO_TEXT },
-  { name: 'compilation', label: 'playthrough', drawn: false, color: null, width: null, height: null, ...NO_TEXT },
+  { name: 'new', label: 'new', drawn: true, color: 'var(--vods-tag-new)', width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'updated', label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'complete', label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'compilation', label: 'playthrough', drawn: false, color: null, width: null, height: null, rotate: null, ...NO_TEXT },
 ]
 /** Cleaned SVGs by tag name, with the hash that versions their URL. */
 const tagShapes = new Map<string, { svg: string; v: string }>()
 let tagsChanged: { at: string; by: string } | null = null
+let homeCards: Json[] = [{ kind: 'latest' }, { kind: 'tag', tag: 'compilation' }, { kind: 'games' }]
+let playDefault = 'segments'
+let optionsChanged: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: null, updatedBy: null }
 const siteTagsOff = () => process.env.MOCK_SITE_TAGS === 'no'
 const siteTagsJson = (admin: boolean) => ({
   tags: siteTags.map((t) => {
@@ -693,6 +730,7 @@ function checkTags(list: unknown): SiteTag[] | string {
     for (const k of ['width', 'height'] as const) {
       if (t[k] != null && !(Number.isInteger(t[k]) && t[k] >= 8 && t[k] <= 200)) return `${t.name}: ${k} must be 8–200`
     }
+    if (t.rotate != null && !(Number.isInteger(t.rotate) && t.rotate >= -180 && t.rotate <= 180)) return `${t.name}: rotate must be -180 to 180`
     const text = t.text == null ? null : typeof t.text === 'string' ? t.text.trim() : undefined
     if (text === undefined || text === '' || (text && text.length > 24)) return `${t.name}: text must be 1–24 characters, or null`
     if (t.textColor != null && (typeof t.textColor !== 'string' || !isTagColor(t.textColor))) return `${t.name}: textColor is not a color the site takes`
@@ -706,7 +744,7 @@ function checkTags(list: unknown): SiteTag[] | string {
     if (t.textRotate != null && !(Number.isInteger(t.textRotate) && t.textRotate >= -180 && t.textRotate <= 180)) return `${t.name}: textRotate must be -180 to 180`
     const pattern = t.pattern ? { pattern: t.pattern, patternColor: t.patternColor ?? null, patternSize: t.patternSize ?? null } : { pattern: null, patternColor: null, patternSize: null }
     const style = text ? { textColor: t.textColor ?? null, textSize: t.textSize ?? null, textX: t.textX ?? null, textY: t.textY ?? null, textRotate: t.textRotate ?? null } : NO_TEXT
-    out.push({ name: t.name, label: t.label.trim(), drawn: t.drawn, color: t.color ?? null, width: t.width ?? null, height: t.height ?? null, ...style, text, ...pattern })
+    out.push({ name: t.name, label: t.label.trim(), drawn: t.drawn, color: t.color ?? null, width: t.width ?? null, height: t.height ?? null, rotate: t.rotate ?? null, ...style, text, ...pattern })
   }
   const gone = ['new', 'updated', 'compilation'].find((name) => !seen.has(name))
   if (gone) return `${gone} is set automatically and can't be removed`
@@ -760,7 +798,7 @@ function storageJson() {
 }
 
 /**
- * The fake vexoulz-auth. `MOCK_AUTH_CODES=<status>` makes POST /v1/codes answer that status instead (429, 409...), and
+ * The fake vex-auth. `MOCK_AUTH_CODES=<status>` makes POST /v1/codes answer that status instead (429, 409...), and
  * `MOCK_ADMIN_CODE=<status>` does the same for the worker's POST /admin/session {code} (503, 502...).
  */
 async function fakeAuth(req: IncomingMessage, res: ServerResponse, url: URL) {
@@ -787,7 +825,7 @@ async function fakeAuth(req: IncomingMessage, res: ServerResponse, url: URL) {
   }
   if (path === '/v1/codes' && method === 'POST') {
     if (!s) return problem(res, 401, 'signed_out', 'Not signed in')
-    if (req.headers['x-vexoulz-csrf'] !== s.csrf) return problem(res, 403, 'csrf', 'Missing or wrong X-Vexoulz-CSRF')
+    if (req.headers['x-vex-csrf'] !== s.csrf) return problem(res, 403, 'csrf', 'Missing or wrong X-Vex-CSRF')
     const forced = Number(process.env.MOCK_AUTH_CODES)
     if (forced) return problem(res, forced, 'mock', `MOCK_AUTH_CODES=${forced}`)
     const { client_id } = await body(req)
@@ -812,6 +850,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
       server.middlewares.use('/backend', (req, res, next) => {
         const tagsPath = (req.url ?? '').split('?')[0]!
         if (tagsPath === '/v1/site/tags' && !siteTagsOff()) return send(res, 200, siteTagsJson(false))
+        if (tagsPath === '/v1/site/options') return send(res, 200, { homeCards, playDefault })
         const shm = /^\/v1\/site\/tags\/([a-z0-9-]+)\.svg$/.exec(tagsPath)
         if (shm && !siteTagsOff()) {
           const sh = tagShapes.get(shm[1]!)
@@ -822,6 +861,10 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           })
           return res.end(sh.svg)
         }
+        // MOCK_LIVE=yes: the channel is live, recording into the latest VOD. MOCK_FULLY_CUT=<vod id>: every chapter of
+        // that VOD is cut from the uploads. Both only to try those pages without waiting for the real thing.
+        if (tagsPath === '/v1/status' && process.env.MOCK_LIVE === 'yes') return void mockLive(publicApi, res)
+        if (process.env.MOCK_FULLY_CUT && tagsPath === `/vods/${process.env.MOCK_FULLY_CUT}`) return void mockFullyCut(publicApi, process.env.MOCK_FULLY_CUT!, res)
         if (tagsPath === '/vods' && /[?&](first|last)LiveAt%5B|[?&](first|last)LiveAt\[/.test(req.url ?? '')) return liveFiltered(publicApi, req.url!, res)
         const pm = /^\/vods\/([^/?]+)(?:\?.*)?$/.exec(req.url ?? '')
         const id = pm ? decodeURIComponent(pm[1]!) : ''
@@ -842,7 +885,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           if (method === 'GET') return send(res, 200, sessionJson(s))
           if (method === 'POST') {
             const sent = await body(req)
-            // A vexoulz-auth code (the quiet admin check): the fake admin gets a session, anyone else {admin: false}.
+            // A vex-auth code (the quiet admin check): the fake admin gets a session, anyone else {admin: false}.
             if (typeof sent.code === 'string') {
               const forced = Number(process.env.MOCK_ADMIN_CODE)
               if (forced) return problem(res, forced, forced === 503 ? 'unavailable' : 'misconfigured', `MOCK_ADMIN_CODE=${forced}`)
@@ -870,7 +913,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           }
         }
 
-        // The worker goes through vexoulz-auth here; the mock signs the fake Twitch admin in straight away.
+        // The worker goes through vex-auth here; the mock signs the fake Twitch admin in straight away.
         if (path === '/admin/signin' && method === 'GET') {
           let next = url.searchParams.get('next') ?? ''
           if (!next.startsWith('/') || next.startsWith('//')) next = '/manage'
@@ -906,7 +949,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             youtube: { authorized: true, valid: true, error: null, checkedAt: iso(4 * 60_000), channel: { id: 'UCmock', title: 'vexoul VODs', url: 'https://www.youtube.com/@vexoul' }, connectedAt: iso(3 * 86_400_000), refreshTokenExpiresAt: null, quota: quotaJson() },
             live: { live: false, streamId: null, startedAt: null },
             twitchViewer: viewerStatus(),
-            doomtp: { configured: true, keyed: true, login: 'vexoulz', ok: true, listening: true, since: iso(26 * 3_600_000), error: null, checkedAt: iso(30_000) },
+            doomtp: { configured: true, keyed: true, login: 'vexouluna', ok: true, listening: true, since: iso(26 * 3_600_000), error: null, checkedAt: iso(30_000) },
             jobs: { counts: counts() },
           })
         if (path === '/admin/youtube/auth') return send(res, 200, { url: 'https://accounts.google.com/' })
@@ -1005,6 +1048,15 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- synthetic VODs (/api/v2/synthetic) ----
+        const dm = /^\/api\/v2\/synthetic\/([^/]+)\/dmca$/.exec(path)
+        if (dm && method === 'GET') {
+          // Made-up claims on its first source, one in a window and one not, so Compile shows the warning.
+          const sv = synthetics.get(decodeURIComponent(dm[1]!))
+          if (!sv) return problem(res, 404, 'vod_not_found', 'No such synthetic VOD.')
+          const first = sv.segments[0]
+          const claim = (mute: number[][]) => ({ vod_id: first!.vod_id, part: 1, mute, blackout: [], placed: true })
+          return send(res, 200, first ? { overlapping: [claim([[120, 185]])], other: [claim([[9000, 9030]])] } : { overlapping: [], other: [] })
+        }
         const sm = /^\/api\/v2\/synthetic(?:\/([^/]+))?$/.exec(path)
         if (sm) {
           const id = sm[1] ? decodeURIComponent(sm[1]) : null
@@ -1015,6 +1067,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             const made = await buildSynthetic(publicApi, nid, b, null)
             if ('error' in made) return problem(res, made.status, made.code, made.error)
             synthetics.set(nid, made)
+            keepAuto(nid, b)
             return send(res, 201, syntheticView(made))
           }
           const sv = id ? synthetics.get(id) : undefined
@@ -1024,6 +1077,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             const next = await buildSynthetic(publicApi, sv.id, { ...sv, ...b }, sv)
             if ('error' in next) return problem(res, next.status, next.code, next.error)
             synthetics.set(sv.id, next)
+            keepAuto(sv.id, b)
             return send(res, 200, syntheticView(next))
           }
           if (method === 'DELETE') {
@@ -1069,6 +1123,16 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           return send(res, 200, { data: settingsJson() })
         }
 
+        // ---- site options ----
+        if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { homeCards, playDefault, ...optionsChanged })
+        if (path === '/admin/site/options' && method === 'PUT') {
+          if (!Array.isArray(b.homeCards)) return fail(res, 400, 'homeCards must be a list of at most 12 cards')
+          homeCards = b.homeCards as Json[]
+          if (b.playDefault === 'segments' || b.playDefault === 'compiled') playDefault = b.playDefault
+          optionsChanged = { updatedAt: iso(), updatedBy: s.user ? `twitch:${s.user.id}` : 'password' }
+          return send(res, 200, { homeCards, playDefault, ...optionsChanged })
+        }
+
         // ---- site tags ----
         if (path.startsWith('/admin/site/tags') && siteTagsOff()) return fail(res, 404, 'Not found')
         const by = s.user ? `twitch:${s.user.id}` : 'password'
@@ -1111,6 +1175,27 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           await new Promise((r) => setTimeout(r, 600))
           ytCheck = await youtubeCheckJson(publicApi)
           return send(res, 200, { running: false, last: ytCheck })
+        }
+
+        // ---- censor review (a job the censor check paused) ----
+        const crm = /^\/admin\/jobs\/(\d+)\/censor-review$/.exec(path)
+        if (crm && method === 'POST') {
+          const job = jobs.find((j) => j.id === Number(crm[1]))
+          if (!job) return fail(res, 404, 'No such job')
+          const games = ((job.payload.censor_review as Json | undefined)?.games ?? []) as Json[]
+          if (job.state !== 'paused' || !games.length) return fail(res, 409, `Job ${job.id} is not paused for a censor review`)
+          if (b.decision !== 'upload' && b.decision !== 'cut') return fail(res, 400, 'decision must be "upload" or "cut"')
+          if (b.decision === 'cut') {
+            const ids = new Set(games.map((g) => String(g.gameId)))
+            const vod = job.vodId ? await vodOf(publicApi, job.vodId) : null
+            if (vod) {
+              vod.chapters = ((vod.chapters ?? []) as Json[]).map((c) => (ids.has(String(c.gameId)) ? { ...c, restricted: true } : c))
+              locked.add(String(vod.id))
+            }
+          }
+          job.state = 'queued'
+          log(job, `Censor review: ${b.decision}; resumed`)
+          return send(res, 200, { message: `Job ${job.id} resumed at step ${job.step} (${b.decision})` })
         }
 
         // ---- storage ----
@@ -1293,7 +1378,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               return send(res, 200, { error: false, msg: `Joined ${sp.otherId} back into ${id}`, splice: out, vod: adminVod(vods.get(id)!) })
             }
             if (!part && method === 'PATCH') {
-              const FIELDS = ['title', 'hidden', 'thumbnailUrl', 'duration', 'createdAt']
+              const FIELDS = ['title', 'hidden', 'thumbnailUrl', 'duration', 'createdAt', 'cutReason']
               const unknown = Object.keys(b).filter((k) => !FIELDS.includes(k))
               if (!Object.keys(b).length) return fail(res, 400, `Send at least one of ${FIELDS.join(', ')}`)
               if (unknown.length) return fail(res, 400, `unknown field(s) ${unknown.join(', ')}; these can be changed: ${FIELDS.join(', ')}`)
@@ -1301,6 +1386,8 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               if ('title' in b && (typeof b.title !== 'string' || !b.title.trim())) return fail(res, 400, 'title must be a non-empty string')
               if ('hidden' in b && typeof b.hidden !== 'boolean') return fail(res, 400, 'hidden must be true or false')
               if ('thumbnailUrl' in b && b.thumbnailUrl && !/^https?:\/\/\S+$/.test(String(b.thumbnailUrl))) return fail(res, 400, 'thumbnailUrl must be an http(s) URL or null')
+              if ('cutReason' in b && b.cutReason != null && (typeof b.cutReason !== 'string' || b.cutReason.trim().length > 500))
+                return fail(res, 400, 'cutReason must be text of at most 500 characters, or null')
               if ('duration' in b && !/^\d+:[0-5]\d:[0-5]\d$/.test(String(b.duration))) return fail(res, 400, 'duration must be HH:MM:SS')
               if ('createdAt' in b && (!/(Z|[+-]\d\d:?\d\d)$/.test(String(b.createdAt)) || Number.isNaN(Date.parse(String(b.createdAt)))))
                 return fail(res, 400, 'createdAt must be an ISO date and time with an offset, e.g. 2026-09-30T18:00:00Z')
@@ -1319,6 +1406,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               }
               if ('thumbnailUrl' in b) vod.thumbnail_url = b.thumbnailUrl || null
               if ('createdAt' in b) vod.createdAt = new Date(String(b.createdAt)).toISOString()
+              if ('cutReason' in b) vod.cut_reason = b.cutReason?.trim() || null
               return send(res, 200, adminVod(vod))
             }
             if (part === 'games' && method === 'GET') {
