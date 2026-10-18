@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// One list of VODs, by tag, each its own page (lib/listQuery, TABS): /vods has the plain VODs (merges and splits
-// included), /playthroughs the playthroughs (one game across streams, as one video). One filter bar (All resets, title
+// One list of VODs, by tag, each its own page (lib/listQuery, tabs()): /vods has the plain VODs (merges and splits
+// included), each tag with a page its own (/playthroughs: one game across streams, as one video). One filter bar (All resets, title
 // search, game dropdown with every game in the archive, tag, date range; all combinable and kept in the URL), a grid
 // of cards, and "load more". On phones the bar wraps. A tag on a card links here narrowed to it (ThumbTags).
 import { resumeProgress, type GamePlayed, type Progress, type Vod } from '../../index'
@@ -11,7 +11,7 @@ import GamePicker from '../components/GamePicker.vue'
 import TagPicker from '../components/TagPicker.vue'
 import VodCard from '../components/VodCard.vue'
 import { loadGamesPlayed } from '../lib/gamesPlayed'
-import { hasFilters, parseListQuery, toApiFilter, toListQuery, type ListState, type Tab } from '../lib/listQuery'
+import { hasFilters, parseListQuery, tabs, toApiFilter, toListQuery, type ListState, type Tab } from '../lib/listQuery'
 import { site, vodsConfig } from '../site'
 import VodsShell from '../components/VodsShell.vue'
 import { watchDebounced } from '../composables/watchDebounced'
@@ -75,7 +75,8 @@ function resetAll() {
   router.replace({ query: {} })
 }
 
-const playthroughs = computed(() => state.value.tab === 'playthroughs')
+/** A tag's page (null on the plain VODs): its title, and what its empty list says. */
+const tagPage = computed(() => tabs().find((t) => t.tag && t.value === state.value.tab) ?? null)
 
 // ---- tag ----
 const tag = computed({
@@ -127,7 +128,7 @@ const countText = computed(() => `${(shownFrom.value + vods.value.length).toLoca
   <VodsShell>
 
     <div ref="bar" class="bar">
-      <h1 class="vods-display">{{ playthroughs ? 'Playthroughs' : 'Past broadcasts' }}</h1>
+      <h1 class="vods-display">{{ tagPage ? tagPage.label : 'Past broadcasts' }}</h1>
       <div class="filters">
         <UiButton :pressed="!hasFilters(state)" label="Clear every filter" @click="resetAll">All</UiButton>
         <UiInput v-model="titleDraft" class="search" type="search" placeholder="Search titles…" clearable>
@@ -162,8 +163,8 @@ const countText = computed(() => `${(shownFrom.value + vods.value.length).toLoca
 
     <UiEmptyState
       v-else-if="!vods.length"
-      :title="playthroughs ? 'No playthroughs match' : 'No VODs match'"
-      :text="hasFilters(state) ? 'Try another search, tag or date range.' : playthroughs ? 'No playthroughs have been put together yet.' : 'Nothing archived yet.'"
+      :title="tagPage ? `No ${tagPage.label.toLowerCase()} match` : 'No VODs match'"
+      :text="hasFilters(state) ? 'Try another search, tag or date range.' : tagPage ? `No ${tagPage.label.toLowerCase()} yet.` : 'Nothing archived yet.'"
     >
       <template v-if="hasFilters(state)" #actions>
         <UiButton @click="resetAll">Clear filters</UiButton>

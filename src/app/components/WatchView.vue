@@ -16,6 +16,7 @@ import TickText from './TickText.vue'
 import WatchTimeline from './WatchTimeline.vue'
 import { useWatchView } from '../composables/useWatchView'
 import { gamesWithArt } from '../lib/art'
+import { kindLabel } from '../lib/listQuery'
 import VodsShell from './VodsShell.vue'
 import ManageVodButton from './ManageVodButton.vue'
 
@@ -280,7 +281,7 @@ watchEffect(() => learnGameColors(posterGames.value))
                     v-for="a in appearsIn"
                     :key="a.id"
                     :to="watchPath({ id: a.id, uploads: [] })"
-                    :sub="a.tags.includes('compilation') ? 'playthrough' : undefined"
+                    :sub="kindLabel(a.tags)"
                     @click="close()"
                   >
                     {{ a.title || a.id }}
