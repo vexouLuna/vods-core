@@ -1,5 +1,29 @@
 # @vex/vods-core
 
+## 0.35.0
+
+### Minor Changes
+
+- b01eb4f: Bot-chat notices that carry the chatter's own message (a resub's) now show their system line over a normal chat line,
+  with the chatter's colour, badges and emotes. Chat lines carry Twitch's message type (`messageType`: highlighted,
+  intro, gigantified emote, message effect), and GIFs come through as `gif` tokens (`GifToken`). Needs
+  @vex/platform-web with chat message types.
+- d9f8215: The app is look-neutral: its pages use `Ui*` controls that the site hands to `createVodsApp({ ui })`, and style
+  themselves with `--vods-*` tokens and `vods-*` utility classes (`styles/tokens.css`). Deep Field moves to the new
+  `@vex/vods-core/deep-field` entry (`deepField`, plus `@vex/vods-core/deep-field.css`). Breaking: `ui` is required, and
+  the app no longer imports `@vex/ui/platform.css` or styles `vx-*` classes itself.
+  
+  `art.playhead` swaps the timeline's snail for the site's own playhead.
+- d2edd1c: Manage: a job paused by the worker's IGDB censor check shows the flagged games on its page, with a link to the censor ranges and "Cut these games" (`admin.censorReview`); the merge panel says a VOD whose footage was lost can take the rest. The dev mock has the check's job, route and settings.
+- 655cfaa: - A VOD cut in full gets its own page (what was cut and why) instead of "no VOD uploads yet".
+  - While the channel is live, the home page shows the stream (Twitch preview, LIVE tag, its VOD page) in the latest
+    VOD's place. New `ArchiveClient.liveStatus()` and `LiveStatus` type (`/v1/status`).
+  - Signed-in admins get a 🔧 on each VOD card, the latest VOD and the watch page, to that VOD's Manage page.
+  - Tags take a `rotate` (degrees; unset keeps the −4° tilt), set on /manage/tags. Needs twitch-archive to store it;
+    an archive without it drops the field.
+  - /manage/storage's disk bar splits the archive's folders, stale folders and everything else.
+  - adminMock: `MOCK_LIVE=yes` and `MOCK_FULLY_CUT=<vod id>`.
+
 ## 0.34.0
 
 ### Minor Changes
