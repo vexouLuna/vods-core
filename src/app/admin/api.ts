@@ -465,6 +465,15 @@ export interface SyntheticVod {
   compiled?: { outdated: boolean } | null
 }
 
+/** GET /api/v2/synthetic/{id}/dmca: a source's DMCA claims (its done DMCA jobs), which a compile copies. */
+export interface SourceDmcaClaim {
+  vod_id: string
+  /** The part the claims are on; null: the whole VOD. Ranges are seconds of that part or VOD. */
+  part: number | null
+  mute: [number, number][]
+  blackout: [number, number][]
+}
+
 /** POST /api/v2/synthetic (with `id`) or PUT /api/v2/synthetic/{id} (only the fields sent change). */
 export interface SyntheticInput {
   /** New ones only; not only digits (those are Twitch's). */
@@ -748,6 +757,10 @@ export class AdminClient {
   }
   synthetic(id: string, signal?: AbortSignal): Promise<SyntheticVod> {
     return this.request('GET', `/api/v2/synthetic/${enc(id)}`, undefined, signal)
+  }
+  /** Compiling a synthetic VOD with these needs `accept_dmca: true` in the compile job's payload. */
+  syntheticDmca(id: string, signal?: AbortSignal): Promise<SourceDmcaClaim[]> {
+    return this.request('GET', `/api/v2/synthetic/${enc(id)}/dmca`, undefined, signal)
   }
   createSynthetic(body: SyntheticInput & { id: string }): Promise<SyntheticVod> {
     return this.request('POST', '/api/v2/synthetic', body)

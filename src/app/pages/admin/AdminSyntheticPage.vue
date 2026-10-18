@@ -9,7 +9,7 @@ import { toClock } from '../../../index'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { errorText } from '@vex/platform-web'
-import type { PlaythroughWindow, SyntheticInput, SyntheticVod } from '../../admin/api'
+import type { PlaythroughWindow, SourceDmcaClaim, SyntheticInput, SyntheticVod } from '../../admin/api'
 import ManageShell from '../../admin/ManageShell.vue'
 import PlaythroughBuilder from '../../admin/PlaythroughBuilder.vue'
 import { admin } from '../../admin/session'
@@ -143,11 +143,33 @@ async function save() {
 }
 
 const compiling = ref(false)
+/** The sources' DMCA claims, when Compile found some: the warning is open until it's accepted or cancelled. */
+const claims = ref<SourceDmcaClaim[] | null>(null)
+const accepted = ref(false)
+const claimsOpen = computed({ get: () => claims.value !== null, set: (open) => { if (!open) claims.value = null } })
+const ranges = (r: [number, number][]) => r.map(([a, b]) => `${toClock(a)}–${toClock(b)}`).join(', ')
 async function compile() {
   compiling.value = true
   try {
-    // `replace` swaps out the compiled uploads of an earlier run (none on the first).
-    const job = await platform.enqueue({ kind: 'compile', subject: vodSubject(props.id!), payload: { type: 'compiled', replace: true } })
+    const found = await admin.syntheticDmca(props.id!)
+    if (found.length) {
+      accepted.value = false
+      claims.value = found
+    } else await enqueueCompile(false)
+  } catch (e) {
+    toast.show(errorText(e), { kind: 'error', duration: 6000 })
+  } finally {
+    compiling.value = false
+  }
+}
+async function enqueueCompile(acceptDmca: boolean) {
+  compiling.value = true
+  try {
+    // `replace` swaps out the compiled uploads of an earlier run (none on the first); the archive refuses
+    // sources with DMCA claims unless `accept_dmca`.
+    const payload = { type: 'compiled', replace: true, ...(acceptDmca ? { accept_dmca: true } : {}) }
+    const job = await platform.enqueue({ kind: 'compile', subject: vodSubject(props.id!), payload })
+    claims.value = null
     router.push(`/manage/jobs/${job.id}`)
   } catch (e) {
     toast.show(errorText(e), { kind: 'error', duration: 6000 })
@@ -267,6 +289,25 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
       </div>
     </form>
 
+    <UiDialog v-model:open="claimsOpen" title="Its sources have DMCA claims">
+      <UiCallout tone="error" title="The compiled file copies the claimed content">
+        These sources were claimed on YouTube. Their claimed ranges go into the compiled upload as they are, and it
+        can be claimed, blocked or get the channel a strike.
+      </UiCallout>
+      <ul class="claims">
+        <li v-for="(c, i) in claims ?? []" :key="i">
+          <strong>VOD {{ c.vod_id }}</strong>{{ c.part !== null ? `, part ${c.part}` : '' }}:
+          <span v-if="c.mute.length">muted {{ ranges(c.mute) }}</span><span v-if="c.mute.length && c.blackout.length">; </span>
+          <span v-if="c.blackout.length">blacked out {{ ranges(c.blackout) }}</span>
+        </li>
+      </ul>
+      <UiCheckbox v-model="accepted" label="I understand the risks" />
+      <template #actions="{ close }">
+        <UiButton @click="close">Cancel</UiButton>
+        <UiButton variant="danger-solid" :disabled="!accepted" :loading="compiling" @click="enqueueCompile(true)">Compile anyway</UiButton>
+      </template>
+    </UiDialog>
+
     <UiDialog v-model:open="deleteOpen" :title="`Delete ${id}?`">
       Its link stops working and, if it stood in for its sources, they come back. The sources themselves aren't touched.
       <template #actions="{ close }">
@@ -298,6 +339,7 @@ dd { margin: 0; }
 .n { align-self: center; min-width: 1.5em; opacity: 0.6; }
 .vodid { width: 9.5rem; }
 .grow { flex: 1 1 10rem; }
+.claims { margin: 12px 0; padding-left: 1.2em; display: grid; gap: 4px; }
 .acts { display: flex; gap: 2px; }
 .save { display: flex; flex-wrap: wrap; gap: 8px; }
 </style>

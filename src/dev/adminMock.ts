@@ -1045,6 +1045,14 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- synthetic VODs (/api/v2/synthetic) ----
+        const dm = /^\/api\/v2\/synthetic\/([^/]+)\/dmca$/.exec(path)
+        if (dm && method === 'GET') {
+          // A made-up claim on its first source, so Compile shows the warning.
+          const sv = synthetics.get(decodeURIComponent(dm[1]!))
+          if (!sv) return problem(res, 404, 'vod_not_found', 'No such synthetic VOD.')
+          const first = sv.segments[0]
+          return send(res, 200, first ? [{ vod_id: first.vod_id, part: 1, mute: [[120, 185]], blackout: [] }] : [])
+        }
         const sm = /^\/api\/v2\/synthetic(?:\/([^/]+))?$/.exec(path)
         if (sm) {
           const id = sm[1] ? decodeURIComponent(sm[1]) : null
