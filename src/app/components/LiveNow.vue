@@ -68,7 +68,7 @@ const art = computed(() => (props.live.game ? boxArt(props.live.game.image) ?? u
   position: absolute; top: 8px; right: 8px; font-size: 12px; padding: 0 6px; border-radius: var(--vods-radius-sm);
   background: rgb(0 0 0 / 0.75); color: #fff;
 }
-.manage { bottom: -9px; right: -9px; }
+.manage { top: -9px; right: -9px; }
 .side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .title { margin: 0; font-size: 19px; line-height: 1.3; overflow-wrap: anywhere; }
 .title a { color: var(--vods-ink); text-decoration: none; }
