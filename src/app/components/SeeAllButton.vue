@@ -12,7 +12,7 @@ defineProps<{ to: string }>()
 <style scoped>
 .see-all {
   color: var(--vods-bg); font-weight: 600; background: var(--vods-info); border-color: var(--vods-info);
-  backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 .see-all:hover { color: var(--vods-bg); background: var(--vods-info); border-color: var(--vods-info); filter: brightness(1.1); }
 </style>
