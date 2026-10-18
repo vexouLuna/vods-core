@@ -4,6 +4,7 @@
 import type { VodsConfig } from '../config'
 import { configureAdmin } from './admin/session'
 import { configurePlatform } from './admin/platform'
+import { loadSiteOptions } from './lib/siteOptions'
 import { loadTagConfig, tagConfig } from './lib/vodTags'
 import { configureSite, site, type VodsSite } from './site'
 
@@ -18,7 +19,7 @@ export interface VodsSiteOptions {
 
 /**
  * Sets up the site before its app mounts: the site and channel, the admin API, and how tags show (the site's own
- * until /manage/tags answers). createVodsApp() does this itself; a site with its own UI calls it once from main.ts.
+ * until /manage/tags answers) and the homepage's cards (/manage/home). createVodsApp() does this itself; a site with its own UI calls it once from main.ts.
  */
 export function setupVodsSite(options: VodsSiteOptions): void {
   configureSite(options.config, options.site)
@@ -26,6 +27,7 @@ export function setupVodsSite(options: VodsSiteOptions): void {
   configureAdmin(options.adminBase ?? '/backend-admin')
   configurePlatform()
   void loadTagConfig()
+  void loadSiteOptions()
 }
 
 // The route table and the account and Manage wiring around the router (createVodsApp() uses the same).
@@ -46,6 +48,7 @@ export * from './lib/notify'
 export * from './lib/place'
 export * from './lib/tagShape'
 export * from './lib/vodTags'
+export * from './lib/siteOptions'
 export * from './lib/watch'
 export * from './composables/useChatSettings'
 export * from './composables/useFullscreen'

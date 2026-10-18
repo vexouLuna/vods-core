@@ -1,6 +1,7 @@
 import { ProblemError, parseRetryAfter } from '@vex/platform-web'
 import type { RawDrive, RawEmoteSets, RawVod } from '../../index'
 import type { RawTag } from '../lib/vodTags'
+import type { SiteOptions } from '../lib/siteOptions'
 
 // Client for twitch-archive's worker admin API, as described in docs/admin-api.md. The browser holds no key: a
 // password login gives it an HttpOnly session cookie, and every change carries the session's CSRF token.
@@ -275,6 +276,11 @@ export interface GameRow {
 /** GET /admin/site/tags: how each VOD tag shows on the site, in order (docs/admin-api.md, "Site tags"). */
 export interface SiteTags {
   tags: RawTag[]
+  updatedAt: string | null
+  updatedBy: string | null
+}
+/** GET /admin/site/options: the site's own options (docs/admin-api.md, "Site options"). */
+export interface SiteOptionsView extends SiteOptions {
   updatedAt: string | null
   updatedBy: string | null
 }
@@ -819,6 +825,14 @@ export class AdminClient {
   }
   resetSetting(key: string): Promise<{ data: RuntimeSetting[] }> {
     return this.request('DELETE', `/admin/settings/${enc(key)}`)
+  }
+  // ---- site options ----
+  siteOptions(signal?: AbortSignal): Promise<SiteOptionsView> {
+    return this.request('GET', '/admin/site/options', undefined, signal)
+  }
+  /** The options sent change (all or none); the others keep their value. */
+  saveSiteOptions(changes: Partial<SiteOptions>): Promise<SiteOptionsView> {
+    return this.request('PUT', '/admin/site/options', changes)
   }
   // ---- site tags ----
   siteTags(signal?: AbortSignal): Promise<SiteTags> {

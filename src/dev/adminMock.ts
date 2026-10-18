@@ -696,6 +696,8 @@ let siteTags: SiteTag[] = [
 /** Cleaned SVGs by tag name, with the hash that versions their URL. */
 const tagShapes = new Map<string, { svg: string; v: string }>()
 let tagsChanged: { at: string; by: string } | null = null
+let homeCards: Json[] = [{ kind: 'latest' }, { kind: 'tag', tag: 'compilation' }, { kind: 'games' }]
+let optionsChanged: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: null, updatedBy: null }
 const siteTagsOff = () => process.env.MOCK_SITE_TAGS === 'no'
 const siteTagsJson = (admin: boolean) => ({
   tags: siteTags.map((t) => {
@@ -838,6 +840,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
       server.middlewares.use('/backend', (req, res, next) => {
         const tagsPath = (req.url ?? '').split('?')[0]!
         if (tagsPath === '/v1/site/tags' && !siteTagsOff()) return send(res, 200, siteTagsJson(false))
+        if (tagsPath === '/v1/site/options') return send(res, 200, { homeCards })
         const shm = /^\/v1\/site\/tags\/([a-z0-9-]+)\.svg$/.exec(tagsPath)
         if (shm && !siteTagsOff()) {
           const sh = tagShapes.get(shm[1]!)
@@ -1097,6 +1100,15 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           if (!SETTINGS.some((x) => x.key === setm[1])) return fail(res, 404, `No setting ${setm[1]}`)
           overrides.delete(setm[1]!)
           return send(res, 200, { data: settingsJson() })
+        }
+
+        // ---- site options ----
+        if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { homeCards, ...optionsChanged })
+        if (path === '/admin/site/options' && method === 'PUT') {
+          if (!Array.isArray(b.homeCards)) return fail(res, 400, 'homeCards must be a list of at most 12 cards')
+          homeCards = b.homeCards as Json[]
+          optionsChanged = { updatedAt: iso(), updatedBy: s.user ? `twitch:${s.user.id}` : 'password' }
+          return send(res, 200, { homeCards, ...optionsChanged })
         }
 
         // ---- site tags ----
