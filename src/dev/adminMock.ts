@@ -1047,11 +1047,12 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         // ---- synthetic VODs (/api/v2/synthetic) ----
         const dm = /^\/api\/v2\/synthetic\/([^/]+)\/dmca$/.exec(path)
         if (dm && method === 'GET') {
-          // A made-up claim on its first source, so Compile shows the warning.
+          // Made-up claims on its first source, one in a window and one not, so Compile shows the warning.
           const sv = synthetics.get(decodeURIComponent(dm[1]!))
           if (!sv) return problem(res, 404, 'vod_not_found', 'No such synthetic VOD.')
           const first = sv.segments[0]
-          return send(res, 200, first ? [{ vod_id: first.vod_id, part: 1, mute: [[120, 185]], blackout: [] }] : [])
+          const claim = (mute: number[][]) => ({ vod_id: first!.vod_id, part: 1, mute, blackout: [], placed: true })
+          return send(res, 200, first ? { overlapping: [claim([[120, 185]])], other: [claim([[9000, 9030]])] } : { overlapping: [], other: [] })
         }
         const sm = /^\/api\/v2\/synthetic(?:\/([^/]+))?$/.exec(path)
         if (sm) {

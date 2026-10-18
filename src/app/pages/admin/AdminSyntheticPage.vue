@@ -9,7 +9,7 @@ import { toClock } from '../../../index'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { errorText } from '@vex/platform-web'
-import type { PlaythroughWindow, SourceDmcaClaim, SyntheticInput, SyntheticVod } from '../../admin/api'
+import type { PlaythroughWindow, SyntheticDmca, SyntheticInput, SyntheticVod } from '../../admin/api'
 import ManageShell from '../../admin/ManageShell.vue'
 import PlaythroughBuilder from '../../admin/PlaythroughBuilder.vue'
 import { admin } from '../../admin/session'
@@ -144,7 +144,7 @@ async function save() {
 
 const compiling = ref(false)
 /** The sources' DMCA claims, when Compile found some: the warning is open until it's accepted or cancelled. */
-const claims = ref<SourceDmcaClaim[] | null>(null)
+const claims = ref<SyntheticDmca | null>(null)
 const accepted = ref(false)
 const claimsOpen = computed({ get: () => claims.value !== null, set: (open) => { if (!open) claims.value = null } })
 const ranges = (r: [number, number][]) => r.map(([a, b]) => `${toClock(a)}–${toClock(b)}`).join(', ')
@@ -152,7 +152,8 @@ async function compile() {
   compiling.value = true
   try {
     const found = await admin.syntheticDmca(props.id!)
-    if (found.length) {
+    // Any claim warns, also one outside the windows it plays.
+    if (found.overlapping.length || found.other.length) {
       accepted.value = false
       claims.value = found
     } else await enqueueCompile(false)
@@ -294,13 +295,26 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
         These sources were claimed on YouTube. Their claimed ranges go into the compiled upload as they are, and it
         can be claimed, blocked or get the channel a strike.
       </UiCallout>
-      <ul class="claims">
-        <li v-for="(c, i) in claims ?? []" :key="i">
+      <p class="small"><strong>In the windows this video uses</strong></p>
+      <ul v-if="claims?.overlapping.length" class="claims">
+        <li v-for="(c, i) in claims.overlapping" :key="i">
           <strong>VOD {{ c.vod_id }}</strong>{{ c.part !== null ? `, part ${c.part}` : '' }}:
           <span v-if="c.mute.length">muted {{ ranges(c.mute) }}</span><span v-if="c.mute.length && c.blackout.length">; </span>
           <span v-if="c.blackout.length">blacked out {{ ranges(c.blackout) }}</span>
+          <span v-if="!c.placed" class="vods-muted"> (a live copy's times: couldn't be matched to the windows)</span>
         </li>
       </ul>
+      <p v-else class="small vods-muted">None: every claim is outside the windows used.</p>
+      <details v-if="claims?.other.length" class="other">
+        <summary>Other claims in stitched videos ({{ claims.other.length }})</summary>
+        <ul class="claims">
+          <li v-for="(c, i) in claims.other" :key="i">
+            <strong>VOD {{ c.vod_id }}</strong>{{ c.part !== null ? `, part ${c.part}` : '' }}:
+            <span v-if="c.mute.length">muted {{ ranges(c.mute) }}</span><span v-if="c.mute.length && c.blackout.length">; </span>
+            <span v-if="c.blackout.length">blacked out {{ ranges(c.blackout) }}</span>
+          </li>
+        </ul>
+      </details>
       <UiCheckbox v-model="accepted" label="I understand the risks" />
       <template #actions="{ close }">
         <UiButton @click="close">Cancel</UiButton>
@@ -339,7 +353,9 @@ dd { margin: 0; }
 .n { align-self: center; min-width: 1.5em; opacity: 0.6; }
 .vodid { width: 9.5rem; }
 .grow { flex: 1 1 10rem; }
-.claims { margin: 12px 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.claims { margin: 8px 0 12px; padding-left: 1.2em; display: grid; gap: 4px; }
+.other { margin-bottom: 12px; }
+.other summary { cursor: pointer; }
 .acts { display: flex; gap: 2px; }
 .save { display: flex; flex-wrap: wrap; gap: 8px; }
 </style>

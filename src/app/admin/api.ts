@@ -465,13 +465,22 @@ export interface SyntheticVod {
   compiled?: { outdated: boolean } | null
 }
 
-/** GET /api/v2/synthetic/{id}/dmca: a source's DMCA claims (its done DMCA jobs), which a compile copies. */
+/** A source's DMCA claims from one of its done DMCA jobs. */
 export interface SourceDmcaClaim {
   vod_id: string
   /** The part the claims are on; null: the whole VOD. Ranges are seconds of that part or VOD. */
   part: number | null
   mute: [number, number][]
   blackout: [number, number][]
+  /** False: a live copy's claims, which couldn't be placed on the VOD's time, so they count as overlapping. */
+  placed: boolean
+}
+
+/** GET /api/v2/synthetic/{id}/dmca: `overlapping` are ranges in a window the synthetic VOD plays (a compile copies
+ * them), `other` the rest of those sources' claims. */
+export interface SyntheticDmca {
+  overlapping: SourceDmcaClaim[]
+  other: SourceDmcaClaim[]
 }
 
 /** POST /api/v2/synthetic (with `id`) or PUT /api/v2/synthetic/{id} (only the fields sent change). */
@@ -758,8 +767,8 @@ export class AdminClient {
   synthetic(id: string, signal?: AbortSignal): Promise<SyntheticVod> {
     return this.request('GET', `/api/v2/synthetic/${enc(id)}`, undefined, signal)
   }
-  /** Compiling a synthetic VOD with these needs `accept_dmca: true` in the compile job's payload. */
-  syntheticDmca(id: string, signal?: AbortSignal): Promise<SourceDmcaClaim[]> {
+  /** Compiling a synthetic VOD with any of these (in either list) needs `accept_dmca: true` in the job's payload. */
+  syntheticDmca(id: string, signal?: AbortSignal): Promise<SyntheticDmca> {
     return this.request('GET', `/api/v2/synthetic/${enc(id)}/dmca`, undefined, signal)
   }
   createSynthetic(body: SyntheticInput & { id: string }): Promise<SyntheticVod> {
