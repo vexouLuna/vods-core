@@ -266,7 +266,10 @@ async function mockLive(api: string, res: ServerResponse) {
 async function mockFullyCut(api: string, id: string, res: ServerResponse) {
   try {
     const vod = (await publicJson(api, `/vods/${encodeURIComponent(id)}`)) as Json
-    send(res, 200, { ...vod, chapters: ((vod.chapters ?? []) as Json[]).map((c) => ({ ...c, restricted: true })) })
+    // The reason set on Manage, as the archive's public JSON carries it (only when there is one).
+    const reason = vods.get(id)?.cut_reason
+    const chapters = ((vod.chapters ?? []) as Json[]).map((c) => ({ ...c, restricted: true }))
+    send(res, 200, { ...vod, chapters, ...(reason ? { cut_reason: reason } : {}) })
   } catch (e) {
     send(res, 404, { name: 'NotFound', message: String(e), code: 404 })
   }
@@ -1344,7 +1347,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               return send(res, 200, { error: false, msg: `Joined ${sp.otherId} back into ${id}`, splice: out, vod: adminVod(vods.get(id)!) })
             }
             if (!part && method === 'PATCH') {
-              const FIELDS = ['title', 'hidden', 'thumbnailUrl', 'duration', 'createdAt']
+              const FIELDS = ['title', 'hidden', 'thumbnailUrl', 'duration', 'createdAt', 'cutReason']
               const unknown = Object.keys(b).filter((k) => !FIELDS.includes(k))
               if (!Object.keys(b).length) return fail(res, 400, `Send at least one of ${FIELDS.join(', ')}`)
               if (unknown.length) return fail(res, 400, `unknown field(s) ${unknown.join(', ')}; these can be changed: ${FIELDS.join(', ')}`)
@@ -1352,6 +1355,8 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               if ('title' in b && (typeof b.title !== 'string' || !b.title.trim())) return fail(res, 400, 'title must be a non-empty string')
               if ('hidden' in b && typeof b.hidden !== 'boolean') return fail(res, 400, 'hidden must be true or false')
               if ('thumbnailUrl' in b && b.thumbnailUrl && !/^https?:\/\/\S+$/.test(String(b.thumbnailUrl))) return fail(res, 400, 'thumbnailUrl must be an http(s) URL or null')
+              if ('cutReason' in b && b.cutReason != null && (typeof b.cutReason !== 'string' || b.cutReason.trim().length > 500))
+                return fail(res, 400, 'cutReason must be text of at most 500 characters, or null')
               if ('duration' in b && !/^\d+:[0-5]\d:[0-5]\d$/.test(String(b.duration))) return fail(res, 400, 'duration must be HH:MM:SS')
               if ('createdAt' in b && (!/(Z|[+-]\d\d:?\d\d)$/.test(String(b.createdAt)) || Number.isNaN(Date.parse(String(b.createdAt)))))
                 return fail(res, 400, 'createdAt must be an ISO date and time with an offset, e.g. 2026-09-30T18:00:00Z')
@@ -1370,6 +1375,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               }
               if ('thumbnailUrl' in b) vod.thumbnail_url = b.thumbnailUrl || null
               if ('createdAt' in b) vod.createdAt = new Date(String(b.createdAt)).toISOString()
+              if ('cutReason' in b) vod.cut_reason = b.cutReason?.trim() || null
               return send(res, 200, adminVod(vod))
             }
             if (part === 'games' && method === 'GET') {

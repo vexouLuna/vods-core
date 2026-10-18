@@ -304,7 +304,12 @@ export interface DetailsDraft {
   duration: number
   /** The `datetime-local` value, in this browser's time zone. */
   createdAt: string
+  /** Why the VOD was cut, or '' for none. */
+  cutReason: string
 }
+
+/** The worker's limit on `cutReason`. */
+export const CUT_REASON_MAX = 500
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -340,6 +345,7 @@ export function detailsDraft(vod: AdminVod): DetailsDraft {
     thumbnailUrl: vod.thumbnail_url ?? '',
     duration: vodSeconds(vod),
     createdAt: toLocalInput(vod.createdAt),
+    cutReason: vod.cut_reason ?? '',
   }
 }
 
@@ -355,6 +361,7 @@ export function detailsErrors(d: DetailsDraft, contentEnd = 0): Map<keyof Detail
   if (!Number.isFinite(d.duration) || d.duration <= 0) errors.set('duration', 'The duration must be a time.')
   else if (contentEnd > d.duration + 1) errors.set('duration', `Chapters or games run to ${toClock(contentEnd)}: shorten them first.`)
   if (!fromLocalInput(d.createdAt)) errors.set('createdAt', 'Pick a date and time.')
+  if (d.cutReason.trim().length > CUT_REASON_MAX) errors.set('cutReason', `At most ${CUT_REASON_MAX} characters.`)
   return errors
 }
 
@@ -369,6 +376,7 @@ export function detailsPatch(d: DetailsDraft, vod: AdminVod): VodPatch {
     const at = fromLocalInput(d.createdAt)
     if (at) patch.createdAt = at
   }
+  if (d.cutReason.trim() !== was.cutReason) patch.cutReason = d.cutReason.trim() || null
   return patch
 }
 

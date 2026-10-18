@@ -94,6 +94,8 @@ export interface Vod {
   supersededBy?: SupersededBy[] | null
   /** Synthetic VODs (playthroughs) that use part of this one. */
   appearsIn?: AppearsIn[] | null
+  /** Why the VOD was cut, when an admin gave a reason: the page for a VOD cut in full shows it. */
+  cutReason?: string | null
 }
 
 /** Source seconds [start, end) of VOD `vodId`, playing from `at` on the synthetic VOD. */

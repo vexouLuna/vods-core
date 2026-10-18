@@ -1,11 +1,11 @@
 <script setup lang="ts">
-// A VOD's details: title, thumbnail (a URL, or the default), duration and when it was streamed. Only what changed is
+// A VOD's details: title, thumbnail (a URL, or the default), duration, when it was streamed and why it was cut. Only what changed is
 // sent. A VOD merged into another keeps its details as they were.
 import { useToast } from '@vex/ui/utils'
 import { computed, ref, watch } from 'vue'
 import { errorText } from '@vex/platform-web'
 import type { AdminVod } from './api'
-import { detailsDraft, detailsErrors, detailsPatch, type DetailsDraft } from './edits'
+import { CUT_REASON_MAX, detailsDraft, detailsErrors, detailsPatch, type DetailsDraft } from './edits'
 import { admin } from './session'
 import TimeInput from './TimeInput.vue'
 
@@ -110,6 +110,16 @@ async function save() {
       </UiField>
     </div>
 
+    <UiField
+      label="Why it was cut"
+      help="Shown on its page once every chapter is cut. Empty: “cut from the YouTube uploads” and each chapter’s cut note."
+      :error="errors.get('cutReason')"
+    >
+      <template #default="{ id }">
+        <textarea :id="id" v-model="draft.cutReason" class="vods-input reason" rows="2" :maxlength="CUT_REASON_MAX" :disabled="merged" />
+      </template>
+    </UiField>
+
     <UiCallout v-if="error" tone="error" title="Couldn't save the details">{{ error }}</UiCallout>
     <div class="foot">
       <UiButton :disabled="!dirty || saving" @click="reset">Undo changes</UiButton>
@@ -131,6 +141,7 @@ async function save() {
 .inline { display: flex; flex-wrap: wrap; gap: 8px; }
 .inline > :first-child { flex: 1 1 180px; min-width: 0; }
 .clock { flex: 0 0 110px; }
+.reason { width: 100%; box-sizing: border-box; height: auto; resize: vertical; padding: 6px 8px; font: inherit; }
 .grid { display: flex; flex-wrap: wrap; gap: 12px 24px; }
 .grid > * { flex: 1 1 240px; }
 .foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

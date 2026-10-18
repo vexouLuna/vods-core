@@ -90,6 +90,7 @@ export function normalizeVod(raw: RawVod): Vod {
       ? raw.superseded_by.map((s) => ({ id: s.id, start: Number(s.start) || 0, end: s.end == null ? null : Number(s.end), at: Number(s.at) || 0 }))
       : null,
     appearsIn: raw.appears_in?.length ? raw.appears_in.map((a) => ({ id: a.id, title: a.title ?? '', tags: a.tags ?? [] })) : null,
+    cutReason: raw.cut_reason?.trim() || null,
   }
 }
 

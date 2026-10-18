@@ -2,7 +2,8 @@
 // /vods/:id, /live/:id and /youtube/:id. `?t=` is VOD time (wins), `?part=` starts a part from its beginning;
 // with neither, playback resumes where this browser left off. A VOD merged into another one, or replaced by a
 // synthetic VOD (a merge or split that keeps the original), sends you to the same moment in that one. A VOD cut in
-// full (every chapter cut from the YouTube uploads) gets its own page saying so, with what was cut.
+// full (every chapter cut from the YouTube uploads) gets its own page saying so (the admin's reason, if given), with
+// what was cut.
 import { useToast } from '@vex/ui/utils'
 import { boxArt, isFinished, isResumable, parseTimestamp, redirectTarget, resumeProgress, toClock, toHMS, type Position, type UploadType } from '../../index'
 import { useVodsContext, useWatch } from '../../vue/index'
@@ -126,7 +127,7 @@ watchEffect(() => {
     <template v-else-if="vod && fullyCut && !moved">
       <UiEmptyState
         title="Cut in full"
-        :text="`Every chapter of “${vod.title || 'Untitled stream'}” (${toClock(vod.duration)}) was cut from the YouTube uploads, so there's nothing left to play.`"
+        :text="vod.cutReason || `Every chapter of “${vod.title || 'Untitled stream'}” (${toClock(vod.duration)}) was cut from the YouTube uploads, so there's nothing left to play.`"
       >
         <template #actions>
           <UiButton :href="site.twitchUrl" external>Twitch channel</UiButton>
