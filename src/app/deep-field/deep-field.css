@@ -2,7 +2,10 @@
  * The app (tokens.css) on Deep Field: --vods-* from vex-ui's --vx-* tokens, and the vods-* utility classes as their
  * vx-* twins. A Deep Field site imports this after @vex/ui's style.css: `@vex/vods-core/deep-field.css`.
  */
-:root {
+/* Also on [data-site]: vex-ui switches --vx-accent there (the shell, below <html>), and a custom property's var() is
+   resolved where it's declared, so --vods-accent set on :root alone stays the default accent. */
+:root,
+[data-site] {
   --vods-bg: var(--vx-bg);
   --vods-surface: var(--vx-surface);
   --vods-surface-2: var(--vx-surface-2);
@@ -23,6 +26,8 @@
   --vods-hatch: var(--vx-hatch);
   --vods-hatch-dark: var(--vx-hatch-dark);
   --vods-hatch-bad: var(--vx-hatch-bad);
+  /* tokens.css derives this from the accent on :root; re-derive it here for the same reason. */
+  --vods-tag-new: var(--vods-accent);
 }
 
 /* The pages' container queries (@container vods) run against Deep Field's shell. */
