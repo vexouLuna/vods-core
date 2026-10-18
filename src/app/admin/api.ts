@@ -458,6 +458,8 @@ export interface SyntheticVod {
   /** When it was made, and when its segments, title or tags last changed. */
   made_at: string | null
   changed_at: string | null
+  /** A game it follows: its segments are every window of it, kept so by the archive. Null: by hand. */
+  auto: { game_id: string } | null
   segments: SyntheticSegment[]
 }
 
@@ -470,6 +472,8 @@ export interface SyntheticInput {
   supersedes?: boolean
   tags?: string[]
   segments?: Partial<SyntheticSegment>[]
+  /** Follow a game (its windows replace `segments`); null stops. Segments sent without it stop it too. */
+  auto?: { game_id: string } | null
 }
 
 /** GET /api/v2/playthrough-candidates: a window of a real, shown VOD playing the game, oldest first. */

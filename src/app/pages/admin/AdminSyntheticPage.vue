@@ -30,12 +30,17 @@ const loadError = ref<string | null>(null)
 const notFound = ref(false)
 const form = ref({ id: '', title: '', tags: '', supersedes: false })
 const segments = ref<Row[]>([])
+// The game a playthrough follows (the archive keeps its segments to that game's windows), or the one it was just built from.
+const follow = ref<{ id: string; name: string | null } | null>(null)
+const keepUp = ref(false)
 
 function fill(v: SyntheticVod | null) {
   vod.value = v
   form.value = { id: v?.id ?? '', title: v?.title ?? '', tags: (v?.tags ?? []).join(', '), supersedes: v?.supersedes ?? false }
   segments.value = (v?.segments ?? []).map((s) => row({ vod_id: s.vod_id, start: s.start, end: s.end, at: s.at, label: s.label ?? '' }))
   if (!segments.value.length) segments.value = [row()]
+  follow.value = v?.auto ? { id: v.auto.game_id, name: null } : null
+  keepUp.value = !!v?.auto
 }
 async function load() {
   loadError.value = null
@@ -59,7 +64,8 @@ const move = (i: number, by: -1 | 1) => {
 }
 const remove = (i: number) => (segments.value = segments.value.filter((_, j) => j !== i))
 const addRow = () => (segments.value = [...segments.value, row()])
-function addWindows(windows: PlaythroughWindow[], game: string | null) {
+function addWindows(windows: PlaythroughWindow[], game: string | null, gameId: string | null) {
+  if (gameId) follow.value = { id: gameId, name: game }
   const kept = segments.value.filter((s) => s.vod_id.trim())
   segments.value = [...kept, ...windows.map((w) => row({ vod_id: w.segment.vod_id, start: w.segment.start, end: w.segment.end, label: w.segment.label }))]
   // A playthrough stands beside its sources and is tagged so.
@@ -116,6 +122,8 @@ async function save() {
       ...(s.label.trim() ? { label: s.label.trim() } : {}),
     })),
   }
+  // Following a game, the archive makes the segments (it ignores these); without, they are a hand edit, which stops it.
+  if (keepUp.value && follow.value) body.auto = { game_id: follow.value.id }
   try {
     if (isNew.value) {
       const made = await admin.createSynthetic({ ...body, id: form.value.id.trim() })
@@ -194,6 +202,11 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
         </div>
         <UiCheckbox v-model="complete" label="Played to the end: shows a complete tag on its thumbnail" />
         <UiCheckbox v-model="form.supersedes" label="Stands in for its sources (a merge or split): they leave the public lists and redirect here" />
+        <UiCheckbox
+          v-if="follow"
+          v-model="keepUp"
+          :label="`Keep up to date: every window of ${follow.name ?? `game ${follow.id}`}, new streams included (the segments below then aren't saved)`"
+        />
       </section>
 
       <section class="panel vods-panel">

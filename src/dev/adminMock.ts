@@ -393,7 +393,13 @@ async function twitchVideos(api: string): Promise<TwitchVideo[]> {
 type Synth = { id: string; title: string | null; supersedes: boolean; tags: string[]; created_at: string | null; made_at: string; changed_at: string; segments: Json[] }
 const synthetics = new Map<string, Synth>()
 const synthLen = (sv: Synth) => sv.segments.reduce((n, g) => Math.max(n, g.at + g.end - g.start), 0)
-const syntheticView = (sv: Synth) => ({ ...sv, hidden: hidden.has(sv.id), duration: hms(synthLen(sv)) })
+// The game each follows (the mock keeps it, but doesn't recompute the segments from it).
+const autos = new Map<string, { game_id: string }>()
+const keepAuto = (id: string, b: Json) => {
+  if (b.auto) autos.set(id, b.auto as { game_id: string })
+  else if ('auto' in b || 'segments' in b) autos.delete(id)
+}
+const syntheticView = (sv: Synth) => ({ ...sv, auto: autos.get(sv.id) ?? null, hidden: hidden.has(sv.id), duration: hms(synthLen(sv)) })
 /** The synthetic VOD as /admin/vods/{id} and the v2 list show it. */
 const synthVod = (sv: Synth): Json => ({
   id: sv.id, title: sv.title, createdAt: sv.created_at, duration: hms(synthLen(sv)), duration_seconds: synthLen(sv),
@@ -1048,6 +1054,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             const made = await buildSynthetic(publicApi, nid, b, null)
             if ('error' in made) return problem(res, made.status, made.code, made.error)
             synthetics.set(nid, made)
+            keepAuto(nid, b)
             return send(res, 201, syntheticView(made))
           }
           const sv = id ? synthetics.get(id) : undefined
@@ -1057,6 +1064,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             const next = await buildSynthetic(publicApi, sv.id, { ...sv, ...b }, sv)
             if ('error' in next) return problem(res, next.status, next.code, next.error)
             synthetics.set(sv.id, next)
+            keepAuto(sv.id, b)
             return send(res, 200, syntheticView(next))
           }
           if (method === 'DELETE') {
