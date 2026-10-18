@@ -12,6 +12,7 @@ import { cutNote } from '../lib/cuts'
 import { gamesWithArt } from '../lib/art'
 import { splitTags, tagStyle } from '../lib/vodTags'
 import ThumbTags from './ThumbTags.vue'
+import ManageVodButton from './ManageVodButton.vue'
 
 const props = defineProps<{ vod: Vod; progress?: Progress | null }>()
 
@@ -54,6 +55,7 @@ const { src: thumb, srcset: thumbSet, onLoad: thumbLoaded, onError: thumbFailed 
         <UiChapterBar v-if="vod.chapters.length" class="chapters" :chapters="vod.chapters" :palette="palette" />
       </UiLink>
       <ThumbTags :vod="vod" class="tags" />
+      <ManageVodButton :id="vod.id" class="manage" />
 
       <UiPopover v-if="games.length" class="posters" :class="{ 'is-open': postersOpen }" @open="postersOpen = true" @close="postersOpen = false" width="min(320px, calc(100vw - 24px))" :cap="340">
         <template #trigger="{ toggle, open }">
@@ -114,6 +116,8 @@ const { src: thumb, srcset: thumbSet, onLoad: thumbLoaded, onError: thumbFailed 
 .watched { position: absolute; left: 0; bottom: 3px; height: 3px; background: var(--vods-accent); z-index: 1; }
 .chapters { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 0 0 var(--vods-radius) var(--vods-radius); overflow: hidden; }
 .tags { position: absolute; left: -5px; top: 30px; z-index: 1; }
+/* Off the thumbnail's bottom corner: the duration pill takes the top one. */
+.manage { bottom: -9px; right: -9px; }
 .posters { position: absolute; left: 8px; bottom: 10px; z-index: 2; }
 /* An open chapter list must cover the cards below it (their posters sit at the same level). */
 .posters.is-open { z-index: 30; }

@@ -81,6 +81,8 @@ plugins: [vue(), adminMock('/backend-admin', 'https://vods.vexoul.net/backend')]
 The mock also serves a fake vex-auth at `/auth-mock`: with `VITE_AUTH_BASE=/auth-mock`, "Sign in" signs in the
 fake admin (`?as=viewer` on its `/login`, or `MOCK_ACCOUNT=viewer`, signs in a plain viewer), and the quiet admin check
 runs against it. `MOCK_AUTH_CODES=<status>` and `MOCK_ADMIN_CODE=<status>` make the code mint or its hand-off fail.
+`MOCK_LIVE=yes` makes the public `/v1/status` say the channel is live, and `MOCK_FULLY_CUT=<vod id>` serves that VOD
+with every chapter cut.
 
 ## Using the engine on its own
 

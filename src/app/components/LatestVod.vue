@@ -7,6 +7,7 @@ import { boxArt, isFinished, toClock, watchPath, type Progress, type Vod } from 
 import { computed, watchEffect } from 'vue'
 import SeeAllButton from './SeeAllButton.vue'
 import ThumbTags from './ThumbTags.vue'
+import ManageVodButton from './ManageVodButton.vue'
 import { useThumbnail } from '../composables/useThumbnail'
 import NoThumbnail from './NoThumbnail.vue'
 import { gamesWithArt } from '../lib/art'
@@ -47,6 +48,7 @@ const { src: thumb, srcset: thumbSet, onLoad: thumbLoaded, onError: thumbFailed 
           <UiChapterBar v-if="vod.chapters.length" class="bar" :chapters="vod.chapters" :palette="palette" />
         </UiLink>
         <ThumbTags :vod="vod" class="tags" />
+        <ManageVodButton :id="vod.id" class="manage" />
       </div>
       <div class="vods-eyebrow">Latest broadcast · {{ relativeDay(vod.createdAt) }}</div>
       <h2 class="title"><UiLink :to="to">{{ title }}</UiLink></h2>
@@ -116,6 +118,7 @@ const { src: thumb, srcset: thumbSet, onLoad: thumbLoaded, onError: thumbFailed 
   background: rgb(0 0 0 / 0.75); color: #fff;
 }
 .tags { position: absolute; left: -5px; top: 12px; z-index: 1; }
+.manage { bottom: -9px; right: -9px; }
 .watched { position: absolute; left: 0; bottom: 4px; height: 3px; background: var(--vods-accent); z-index: 1; }
 .bar { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 0 0 var(--vods-radius) var(--vods-radius); overflow: hidden; }
 .title { margin: 0; font-size: 19px; line-height: 1.3; overflow-wrap: anywhere; }

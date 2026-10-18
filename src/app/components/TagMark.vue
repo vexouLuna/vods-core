@@ -69,7 +69,7 @@ const textStyle = computed(() => ({
     ref="root"
     class="tag-mark"
     :class="[{ 'has-text': tag.text }, tag.pattern && `is-${tag.pattern}`]"
-    :style="{ '--tag-color': tag.color, '--tag-pattern': tag.patternColor, '--tag-pattern-size': `${patternSize}px` }"
+    :style="{ '--tag-rotate': tag.rotate != null ? `${tag.rotate}deg` : undefined, '--tag-color': tag.color, '--tag-pattern': tag.patternColor, '--tag-pattern-size': `${patternSize}px` }"
   >
     <span v-if="tag.pattern" ref="probe" class="probe" hidden></span>
     <img v-if="tag.shape && src" class="shape" :src="src" alt="" :width="w" :height="h" />
@@ -83,7 +83,7 @@ const textStyle = computed(() => ({
 <style scoped>
 .tag-mark {
   position: relative; display: inline-flex; color: var(--tag-color, var(--vods-surface-2));
-  transform: rotate(-4deg); transform-origin: 0 50%; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.5));
+  transform: rotate(var(--tag-rotate, -4deg)); transform-origin: 0 50%; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.5));
 }
 .shape { display: block; object-fit: contain; }
 /* The placeholder takes the tag's color, so the config shows before the image exists. */
