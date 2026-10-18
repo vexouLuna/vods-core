@@ -14,7 +14,7 @@ import './styles/tokens.css'
 
 import App from './App.vue'
 import { configureArt, type VodsArt } from './art'
-import { setupVodsSite } from './kit'
+import { setupVodsSite } from './setup'
 import { installVodsSession, vodsRoutes } from './router'
 import type { VodsSite } from './site'
 import { installUi, type VodsUi } from './ui'
@@ -90,6 +90,7 @@ export function createVodsApp(options: VodsAppOptions): VodsApp {
         youtube: () => import('./pages/admin/AdminYoutubePage.vue'),
         settings: () => import('./pages/admin/AdminSettingsPage.vue'),
         tags: () => import('./pages/admin/AdminTagsPage.vue'),
+        home: () => import('./pages/admin/AdminHomePage.vue'),
         audit: () => import('./pages/admin/AdminAuditPage.vue'),
       },
     }),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { jobStatus, uploadStatus } from '../../src/app/kit'
+import { jobStatus, uploadStatus } from '../../src/app/admin/status'
 
 describe('VOD status chips', () => {
   it('says what the archive has of a VOD', () => {

@@ -1,26 +1,28 @@
 <script setup lang="ts">
-// The home page: the newest VOD in its own panel (the live stream instead, while the channel is live), the latest playthroughs with what each one is, and the most played
-// games. The full lists are their own pages (/vods, /playthroughs: the header and each tile's "see all" button); a
-// game card opens the VODs list narrowed to that game.
+// The home page: the cards set on /manage/home, in order (lib/siteOptions): the newest VOD in its own panel (the live
+// stream instead, while the channel is live), the newest VODs of a tag (playthroughs) with what each one is, and the
+// most played games. The full lists are their own pages (the header and each card's "see all" button); a game card
+// opens the VODs list narrowed to that game.
 import { resumeProgress, type GamePlayed, type LiveStatus, type Progress, type Vod } from '../../index'
 import { useVods, useVodsContext } from '../../vue/index'
 import { computed, ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
-import LatestPlaythroughs from '../components/LatestPlaythroughs.vue'
+import LatestTagged from '../components/LatestTagged.vue'
 import LatestVod from '../components/LatestVod.vue'
 import LiveNow from '../components/LiveNow.vue'
 import MostPlayed from '../components/MostPlayed.vue'
 import VodsShell from '../components/VodsShell.vue'
 import { loadGamesPlayed } from '../lib/gamesPlayed'
-import { listPath, parseListQuery, toApiFilter, toListQuery, type Tab } from '../lib/listQuery'
+import { siteOptions } from '../lib/siteOptions'
+import { listPath, parseListQuery, toApiFilter, toListQuery } from '../lib/listQuery'
 
 const { client, progress } = useVodsContext()
 const router = useRouter()
 
-const tabFilter = (t: Tab) => toApiFilter(parseListQuery({}, t))
-const { vods: latestVods } = useVods(() => ({ ...tabFilter('vods'), page: 1, perPage: 1 }))
+const cards = computed(() => siteOptions.value.homeCards)
+
+const { vods: latestVods } = useVods(() => ({ ...toApiFilter(parseListQuery({}, 'vods')), page: 1, perPage: 1 }))
 const latest = computed(() => latestVods.value[0] ?? null)
-const { vods: latestPlaythroughs, loading: playthroughsLoading } = useVods(() => ({ ...tabFilter('playthroughs'), page: 1, perPage: 2 }))
 
 // Offline, or the status call failed: the latest VOD shows as usual.
 const live = shallowRef<LiveStatus | null>(null)
@@ -49,10 +51,14 @@ const resumeOf = (v: Vod) => resumeProgress(saved.value.get(v.id), v.duration)
 <template>
   <VodsShell>
     <section class="top">
-      <LiveNow v-if="live" :live="live" />
-      <LatestVod v-else-if="latest" :vod="latest" :progress="resumeOf(latest)" />
-      <LatestPlaythroughs :vods="latestPlaythroughs" :loading="playthroughsLoading" :resume="resumeOf" />
-      <MostPlayed :games="games" :error="gamesError" @game="openGame" @retry="fetchGames(true)" />
+      <template v-for="c in cards" :key="c.kind === 'tag' ? `tag:${c.tag}` : c.kind">
+        <template v-if="c.kind === 'latest'">
+          <LiveNow v-if="live" :live="live" />
+          <LatestVod v-else-if="latest" :vod="latest" :progress="resumeOf(latest)" />
+        </template>
+        <LatestTagged v-else-if="c.kind === 'tag'" :tag="c.tag" :resume="resumeOf" />
+        <MostPlayed v-else :games="games" :error="gamesError" @game="openGame" @retry="fetchGames(true)" />
+      </template>
     </section>
   </VodsShell>
 </template>

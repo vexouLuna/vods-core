@@ -28,5 +28,3 @@ on `main` and their pins move.
   `Ui*` controls and `--vods-*`/`.vods-*`; a new token gets a default in `tokens.css` and a mapping in both sites.
 - A new `Ui*` control or a new prop on one reaches every site: add it to `ui.ts` and tell keeki-vods, whose `K*`
   controls must match (their templates are only type-checked against the `Vx*` ones).
-- The `kit` entry (logic without components, `tests/app/kit.test.ts`) has no site left since keeki-vods runs the app;
-  it can go in a later minor.

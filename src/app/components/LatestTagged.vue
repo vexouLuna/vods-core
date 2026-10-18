@@ -1,17 +1,22 @@
 <script setup lang="ts">
-// The newest playthroughs on the home page: each card with what it is beside it (the game, how many streams it took
-// and when they were, its length, whether it's complete, how far you are), and a button to all of them. Hidden while
-// there are none or they couldn't load.
+// A homepage card of the newest VODs with a tag whose type has `homeCard` (playthroughs, highlights): each card with
+// what it is beside it (the games, how many streams it took and when they were, its length, whether it's complete,
+// how far you are), and a button to the tag's page. Hidden while there are none or they couldn't load.
 import { gamePalette } from '@vex/ui/utils'
 import { boxArt, isFinished, toClock, watchPath, type Progress, type Vod } from '../../index'
 import { computed } from 'vue'
+import { useVods } from '../../vue/index'
 import SeeAllButton from './SeeAllButton.vue'
 import VodCard from './VodCard.vue'
-import { COMPLETE_TAG } from '../lib/vodTags'
+import { COMPLETE_TAG, tagConfig } from '../lib/vodTags'
 
-const props = defineProps<{ vods: Vod[]; loading: boolean; resume: (v: Vod) => Progress | null | undefined }>()
+const props = defineProps<{ tag: string; resume: (v: Vod) => Progress | null | undefined }>()
 
-/** What sits beside one playthrough's card. */
+const { vods, loading } = useVods(() => ({ tag: props.tag, page: 1, perPage: 2 }))
+const style = computed(() => tagConfig.value[props.tag])
+const name = computed(() => (style.value?.pageLabel ?? style.value?.label ?? props.tag).toLowerCase())
+
+/** What sits beside one VOD's card. */
 function details(v: Vod, p: Progress | null | undefined) {
   const s = v.synthetic
   const names = [...new Set(v.chapters.filter((c) => c.kind !== 'gap').map((c) => c.name))]
@@ -41,12 +46,12 @@ function you(v: Vod, p: Progress | null | undefined) {
   return { text: `You're ${pct}% in, at ${toClock(p.t)}`, cta: `▶ Resume at ${toClock(p.t)}` }
 }
 
-const entries = computed(() => props.vods.map((vod) => ({ vod, progress: props.resume(vod), ...details(vod, props.resume(vod)) })))
+const entries = computed(() => vods.value.map((vod) => ({ vod, progress: props.resume(vod), ...details(vod, props.resume(vod)) })))
 </script>
 
 <template>
-  <section v-if="loading || vods.length" class="strip vods-panel" aria-label="Latest playthroughs">
-    <div class="vods-eyebrow">Latest playthroughs</div>
+  <section v-if="loading || vods.length" class="strip vods-panel" :aria-label="`Latest ${name}`">
+    <div class="vods-eyebrow">Latest {{ name }}</div>
     <ul class="list" :aria-busy="loading && !vods.length">
       <template v-if="!vods.length">
         <li v-for="i in 2" :key="i" class="item">
@@ -83,7 +88,7 @@ const entries = computed(() => props.vods.map((vod) => ({ vod, progress: props.r
         </div>
       </li>
     </ul>
-    <SeeAllButton to="/playthroughs" class="all">See all playthroughs</SeeAllButton>
+    <SeeAllButton v-if="style?.page" :to="`/${style.page}`" class="all">See all {{ name }}</SeeAllButton>
   </section>
 </template>
 

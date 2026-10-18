@@ -118,7 +118,7 @@ const { src: thumb, srcset: thumbSet, onLoad: thumbLoaded, onError: thumbFailed 
   background: rgb(0 0 0 / 0.75); color: #fff;
 }
 .tags { position: absolute; left: -5px; top: 12px; z-index: 1; }
-.manage { bottom: -9px; right: -9px; }
+.manage { top: -9px; right: -9px; }
 .watched { position: absolute; left: 0; bottom: 4px; height: 3px; background: var(--vods-accent); z-index: 1; }
 .bar { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 0 0 var(--vods-radius) var(--vods-radius); overflow: hidden; }
 .title { margin: 0; font-size: 19px; line-height: 1.3; overflow-wrap: anywhere; }

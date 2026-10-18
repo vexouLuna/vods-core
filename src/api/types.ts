@@ -26,7 +26,7 @@ export interface RawChapter {
 
 export interface RawUpload {
   id: string
-  type: 'vod' | 'live'
+  type: 'vod' | 'live' | 'compiled'
   /** Seconds; missing while YouTube is still processing. */
   duration?: number | null
   part?: number | null

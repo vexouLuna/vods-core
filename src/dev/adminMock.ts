@@ -396,7 +396,13 @@ async function twitchVideos(api: string): Promise<TwitchVideo[]> {
 type Synth = { id: string; title: string | null; supersedes: boolean; tags: string[]; created_at: string | null; made_at: string; changed_at: string; segments: Json[] }
 const synthetics = new Map<string, Synth>()
 const synthLen = (sv: Synth) => sv.segments.reduce((n, g) => Math.max(n, g.at + g.end - g.start), 0)
-const syntheticView = (sv: Synth) => ({ ...sv, hidden: hidden.has(sv.id), duration: hms(synthLen(sv)) })
+// The game each follows (the mock keeps it, but doesn't recompute the segments from it).
+const autos = new Map<string, { game_id: string }>()
+const keepAuto = (id: string, b: Json) => {
+  if (b.auto) autos.set(id, b.auto as { game_id: string })
+  else if ('auto' in b || 'segments' in b) autos.delete(id)
+}
+const syntheticView = (sv: Synth) => ({ ...sv, auto: autos.get(sv.id) ?? null, hidden: hidden.has(sv.id), duration: hms(synthLen(sv)) })
 /** The synthetic VOD as /admin/vods/{id} and the v2 list show it. */
 const synthVod = (sv: Synth): Json => ({
   id: sv.id, title: sv.title, createdAt: sv.created_at, duration: hms(synthLen(sv)), duration_seconds: synthLen(sv),
@@ -699,6 +705,9 @@ let siteTags: SiteTag[] = [
 /** Cleaned SVGs by tag name, with the hash that versions their URL. */
 const tagShapes = new Map<string, { svg: string; v: string }>()
 let tagsChanged: { at: string; by: string } | null = null
+let homeCards: Json[] = [{ kind: 'latest' }, { kind: 'tag', tag: 'compilation' }, { kind: 'games' }]
+let playDefault = 'segments'
+let optionsChanged: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: null, updatedBy: null }
 const siteTagsOff = () => process.env.MOCK_SITE_TAGS === 'no'
 const siteTagsJson = (admin: boolean) => ({
   tags: siteTags.map((t) => {
@@ -841,6 +850,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
       server.middlewares.use('/backend', (req, res, next) => {
         const tagsPath = (req.url ?? '').split('?')[0]!
         if (tagsPath === '/v1/site/tags' && !siteTagsOff()) return send(res, 200, siteTagsJson(false))
+        if (tagsPath === '/v1/site/options') return send(res, 200, { homeCards, playDefault })
         const shm = /^\/v1\/site\/tags\/([a-z0-9-]+)\.svg$/.exec(tagsPath)
         if (shm && !siteTagsOff()) {
           const sh = tagShapes.get(shm[1]!)
@@ -1038,6 +1048,15 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- synthetic VODs (/api/v2/synthetic) ----
+        const dm = /^\/api\/v2\/synthetic\/([^/]+)\/dmca$/.exec(path)
+        if (dm && method === 'GET') {
+          // Made-up claims on its first source, one in a window and one not, so Compile shows the warning.
+          const sv = synthetics.get(decodeURIComponent(dm[1]!))
+          if (!sv) return problem(res, 404, 'vod_not_found', 'No such synthetic VOD.')
+          const first = sv.segments[0]
+          const claim = (mute: number[][]) => ({ vod_id: first!.vod_id, part: 1, mute, blackout: [], placed: true })
+          return send(res, 200, first ? { overlapping: [claim([[120, 185]])], other: [claim([[9000, 9030]])] } : { overlapping: [], other: [] })
+        }
         const sm = /^\/api\/v2\/synthetic(?:\/([^/]+))?$/.exec(path)
         if (sm) {
           const id = sm[1] ? decodeURIComponent(sm[1]) : null
@@ -1048,6 +1067,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             const made = await buildSynthetic(publicApi, nid, b, null)
             if ('error' in made) return problem(res, made.status, made.code, made.error)
             synthetics.set(nid, made)
+            keepAuto(nid, b)
             return send(res, 201, syntheticView(made))
           }
           const sv = id ? synthetics.get(id) : undefined
@@ -1057,6 +1077,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             const next = await buildSynthetic(publicApi, sv.id, { ...sv, ...b }, sv)
             if ('error' in next) return problem(res, next.status, next.code, next.error)
             synthetics.set(sv.id, next)
+            keepAuto(sv.id, b)
             return send(res, 200, syntheticView(next))
           }
           if (method === 'DELETE') {
@@ -1100,6 +1121,16 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           if (!SETTINGS.some((x) => x.key === setm[1])) return fail(res, 404, `No setting ${setm[1]}`)
           overrides.delete(setm[1]!)
           return send(res, 200, { data: settingsJson() })
+        }
+
+        // ---- site options ----
+        if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { homeCards, playDefault, ...optionsChanged })
+        if (path === '/admin/site/options' && method === 'PUT') {
+          if (!Array.isArray(b.homeCards)) return fail(res, 400, 'homeCards must be a list of at most 12 cards')
+          homeCards = b.homeCards as Json[]
+          if (b.playDefault === 'segments' || b.playDefault === 'compiled') playDefault = b.playDefault
+          optionsChanged = { updatedAt: iso(), updatedBy: s.user ? `twitch:${s.user.id}` : 'password' }
+          return send(res, 200, { homeCards, playDefault, ...optionsChanged })
         }
 
         // ---- site tags ----

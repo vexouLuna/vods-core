@@ -5,6 +5,8 @@ defineProps<{ id?: string; swatches: string[]; invalid?: boolean; placeholder?: 
 const model = defineModel<string>({ required: true })
 /** The picker only takes #rrggbb; for anything else it starts from black. */
 const pickerValue = (c: string) => (/^#[0-9a-f]{6}$/i.test(c.trim()) ? c.trim() : '#000000')
+/** Tags saved before the app's own tokens name a site's (`--vx-*`, keeki's `--k-*`); they match the same swatch. */
+const sameToken = (c: string) => c.trim().replace(/^var\(--(?:vx|k)-/, 'var(--vods-')
 </script>
 
 <template>
@@ -19,7 +21,7 @@ const pickerValue = (c: string) => (/^#[0-9a-f]{6}$/i.test(c.trim()) ? c.trim() 
       type="button"
       class="swatch"
       :style="{ background: s }"
-      :aria-pressed="model === s"
+      :aria-pressed="sameToken(model) === s"
       :title="s"
       :aria-label="s"
       @click="model = s"
