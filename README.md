@@ -66,7 +66,7 @@ app.mount('#app')
 | `site.tags` | How VOD tags show until the archive has its own (edited on /manage/tags); `DEFAULT_TAGS` otherwise. |
 | `adminClientId` | The archive's client id at vex-auth (the worker's `ARCHIVE_ADMIN_AUTH_CLIENT_ID`), for the quiet admin check that shows an admin Manage without a reload (docs/admin-api.md, 1c). Default `vods-admin`. |
 | `art.noThumbnail` | A component for a VOD with no thumbnail (fills a 16:9 box). Default: a plain placeholder. |
-| `art.twitchGlyph` | Twitch's mark on the Manage button and "Sign in with Twitch" (16 px). Default: a placeholder. |
+| `art.twitchGlyph` | Twitch's mark on the account menu's Manage item and "Sign in with Twitch" (16 px). Default: a placeholder. |
 
 The `/backend` and `/backend-admin` paths are the archive's API and the worker's admin API on the site's own origin;
 the server in front of the site forwards them. In dev, the site's `vite.config.ts` proxies `/backend` to the public

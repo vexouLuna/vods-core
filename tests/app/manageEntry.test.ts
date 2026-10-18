@@ -12,7 +12,7 @@ describe('Manage lives only in the account menu', () => {
 
   it('shows Manage whenever the dashboard session is live, with a menu user for a password-only admin', () => {
     const menu = read('AccountMenu.vue')
-    expect(menu).toMatch(/<UiMenuItem v-if="session\.authenticated" to="\/manage"/)
+    expect(menu).toMatch(/<UiMenuItem v-if="session\.authenticated" to="\/manage" @click="close\(\)"><TwitchMark \/> Manage</)
     expect(menu).toMatch(/session\.authenticated \? \{ name: session\.user\?\.displayName \?\? 'admin' \}/)
   })
 })

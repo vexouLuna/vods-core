@@ -7,6 +7,7 @@ import { useAccount } from '@vex/ui/account'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { logout, session } from '../admin/session'
+import TwitchMark from './TwitchMark.vue'
 
 const account = useAccount()
 const route = useRoute()
@@ -39,7 +40,7 @@ async function signOut() {
     @sign-out="signOut"
   >
     <template #default="{ close }">
-      <UiMenuItem v-if="session.authenticated" to="/manage" @click="close()">Manage</UiMenuItem>
+      <UiMenuItem v-if="session.authenticated" to="/manage" @click="close()"><TwitchMark /> Manage</UiMenuItem>
       <slot :close="close"></slot>
     </template>
   </UiAccountMenu>
