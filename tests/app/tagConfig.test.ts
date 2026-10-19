@@ -103,7 +103,7 @@ describe('loadTagConfig', () => {
     expect(Object.keys(tagConfig.value)).toEqual(['speedrun'])
   })
   it('keeps the built-in tags when the archive has none', async () => {
-    await loadTagConfig(json(404, { message: 'No record found' }) as unknown as typeof fetch, '/backend')
+    await loadTagConfig(json(404, { message: 'The site tags were never saved' }) as unknown as typeof fetch, '/backend')
     expect(tagConfig.value).toBe(site.tags)
     await loadTagConfig((async () => { throw new Error('offline') }) as unknown as typeof fetch, '/backend')
     expect(tagConfig.value).toBe(site.tags)

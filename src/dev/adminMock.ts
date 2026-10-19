@@ -868,9 +868,9 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         if (tagsPath === '/vods' && /[?&](first|last)LiveAt%5B|[?&](first|last)LiveAt\[/.test(req.url ?? '')) return liveFiltered(publicApi, req.url!, res)
         const pm = /^\/vods\/([^/?]+)(?:\?.*)?$/.exec(req.url ?? '')
         const id = pm ? decodeURIComponent(pm[1]!) : ''
-        if (pm && hidden.has(id)) return send(res, 404, { name: 'NotFound', message: 'No record found', code: 404 })
+        if (pm && hidden.has(id)) return send(res, 404, { name: 'NotFound', message: `Nothing has the id '${id}'`, code: 404 })
         if (!pm || !spliced.has(id)) return next()
-        if (deleted.has(id)) return send(res, 404, { name: 'NotFound', message: 'No record found', code: 404 })
+        if (deleted.has(id)) return send(res, 404, { name: 'NotFound', message: `Nothing has the id '${id}'`, code: 404 })
         const { chaptersLocked: _c, botChat: _b, splices: _s, hidden: _h, ...pub } = adminVod(vods.get(id)!)
         return send(res, 200, pub)
       })
@@ -1332,7 +1332,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         if (vm) {
           const id = decodeURIComponent(vm[1]!)
           const vod = await vodOf(publicApi, id)
-          if (!vod) return fail(res, 404, 'No Vod Data')
+          if (!vod) return fail(res, 404, 'No such VOD')
           const part = vm[2]
           try {
             if (!part && method === 'GET') return send(res, 200, adminVod(vod))
@@ -1354,7 +1354,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             }
             if (part === 'merge' && method === 'POST') {
               const src = await vodOf(publicApi, String(b.source ?? ''))
-              if (!src) return fail(res, 404, `No Vod Data for ${b.source}`)
+              if (!src) return fail(res, 404, `No such VOD: ${b.source}`)
               const sp = mergeVods(vod, src, b.gap)
               return send(res, 200, { error: false, msg: `Merged ${src.id} into ${id} at ${sp.offset}s`, splice: spliceJson(sp), warnings: [], vod: adminVod(vod) })
             }
@@ -1495,7 +1495,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               if (!['vod', 'live'].includes(type)) return fail(res, 400, 'type must be vod or live')
               if (b.part != null && !(Number.isInteger(b.part) && b.part >= 1)) return fail(res, 400, 'part must be a whole number >= 1')
               const job = add(b.part != null ? 'reupload' : 'download', id, 'queued', 0, 0, { payload: { vodId: id, type, ...(b.part != null ? { part: b.part } : {}), replace: true } })
-              return ok(res, b.part != null ? `Re-archiving ${id} part ${b.part}..` : `Re-archiving ${id}..`, job)
+              return ok(res, b.part != null ? `Re-archiving ${id} part ${b.part}; the old upload goes once the new one is up` : `Re-archiving ${id}; the old uploads go once the new ones are up`, job)
             }
             if (part === 'drive' && method === 'PUT') {
               vod.drive = ((b.drive as Json[]) ?? []).map((d) => ({ id: d.id, type: d.type }))
@@ -1577,25 +1577,25 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         const start = (kind: string, msg: string) => ok(res, msg, add(kind, vodId || null, 'queued', 0, 0, { payload: { ...b } }))
         if (method === 'POST' || method === 'DELETE') {
           const needsVod = ['/admin/bot-chat', '/admin/chapters', '/admin/emotes', '/admin/logs', '/admin/duration', '/admin/youtube/parts', '/admin/download', '/admin/reupload', '/admin/delete']
-          if (needsVod.includes(path) && !(await vodOf(publicApi, vodId))) return fail(res, 404, 'No Vod Data')
+          if (needsVod.includes(path) && !(await vodOf(publicApi, vodId))) return fail(res, 404, 'No such VOD')
           // A merged or split VOD no longer matches Twitch's VOD of that id: the worker refuses to re-fetch it.
           const twitch = ['/admin/chapters', '/admin/emotes', '/admin/logs', '/admin/duration', '/admin/download', '/admin/reupload', '/admin/delete', '/admin/hls/download', '/admin/bot-chat']
           if (twitch.includes(path) && (vods.get(vodId)?.merged_into || splicesOf(vodId).some((sp) => !sp.undoneAt)))
             return fail(res, 409, `vod ${vodId} was merged or split; it no longer matches Twitch's VOD of that id`)
           switch (path) {
             case '/admin/chapters': return start('chapters', `Saving Chapters for ${vodId}`)
-            case '/admin/emotes': return start('emotes', b.force ? 'Saving emotes (overwriting)..' : 'Saving emotes..')
-            case '/admin/emotes/backfill': return start('global_emotes_backfill', 'Backfilling global emotes..')
+            case '/admin/emotes': return start('emotes', b.force ? 'Saving emotes (overwriting)…' : 'Saving emotes…')
+            case '/admin/emotes/backfill': return start('global_emotes_backfill', 'Backfilling global emotes…')
             case '/admin/bot-chat':
               if (jobs.some((j) => j.kind === 'bot_chat' && j.vodId === vodId && isActive(j)))
                 return fail(res, 409, `A bot chat job for ${vodId} is already running`)
-              return start('bot_chat', `Reading bot chat for ${vodId}..`)
-            case '/admin/bot-chat/backfill': return start('bot_chat_backfill', 'Backfilling bot chat..')
-            case '/admin/logs': return start('chat', 'Getting logs..')
+              return start('bot_chat', `Reading bot chat for ${vodId}…`)
+            case '/admin/bot-chat/backfill': return start('bot_chat_backfill', 'Backfilling bot chat…')
+            case '/admin/logs': return start('chat', 'Getting the chat logs…')
             case '/admin/youtube/parts': return start('describe', `Updating YouTube descriptions for ${vodId}`)
-            case '/admin/download': return start('download', 'Starting download..')
-            case '/admin/reupload': return start('reupload', `Re-uploading ${vodId} part ${b.part}..`)
-            case '/admin/hls/download': return start('archive', `Downloading ${vodId} via HLS..`)
+            case '/admin/download': return start('download', 'Starting the download…')
+            case '/admin/reupload': return start('reupload', `Re-uploading ${vodId} part ${b.part}…`)
+            case '/admin/hls/download': return start('archive', `Downloading ${vodId} via HLS…`)
             case '/admin/generate/vod': return start('chapters', `Created vod ${vodId}`)
             case '/admin/duration': return send(res, 200, { error: false, msg: 'Saved duration!', duration: (await vodOf(publicApi, vodId))!.duration })
             case '/admin/delete':

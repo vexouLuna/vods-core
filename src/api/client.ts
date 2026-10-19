@@ -99,8 +99,8 @@ export class ArchiveClient {
     const q = toQueryString({ content_offset_seconds: Math.max(0, Math.floor(offset)), source })
     return this.get<RawCommentPage>(`/v1/vods/${encodeURIComponent(vodId)}/comments${q}`, signal).catch((e: unknown) => {
       // The archive answers 500 when nothing was said at or after the offset (past the last message): no chat, not
-      // an error.
-      if (e instanceof ProblemError && e.status === 500 && e.message.startsWith('Failed to retrieve comments from offset')) return { comments: [] }
+      // an error. shortcut: the old wording is for archives before twitch-archive#170, drop it once that is deployed.
+      if (e instanceof ProblemError && e.status === 500 && /^(No chat at or after offset|Failed to retrieve comments from offset)/.test(e.message)) return { comments: [] }
       throw e
     })
   }
