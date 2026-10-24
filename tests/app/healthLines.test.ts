@@ -11,6 +11,8 @@ import {
   splitProblems,
   stuckLine,
   stuckVods,
+  twitchAppLine,
+  uploadStandingLine,
   youtubeCheckLine,
   youtubeCheckMessage,
 } from '../../src/app/admin/health'
@@ -112,5 +114,23 @@ describe('doomtp-bot tile', () => {
     expect(doomtpLine({ ...base, listening: false, keyed: false }, ago)).toEqual({ text: 'Not in chat', sub: 'left @10:00 · public log only', warn: true, status: 'warn' })
     expect(doomtpLine({ ...base, ok: false, listening: null, error: 'ConnectError' }, ago)).toMatchObject({ text: 'Unreachable', sub: 'ConnectError', status: 'warn' })
     expect(doomtpLine({ ...base, configured: false, ok: null }, ago)).toMatchObject({ text: 'Not set up', status: 'off', warn: false })
+  })
+})
+
+describe('upload standing and the Twitch app', () => {
+  const yt = { authorized: true, valid: true, error: null }
+  const YT = 'https://www.googleapis.com/auth/youtube'
+  it('lists the channel status and scopes, and warns on what makes YouTube refuse an upload', () => {
+    const ok = { ...yt, channel: { id: 'UC1', title: 'c', url: 'u', status: { longUploadsStatus: 'allowed', isLinked: true, privacyStatus: 'public' } }, grantedScopes: [YT] }
+    expect(uploadStandingLine(ok)).toEqual({ text: 'long uploads allowed · linked · public', sub: 'scopes: youtube', warn: false })
+    expect(uploadStandingLine({ ...ok, grantedScopes: ['https://www.googleapis.com/auth/youtube.readonly'] })?.warn).toBe(true)
+    expect(uploadStandingLine({ ...ok, channel: { ...ok.channel, status: { longUploadsStatus: 'allowed', isLinked: false, privacyStatus: 'public' } } })).toMatchObject({ warn: true, text: 'long uploads allowed · not linked · public' })
+    expect(uploadStandingLine({ ...ok, grantedScopes: null })?.sub).toBe('scopes not recorded (connect again to record them)')
+    expect(uploadStandingLine(yt)).toBeNull() // an older worker
+  })
+  it('says whether the app gets a token, apart from the ad-free account', () => {
+    expect(twitchAppLine({ configured: false, clientId: null, tokenOk: null, error: null }).status).toBe('off')
+    expect(twitchAppLine({ configured: true, clientId: 'abcd…ijkl', tokenOk: true, error: null })).toMatchObject({ status: 'ok', sub: 'client abcd…ijkl · used by the censor check' })
+    expect(twitchAppLine({ configured: true, clientId: 'abcd…ijkl', tokenOk: false, error: 'HTTPStatusError: 403' })).toMatchObject({ status: 'warn', sub: 'HTTPStatusError: 403' })
   })
 })

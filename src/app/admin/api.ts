@@ -118,7 +118,9 @@ export interface Health {
     error: string | null
     checkedAt?: string | null
     /** The channel uploads go to; null when the account has none (then valid is false), absent if unknown. */
-    channel?: { id: string; title: string; url: string } | null
+    channel?: { id: string; title: string; url: string; status?: YoutubeChannelStatus } | null
+    /** What Google granted at the last connect or refresh; null for a token that never recorded it. Absent from an older worker. */
+    grantedScopes?: string[] | null
     /** When the account was connected; null for a token imported from the legacy archive. */
     connectedAt?: string | null
     /** When Google said the refresh token ends (only for a time-limited grant). */
@@ -131,8 +133,29 @@ export interface Health {
   twitchViewer?: TwitchViewerStatus | null
   /** The connection to doomtp-bot (its chat log); absent from a worker that predates it. */
   doomtp?: DoomtpStatus | null
+  /** The Twitch app (client credentials) behind Helix and IGDB, which the censor check uses; absent from an older worker. */
+  twitchApp?: TwitchAppStatus | null
   /** Counts over every job, legacy ones too; the job runs themselves come from /api/v2/jobs (platform.ts). */
   jobs: { counts: Partial<Record<JobState, number>> }
+}
+
+/** What decides whether the channel may upload (channels.list's `status`); a field is null when YouTube left it out. */
+export interface YoutubeChannelStatus {
+  /** `allowed`, `eligible` (can be turned on by verifying the channel) or `disallowed`. */
+  longUploadsStatus: string | null
+  /** A channel not linked to a Google account can't upload. */
+  isLinked: boolean | null
+  privacyStatus: string | null
+}
+
+/** The worker's Twitch app: not a user's account, so apart from the ad-free viewer. */
+export interface TwitchAppStatus {
+  configured: boolean
+  /** Masked (first and last four characters). */
+  clientId: string | null
+  /** Whether Twitch gives it a token; null when not configured. */
+  tokenOk: boolean | null
+  error: string | null
 }
 
 /** Whether the worker reaches doomtp-bot, and whether the bot is in the channel's chat (its /log/coverage, asked at most once a minute). */

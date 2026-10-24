@@ -1,7 +1,7 @@
 // What the overview says about uploads and storage: the YouTube quota spent today, the VODs nothing is archiving,
 // the worker's disk and whether the uploads are still on YouTube. The words and the warning thresholds, without the look, so keeki's overview reads the same.
 import { bytes } from '@vex/platform-web'
-import type { DoomtpStatus, StorageView, YoutubeCheck, YoutubeIssue, YoutubeQuota, YoutubeVideos, YoutubeVodReport } from './api'
+import type { DoomtpStatus, Health, StorageView, TwitchAppStatus, YoutubeCheck, YoutubeIssue, YoutubeQuota, YoutubeVideos, YoutubeVodReport } from './api'
 import { admin } from './session'
 
 /** Units an upload costs (videos.insert). */
@@ -142,4 +142,37 @@ export function doomtpLine(d: DoomtpStatus, ago: (iso: string) => string): Healt
   if (!d.ok) return { text: 'Unreachable', sub: d.error ?? 'No answer', warn: true, status: 'warn' }
   if (d.listening) return { text: 'In chat', sub: `${d.since ? `since ${ago(d.since)}` : `#${d.login}`} · ${access}`, warn: false, status: 'ok' }
   return { text: 'Not in chat', sub: `${d.since ? `left ${ago(d.since)}` : `#${d.login}`} · ${access}`, warn: true, status: 'warn' }
+}
+
+const UPLOAD_SCOPES = ['https://www.googleapis.com/auth/youtube', 'https://www.googleapis.com/auth/youtube.upload']
+
+/**
+ * What decides whether uploads are allowed: the channel's long-upload status, whether it is linked, its privacy, and
+ * the scopes Google granted. Warns on what makes YouTube refuse an upload (a 403). Null when the worker doesn't say.
+ */
+export function uploadStandingLine(yt: NonNullable<Health['youtube']>): HealthLine | null {
+  const st = yt.channel?.status
+  if (!st && yt.grantedScopes === undefined) return null
+  const scopes = yt.grantedScopes
+  const short = scopes?.map((s) => s.replace('https://www.googleapis.com/auth/', '')).join(', ')
+  const noScope = !!scopes && !scopes.some((s) => UPLOAD_SCOPES.includes(s))
+  const parts = st
+    ? [`long uploads ${st.longUploadsStatus ?? 'unknown'}`, st.isLinked === false ? 'not linked' : st.isLinked ? 'linked' : 'linked unknown', st.privacyStatus ?? 'privacy unknown']
+    : []
+  return {
+    text: parts.join(' · ') || 'channel status unknown',
+    sub: scopes ? `scopes: ${short || 'none'}` : 'scopes not recorded (connect again to record them)',
+    warn: st?.isLinked === false || st?.longUploadsStatus === 'disallowed' || noScope,
+  }
+}
+
+/** The Twitch app the censor check (IGDB) and chapter lookups use, with its masked client id. */
+export function twitchAppLine(a: TwitchAppStatus): HealthLine & { status: 'ok' | 'warn' | 'off' } {
+  if (!a.configured) return { status: 'off', text: 'Not configured', sub: 'censor check and box art are off', warn: false }
+  return {
+    status: a.tokenOk ? 'ok' : 'warn',
+    text: a.tokenOk ? 'Token OK' : 'Token refused',
+    sub: a.tokenOk ? `client ${a.clientId} · used by the censor check` : (a.error ?? `client ${a.clientId}`),
+    warn: !a.tokenOk,
+  }
 }
