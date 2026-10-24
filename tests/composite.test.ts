@@ -157,6 +157,8 @@ describe('normalize and redirects', () => {
     expect(vod.synthetic?.lastLiveAt).toBeNull()
     const plain = normalizeVod({ ...raw, tags: undefined, synthetic: null, appears_in: [{ id: 'p', title: null }] })
     expect([plain.tags, plain.synthetic, plain.supersededBy, plain.appearsIn]).toEqual([[], null, null, [{ id: 'p', title: '', tags: [] }]])
+    expect(plain.hidden).toBeUndefined()
+    expect(normalizeVod({ ...raw, synthetic: null, hidden: true }).hidden).toBe(true)
   })
 
   it('starts a new stream where the source changes, unless the archive numbers them', () => {

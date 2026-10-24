@@ -85,6 +85,7 @@ export function normalizeVod(raw: RawVod): Vod {
     streamId: raw.stream_id ?? null,
     mergedInto: raw.merged_into?.id ? { id: raw.merged_into.id, offset: Number(raw.merged_into.offset) || 0 } : null,
     tags: raw.tags ?? [],
+    ...(raw.hidden === true && { hidden: true }),
     synthetic: raw.synthetic ? normalizeSynthetic(raw.synthetic) : null,
     supersededBy: raw.superseded_by?.length
       ? raw.superseded_by.map((s) => ({ id: s.id, start: Number(s.start) || 0, end: s.end == null ? null : Number(s.end), at: Number(s.at) || 0 }))

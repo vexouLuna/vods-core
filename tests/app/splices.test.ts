@@ -1,43 +1,28 @@
 import type { Chapter } from '../../src/index'
 import { describe, expect, it, vi } from 'vitest'
-import { ProblemError } from '@vex/platform-web'
-import { AdminClient, editedSince, isSpliced, validPoints, type Splice } from '../../src/app/admin/api'
+import { AdminClient, isSpliced, type Splice } from '../../src/app/admin/api'
 import { gamesWithArt } from '../../src/app/lib/art'
 import { cutNote } from '../../src/app/lib/cuts'
 
 const reply = (status: number, body: unknown) => vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify(body), { status }))
 
 describe('merge and split client', () => {
-  it('posts the right bodies', async () => {
-    const fetch = reply(200, { error: false, msg: 'ok' })
+  it('posts the right bodies to /api/v2', async () => {
+    const fetch = reply(201, { items: [] })
     const c = new AdminClient({ base: '', fetch })
-    await c.merge('A', 'B')
-    await c.merge('A', 'B', 0)
-    await c.unmerge('A', 'B', true)
+    await c.mergeCandidates('A')
+    await c.merge('A', { sources: ['B', 'C'], gaps: [null, 30] })
+    await c.merge('A', { sources: ['B'], id: 'x' })
     await c.split('A', 3605)
-    await c.unsplit('A')
-    const bodies = fetch.mock.calls.map(([url, init]) => [url, init?.body && JSON.parse(init.body as string)])
-    expect(bodies).toEqual([
-      ['/admin/vods/A/merge', { source: 'B' }],
-      ['/admin/vods/A/merge', { source: 'B', gap: 0 }],
-      ['/admin/vods/A/unmerge', { source: 'B', force: true }],
-      ['/admin/vods/A/split', { at: 3605 }],
-      ['/admin/vods/A/unsplit', {}],
+    await c.split('A', 3605, ['a', 'b'])
+    const calls = fetch.mock.calls.map(([url, init]) => [url, init?.method, init?.body && JSON.parse(init.body as string)])
+    expect(calls).toEqual([
+      ['/api/v2/vods/A/merge-candidates?hours=24', 'GET', undefined],
+      ['/api/v2/vods/A/merge', 'POST', { sources: ['B', 'C'], gaps: [null, 30] }],
+      ['/api/v2/vods/A/merge', 'POST', { sources: ['B'], id: 'x' }],
+      ['/api/v2/vods/A/split', 'POST', { at: 3605 }],
+      ['/api/v2/vods/A/split', 'POST', { at: 3605, ids: ['a', 'b'] }],
     ])
-  })
-
-  it("keeps a 409's extra fields: validPoints and edited", async () => {
-    const points = [{ at: 10800, from: 10800, to: 10860 }]
-    const split = await new AdminClient({ base: '', fetch: reply(409, { error: true, msg: 'inside an upload', validPoints: points }) })
-      .split('A', 5000)
-      .catch((e: unknown) => e)
-    expect(split).toBeInstanceOf(ProblemError)
-    expect(validPoints(split)).toEqual(points)
-    expect(editedSince(split)).toEqual([])
-    const undo = await new AdminClient({ base: '', fetch: reply(409, { error: true, msg: 'Edited since', edited: ['A.title'] }) })
-      .unmerge('A', 'B')
-      .catch((e: unknown) => e)
-    expect(editedSince(undo)).toEqual(['A.title'])
   })
 })
 

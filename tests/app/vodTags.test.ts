@@ -45,7 +45,7 @@ describe('splitTags', () => {
   }
   it('draws the configured tags and leaves the rest as chips', () => {
     const v = vod({ createdAt: daysAgo(1), tags: ['compilation', 'complete', 'other'] })
-    expect(splitTags(v, now, tags)).toEqual({ drawn: ['new', 'complete'], chips: ['compilation', 'other'] })
+    expect(splitTags(v, now, tags)).toEqual({ drawn: ['new', 'complete'], chips: ['other'] })  // compilation and vods: never chips
   })
   it('reads an unknown tag as a chip with its own name', () => {
     expect(tagStyle('other', tags)).toEqual({ label: 'other', drawn: false })

@@ -1,6 +1,8 @@
 // A VOD's tags and how each shows. Two follow the dates: `new` (its first footage went live in the last week) and
 // `updated` (a synthetic VOD, not new, that got footage from the last week). The others are tags set on the VOD, like
-// `complete`, which an admin sets on a playthrough that was played to the end. Whether a tag is drawn on the
+// `complete`. Two say what a VOD is and are set by the archive: `vods` (every VOD, merges and splits too: what /vods
+// lists) and `compilation` (a synthetic VOD that keeps itself up to date); neither is a chip (ADR 0005 in
+// twitch-archive). Whether a tag is drawn on the
 // thumbnail or is a chip, and its color and shape, come from the archive (edited on /manage/tags; docs/admin-api.md,
 // "Site tags"), or from `site.tags` while the archive has none.
 import type { Vod } from '../../index'
@@ -11,8 +13,12 @@ import { isTagColor, TAG_NAME } from './tagRules'
 export const RECENT_MS = 7 * 24 * 3600 * 1000
 /** The tags that follow the dates (vodTags) rather than being set on a VOD. */
 export const DATE_TAGS: readonly string[] = ['new', 'updated']
-/** The VOD tag behind `complete`; set on the synthetic VOD's manage page. */
+/** The VOD tag behind `complete`. */
 export const COMPLETE_TAG = 'complete'
+/** The tag on every VOD /vods lists. */
+export const VODS_TAG = 'vods'
+/** Tags that say what a VOD is, so they'd be on nearly every card: drawn if a site draws them, never a chip. */
+const NO_CHIP: readonly string[] = [VODS_TAG, 'compilation']
 
 /** How every tag shows: `site.tags` until loadTagConfig() gets the archive's. */
 export const tagConfig = shallowRef<Record<string, TagStyle>>(site.tags)
@@ -34,7 +40,7 @@ export function splitTags(vod: Vod, now = Date.now(), tags: Record<string, TagSt
   const all = vodTags(vod, now)
   return {
     drawn: all.filter((t) => tagStyle(t, tags).drawn),
-    chips: all.filter((t) => !tagStyle(t, tags).drawn),
+    chips: all.filter((t) => !tagStyle(t, tags).drawn && !NO_CHIP.includes(t)),
   }
 }
 
@@ -77,20 +83,23 @@ export const TAG_PATTERNS = ['stripes', 'checks'] as const
 export type TagPattern = (typeof TAG_PATTERNS)[number]
 export const TAG_PATTERN_SIZE = { min: 2, max: 40 }
 /** Tags the site or the archive sets by itself: always listed on /manage/tags, and can't be removed there. */
-export const AUTO_TAGS: readonly string[] = ['new', 'updated', 'compilation']
+export const AUTO_TAGS: readonly string[] = ['new', 'updated', 'compilation', VODS_TAG]
 export const isAutoTag = (name: string) => AUTO_TAGS.includes(name)
 
 export const TAG_PAGE_LABEL_MAX = 40
-/** Paths of the site's own that a tag's page can't take. */
+/** Paths of the site's own that a tag's page can't take (`vods` is the `vods` tag's only: pageAllowed). */
 export const RESERVED_PAGES: readonly string[] = ['vods', 'live', 'youtube', 'games', 'manage', 'admin', 'playthrough']
 
-/** A tag's type (page, its title, home card) from the archive, or the site's own for an archive without types. Only
- * what's set: a tag without a page or card has neither key. */
+/** Whether tag `name` can have the page `page`: /vods is the `vods` tag's, and that tag has no other. */
+export const pageAllowed = (name: string, page: string) => (name === VODS_TAG ? page === VODS_TAG : !RESERVED_PAGES.includes(page))
+
+/** A tag's type (page, its title) from the archive, or the site's own for an archive without types. `homeCard` follows
+ * the page (ADR 0005), whatever an older archive sent. Only what's set: a tag without a page has neither key. */
 function typeOf(t: RawTag): Pick<TagStyle, 'page' | 'pageLabel' | 'homeCard'> {
   const from = 'page' in t ? t : { page: null, pageLabel: null, homeCard: null, ...site.tags[t.name] }
-  const page = typeof from.page === 'string' && TAG_NAME.test(from.page) && !RESERVED_PAGES.includes(from.page) ? from.page : null
+  const page = typeof from.page === 'string' && TAG_NAME.test(from.page) && pageAllowed(t.name, from.page) ? from.page : null
   const label = typeof from.pageLabel === 'string' && from.pageLabel.trim() ? from.pageLabel.trim().slice(0, TAG_PAGE_LABEL_MAX) : undefined
-  return { ...(page && { page, pageLabel: label }), ...(from.homeCard === true && { homeCard: true }) }
+  return page ? { page, pageLabel: label, homeCard: true } : {}
 }
 
 /** The archive's list as tag styles: shapes resolved against the API, anything malformed dropped or defaulted. */

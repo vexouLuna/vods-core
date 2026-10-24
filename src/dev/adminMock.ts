@@ -1057,6 +1057,70 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           const claim = (mute: number[][]) => ({ vod_id: first!.vod_id, part: 1, mute, blackout: [], placed: true })
           return send(res, 200, first ? { overlapping: [claim([[120, 185]])], other: [claim([[9000, 9030]])] } : { overlapping: [], other: [] })
         }
+        // ---- v2 merge and split: synthetic VODs tagged vods that hide their sources (ADR 0005) ----
+        const vs = /^\/api\/v2\/vods\/([^/]+)\/(merge-candidates|merge|split)$/.exec(path)
+        if (vs) {
+          const vod = await vodOf(publicApi, decodeURIComponent(vs[1]!))
+          if (!vod) return problem(res, 404, 'vod_not_found', `No VOD ${vs[1]}.`)
+          const ends = (v: Json) => Date.parse(v.createdAt) + durOf(v) * 1000
+          if (vs[2] === 'merge-candidates' && method === 'GET') {
+            // The worker's ?hours=: VODs starting less than that after this one ends, or ending less than that before it starts.
+            const hours = Number(url.searchParams.get('hours')) || 24
+            const from = new Date(Date.parse(vod.createdAt) - (hours * 3600 + 86400) * 1000).toISOString()
+            const to = new Date(ends(vod) + hours * 3600 * 1000).toISOString()
+            const page = (await publicJson(publicApi, `/vods?createdAt[$gt]=${encodeURIComponent(from)}&createdAt[$lt]=${encodeURIComponent(to)}&$sort[createdAt]=1&$limit=50`)) as { data: Json[] }
+            const norm = (t: unknown) => String(t ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
+            const items = page.data
+              .filter((c) => String(c.id) !== String(vod.id) && !deleted.has(String(c.id)) && ends(c) > Date.parse(vod.createdAt) - hours * 3600 * 1000)
+              .map((c) => {
+                const [first, then] = Date.parse(c.createdAt) >= Date.parse(vod.createdAt) ? [vod, c] : [c, vod]
+                const gap = Math.round((Date.parse(then.createdAt) - ends(first)) / 1000)
+                return { id: String(c.id), stream_id: c.stream_id ?? null, title: c.title, created_at: c.createdAt, duration: c.duration, gap, titles_match: norm(c.title) === norm(vod.title) }
+              })
+            return send(res, 200, { items })
+          }
+          if (vs[2] === 'merge' && method === 'POST') {
+            const ids = [String(vod.id), ...((b.sources as string[] | undefined) ?? (b.source ? [String(b.source)] : []))]
+            const all: Json[] = []
+            for (const i of new Set(ids)) {
+              const v = await vodOf(publicApi, i)
+              if (!v) return problem(res, 404, 'vod_not_found', `No VOD ${i}.`)
+              all.push(v)
+            }
+            if (all.length < 2) return problem(res, 422, 'invalid_merge', 'A merge needs two or more different VODs')
+            all.sort((x, y) => Date.parse(x.createdAt) - Date.parse(y.createdAt))
+            const gaps = (b.gaps as (number | null)[] | undefined) ?? all.slice(1).map(() => null)
+            if (gaps.length !== all.length - 1) return problem(res, 422, 'invalid_merge', `gaps must have one entry per join (${all.length - 1}), each a number or null`)
+            let at = 0
+            const segments = all.map((v, i) => {
+              if (i) at += durOf(all[i - 1]!) + (gaps[i - 1] ?? Math.round((Date.parse(v.createdAt) - ends(all[i - 1]!)) / 1000))
+              return { vod_id: String(v.id), start: 0, end: durOf(v), at: Math.max(0, at) }
+            })
+            const nid = String(b.id ?? '').trim() || (b.sources ? `${all[0]!.id}-m` : `${vod.id}+${b.source}`)
+            if (synthetics.has(nid) || vods.has(nid)) return problem(res, 409, 'synthetic_conflict', `${nid} already exists.`)
+            const made = await buildSynthetic(publicApi, nid, { tags: ['vods'], segments }, null)
+            if ('error' in made) return problem(res, made.status, made.code, made.error)
+            synthetics.set(nid, made)
+            for (const v of all) hidden.add(String(v.id))
+            return send(res, 201, syntheticView(made))
+          }
+          if (vs[2] === 'split' && method === 'POST') {
+            const cut = Number(b.at)
+            if (!(cut > 0 && cut < durOf(vod))) return problem(res, 422, 'invalid_split', 'Split inside the VOD.')
+            const ids = (b.ids as [string, string] | undefined) ?? [`${vod.id}-1`, `${vod.id}-2`]
+            const made: Synth[] = []
+            for (const [i, nid] of ids.entries()) {
+              if (synthetics.has(nid) || vods.has(nid)) return problem(res, 409, 'synthetic_conflict', `${nid} already exists.`)
+              const seg = i ? { vod_id: String(vod.id), start: cut } : { vod_id: String(vod.id), end: cut }
+              const one = await buildSynthetic(publicApi, nid, { tags: ['vods'], segments: [seg] }, null)
+              if ('error' in one) return problem(res, one.status, one.code, one.error)
+              made.push(one)
+            }
+            for (const m of made) synthetics.set(m.id, m)
+            hidden.add(String(vod.id))
+            return send(res, 201, made.map(syntheticView))
+          }
+        }
         const sm = /^\/api\/v2\/synthetic(?:\/([^/]+))?$/.exec(path)
         if (sm) {
           const id = sm[1] ? decodeURIComponent(sm[1]) : null

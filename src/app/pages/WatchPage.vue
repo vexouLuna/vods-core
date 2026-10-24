@@ -13,6 +13,7 @@ import { useRoute, useRouter } from 'vue-router'
 import WatchView from '../components/WatchView.vue'
 import { site } from '../site'
 import { cutNote } from '../lib/cuts'
+import { kindLabel } from '../lib/listQuery'
 import VodsShell from '../components/VodsShell.vue'
 import ManageVodButton from '../components/ManageVodButton.vue'
 import { siteOptions, type PlayDefault } from '../lib/siteOptions'
@@ -42,6 +43,8 @@ const switchTo = computed(() =>
 // synthetic VOD replaces (merge or split). Same route type, same moment, and this browser's progress on the old id
 // carries over.
 const moved = computed(() => !!vod.value && redirectTarget(vod.value, 0) !== null)
+// A hidden VOD that two or more synthetic VODs play: a page listing them instead (one: `moved` takes you there).
+const playedIn = computed(() => (vod.value?.hidden && !moved.value ? (vod.value.appearsIn ?? []) : []))
 watch(
   moved,
   async (m) => {
@@ -118,7 +121,7 @@ watchEffect(() => {
 
 <template>
   <WatchView
-    v-if="vod && timeline && start && !moved && !fullyCut"
+    v-if="vod && timeline && start && !moved && !fullyCut && !playedIn.length"
     :key="`${vod.id}:${uploadType}`"
     :vod="vod"
     :timeline="timeline"
@@ -138,6 +141,15 @@ watchEffect(() => {
     <UiEmptyState v-else-if="notFound" code="404" title="No VOD with that id" text="It may never have been archived, or the link is mistyped.">
       <template #actions><UiButton to="/vods" variant="primary">Browse VODs</UiButton></template>
     </UiEmptyState>
+    <template v-else-if="playedIn.length">
+      <UiEmptyState title="Watch it as part of another VOD" :text="`“${vod!.title || 'Untitled stream'}” plays inside these now.`" />
+      <ul class="played-in">
+        <li v-for="a in playedIn" :key="a.id">
+          <UiButton :to="`/vods/${encodeURIComponent(a.id)}`" variant="primary">{{ a.title || a.id }}</UiButton>
+          <span v-if="kindLabel(a.tags)" class="vods-muted">{{ kindLabel(a.tags) }}</span>
+        </li>
+      </ul>
+    </template>
     <template v-else-if="vod && fullyCut && !moved">
       <UiEmptyState
         title="Cut in full"
@@ -182,6 +194,8 @@ watchEffect(() => {
 
 <style scoped>
 .loading { display: flex; flex-direction: column; gap: 10px; }
+.played-in { list-style: none; margin: 14px auto 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.played-in li { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
 .cut { position: relative; display: flex; flex-direction: column; gap: 8px; margin: 14px auto 0; padding: 12px 14px; width: min(100%, 560px); }
 .manage { top: 6px; right: 6px; }
 .cut-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }

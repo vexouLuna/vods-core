@@ -56,9 +56,18 @@ describe('tag types', () => {
     for (const t of ['a', 'b', 'compilation']) expect(out[t]!.page, t).toBeUndefined()
   })
   it("keeps the site's own types for an archive older than them", () => {
-    expect(fromRaw([raw({ name: 'compilation', label: 'pt', drawn: false })], '').compilation).toMatchObject({
+    expect(fromRaw([raw({ name: 'playthroughs', label: 'pt', drawn: false })], '').playthroughs).toMatchObject({
       page: 'playthroughs', pageLabel: 'Playthroughs', homeCard: true,
     })
+  })
+  it('makes homeCard follow the page, and keeps /vods for the vods tag', () => {
+    const t = fromRaw([
+      raw({ name: 'a', page: null, pageLabel: null, homeCard: true }),
+      raw({ name: 'b', page: 'b', pageLabel: 'B', homeCard: false }),
+      raw({ name: 'vods', page: 'vods', pageLabel: 'VODs' }),
+      raw({ name: 'c', page: 'vods', pageLabel: 'C' }),
+    ], '')
+    expect([t.a!.homeCard, t.b!.homeCard, t.vods!.page, t.c!.page]).toEqual([undefined, true, 'vods', undefined])
   })
   it('checks pages in the drafts and saves the type', () => {
     const base = draftOf(raw({ name: 'clip' }))
@@ -182,7 +191,7 @@ describe('tagChanges', () => {
   })
   it('starts from site.tags and previews a draft', () => {
     const list = rawOf(site.tags)
-    expect(list.map((t) => t.name)).toEqual(['new', 'updated', 'complete', 'compilation'])
+    expect(list.map((t) => t.name)).toEqual(['new', 'updated', 'complete', 'playthroughs', 'compilation'])
     const d = draftOf(raw({ shape: 'v1/site/tags/new.svg?v=1', width: '' as never, color: 'nope(' }))
     expect(previewOf(d, '/backend')).toMatchObject({ shape: '/backend/v1/site/tags/new.svg?v=1', color: undefined, width: undefined })
   })
@@ -196,7 +205,9 @@ describe('draftsOf', () => {
       ['updated', true, true],
       ['new', true, false],
       ['compilation', true, false],
+      ['vods', true, false],
     ])
+    expect(drafts[4]).toMatchObject({ page: 'vods', pageLabel: 'VODs', homeCard: true })
     expect(drafts[1]!.label).toBe('fresh')
     expect(blankDraft().auto).toBe(false)
   })

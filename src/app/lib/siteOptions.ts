@@ -5,8 +5,12 @@ import { vodsConfig } from '../site'
 import type { TagStyle } from '../site'
 import { TAG_NAME } from './tagRules'
 
-/** One homepage card: the newest VOD (the stream while live), the newest VODs with a tag, or the most played games. */
-export type HomeCard = { kind: 'latest' } | { kind: 'tag'; tag: string } | { kind: 'games' }
+/**
+ * One homepage card: "Latest live" (the stream while live, else the newest VOD), "Latest VOD" (the newest of a home
+ * category, never the stream), "Latest 2" (its two newest), or the most played games. A tag card shows only while its
+ * tag is a home category (shownHomeCards).
+ */
+export type HomeCard = { kind: 'latest' } | { kind: 'one'; tag: string } | { kind: 'tag'; tag: string } | { kind: 'games' }
 
 /** A synthetic VOD with a compiled upload plays its segments (each source's own uploads) or that one file. */
 export type PlayDefault = 'segments' | 'compiled'
@@ -17,22 +21,26 @@ export interface SiteOptions {
 }
 
 export const DEFAULT_SITE_OPTIONS: SiteOptions = {
-  homeCards: [{ kind: 'latest' }, { kind: 'tag', tag: 'compilation' }, { kind: 'games' }],
+  homeCards: [{ kind: 'latest' }, { kind: 'tag', tag: 'playthroughs' }, { kind: 'games' }],
   playDefault: 'segments',
 }
 
 export const siteOptions = shallowRef<SiteOptions>(DEFAULT_SITE_OPTIONS)
 
 /** What tells two cards apart: a page shows each once. */
-export const homeCardKey = (c: HomeCard): string => (c.kind === 'tag' ? `tag:${c.tag}` : c.kind)
+export const homeCardKey = (c: HomeCard): string => ('tag' in c ? `${c.kind}:${c.tag}` : c.kind)
 
-/** A card's name on /manage/home: "Latest VOD", "Most played games", or "Latest " and the tag's page or label. */
+/** A card's name on /manage/home: "Latest live", "Most played games", or "Latest VOD: " / "Latest 2: " and the tag's page or label. */
 export function homeCardLabel(c: HomeCard, tags: Record<string, TagStyle>): string {
-  if (c.kind === 'latest') return 'Latest VOD'
+  if (c.kind === 'latest') return 'Latest live'
   if (c.kind === 'games') return 'Most played games'
   const s = tags[c.tag]
-  return `Latest ${s?.pageLabel ?? s?.label ?? c.tag}`
+  return `${c.kind === 'one' ? 'Latest VOD' : 'Latest 2'}: ${s?.pageLabel ?? s?.label ?? c.tag}`
 }
+
+/** The cards to draw: a tag card only while its tag is a home category (has a page), whatever was saved. */
+export const shownHomeCards = (cards: HomeCard[], tags: Record<string, TagStyle>): HomeCard[] =>
+  cards.filter((c) => !('tag' in c) || !!tags[c.tag]?.page)
 
 /** The cards the site can draw, in order, one of each; anything else is dropped. */
 export function homeCardsOf(raw: unknown): HomeCard[] {
@@ -42,8 +50,8 @@ export function homeCardsOf(raw: unknown): HomeCard[] {
     const card: HomeCard | null =
       c?.kind === 'latest' || c?.kind === 'games'
         ? { kind: c.kind }
-        : c?.kind === 'tag' && typeof c.tag === 'string' && TAG_NAME.test(c.tag)
-          ? { kind: 'tag', tag: c.tag }
+        : (c?.kind === 'tag' || c?.kind === 'one') && typeof c.tag === 'string' && TAG_NAME.test(c.tag)
+          ? { kind: c.kind, tag: c.tag }
           : null
     if (card && !out.some((o) => homeCardKey(o) === homeCardKey(card))) out.push(card)
   }

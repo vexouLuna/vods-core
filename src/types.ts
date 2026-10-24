@@ -87,13 +87,16 @@ export interface Vod {
   streamId: string | null
   /** Set when this VOD was merged into another: watch `id` at `offset + t` instead. */
   mergedInto?: { id: string; offset: number } | null
-  /** Empty for regular VODs; `compilation` for playthroughs. */
+  /** `vods` on every VOD /vods lists (merges and splits too); `playthroughs` on playthroughs. */
   tags: string[]
+  /** Hidden by an admin, but answered because a shown synthetic VOD plays it: it isn't watched itself, its link
+   * leads to that one (`supersededBy`) or, when several play it, to a list of them (`appearsIn`). */
+  hidden?: boolean
   /** Set on a synthetic VOD (a merge, a split, a playthrough): it plays windows of other VODs. */
   synthetic?: Synthetic | null
   /** Set on a VOD a merge or split replaced: watch those instead (see `supersededTarget`). */
   supersededBy?: SupersededBy[] | null
-  /** Synthetic VODs (playthroughs) that use part of this one. */
+  /** Synthetic VODs (playthroughs; on a hidden VOD, the ones that play it) that use part of this one. */
   appearsIn?: AppearsIn[] | null
   /** Why the VOD was cut, when an admin gave a reason: the page for a VOD cut in full shows it. */
   cutReason?: string | null

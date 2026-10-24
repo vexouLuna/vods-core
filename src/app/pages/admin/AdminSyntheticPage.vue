@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // /manage/synthetic/new and /manage/synthetic/:id: a VOD made of windows of real ones (GET/POST/PUT/DELETE
-// /api/v2/synthetic). A merge or split supersedes its sources (they leave the public lists and redirect into it); a
-// playthrough, built from a game's windows, is listed beside them and tagged `compilation`. Compile starts a job that
+// /api/v2/synthetic): a merge, a split, a playthrough (built from a game's windows and tagged `playthroughs`) or
+// anything else; they all work the same (ADR 0005 in twitch-archive). Its sources can be hidden or shown in one go (a
+// hidden one a shown synthetic VOD plays still opens: its link leads here). Compile starts a job that
 // joins its windows into one file and uploads it as type `compiled` (the archive's compile_youtube_upload must be on).
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
@@ -15,7 +16,7 @@ import PlaythroughBuilder from '../../admin/PlaythroughBuilder.vue'
 import { admin } from '../../admin/session'
 import { platform, vodSubject } from '../../admin/platform'
 import TimeInput from '../../admin/TimeInput.vue'
-import { COMPLETE_TAG } from '../../lib/vodTags'
+import { AUTO_TAGS, tagConfig, VODS_TAG } from '../../lib/vodTags'
 import { site } from '../../site'
 
 const props = defineProps<{ id?: string }>()
@@ -30,7 +31,7 @@ const row = (s: Partial<Row> = {}): Row => ({ key: keys++, vod_id: '', start: nu
 const vod = ref<SyntheticVod | null>(null)
 const loadError = ref<string | null>(null)
 const notFound = ref(false)
-const form = ref({ id: '', title: '', tags: '', supersedes: false })
+const form = ref({ id: '', title: '', tags: '' })
 const segments = ref<Row[]>([])
 // The game a playthrough follows (the archive keeps its segments to that game's windows), or the one it was just built from.
 const follow = ref<{ id: string; name: string | null } | null>(null)
@@ -38,11 +39,13 @@ const keepUp = ref(false)
 
 function fill(v: SyntheticVod | null) {
   vod.value = v
-  form.value = { id: v?.id ?? '', title: v?.title ?? '', tags: (v?.tags ?? []).join(', '), supersedes: v?.supersedes ?? false }
+  form.value = { id: v?.id ?? '', title: v?.title ?? '', tags: (v?.tags ?? []).join(', ') }
   // A playthrough's segments play back to back: its saved `at`s are dropped, or after any edit to a window they would
-  // leave gaps ("Technical difficulties"). A merge keeps them: its gap is where the stream was down.
+  // leave gaps ("Technical difficulties"). A merge or split (tagged `vods`) keeps them: its gap is where the stream was
+  // down (an older archive's `supersedes` says the same).
+  const keepAt = !!v && (v.tags.includes(VODS_TAG) || v.supersedes)
   segments.value = (v?.segments ?? []).map((s) =>
-    row({ vod_id: s.vod_id, start: s.start, end: s.end, at: v!.supersedes ? s.at : null, label: s.label ?? '' }),
+    row({ vod_id: s.vod_id, start: s.start, end: s.end, at: keepAt ? s.at : null, label: s.label ?? '' }),
   )
   if (!segments.value.length) segments.value = [row()]
   follow.value = v?.auto ? { id: v.auto.game_id, name: null } : null
@@ -62,6 +65,30 @@ async function load() {
 }
 watch(() => props.id, load, { immediate: true })
 
+// ── its sources: hidden or shown together ──
+const sources = computed(() => [...new Set((vod.value?.segments ?? []).map((s) => s.vod_id))])
+/** Which sources are hidden; null while loading. */
+const hiddenSources = ref<Set<string> | null>(null)
+const sourcesBusy = ref(false)
+async function loadSources() {
+  const ids = sources.value
+  const states = await Promise.all(ids.map((id) => admin.vod(id).then((v) => (v.hidden ? id : null), () => null)))
+  if (ids === sources.value) hiddenSources.value = new Set(states.filter((id): id is string => !!id))
+}
+watch(sources, () => ((hiddenSources.value = null), void loadSources()), { immediate: true })
+async function setSources(hide: boolean) {
+  sourcesBusy.value = true
+  try {
+    for (const id of sources.value) if (hiddenSources.value?.has(id) !== hide) await admin.patchVod(id, { hidden: hide })
+    toast.show(hide ? `Hid ${sources.value.length} sources` : `Showed ${sources.value.length} sources`, { duration: 3000 })
+  } catch (e) {
+    toast.show(errorText(e), { kind: 'error', duration: 6000 })
+  } finally {
+    sourcesBusy.value = false
+    void loadSources()
+  }
+}
+
 // ── segments ──
 const move = (i: number, by: -1 | 1) => {
   const list = [...segments.value]
@@ -74,10 +101,9 @@ function addWindows(windows: PlaythroughWindow[], game: string | null, gameId: s
   if (gameId) follow.value = { id: gameId, name: game }
   const kept = segments.value.filter((s) => s.vod_id.trim())
   segments.value = [...kept, ...windows.map((w) => row({ vod_id: w.segment.vod_id, start: w.segment.start, end: w.segment.end, label: w.segment.label }))]
-  // A playthrough stands beside its sources and is tagged so.
-  form.value.supersedes = false
+  // A playthrough is tagged so (by hand: any tag can be taken off).
   const tags = tagList.value
-  if (!tags.includes('compilation')) form.value.tags = [...tags, 'compilation'].join(', ')
+  if (!tags.includes('playthroughs')) form.value.tags = [...tags, 'playthroughs'].join(', ')
   if (!form.value.title.trim() && game) form.value.title = `${game} playthrough`
   builderOpen.value = false
 }
@@ -85,14 +111,9 @@ const builderOpen = ref(false)
 
 // ── checks ──
 const tagList = computed(() => [...new Set(form.value.tags.split(',').map((t) => t.trim()).filter(Boolean))])
-// A playthrough played to the end gets the `complete` tag (a tag on its thumbnail).
-const complete = computed({
-  get: () => tagList.value.includes(COMPLETE_TAG),
-  set: (on: boolean) => {
-    const rest = tagList.value.filter((t) => t !== COMPLETE_TAG)
-    form.value.tags = (on ? [...rest, COMPLETE_TAG] : rest).join(', ')
-  },
-})
+/** The site's tags it hasn't got, to add with a click (the automatic ones are set by the archive). */
+const tagSuggestions = computed(() => Object.keys(tagConfig.value).filter((t) => !AUTO_TAGS.includes(t) && !tagList.value.includes(t)))
+const addTag = (t: string) => (form.value.tags = [...tagList.value, t].join(', '))
 const idError = computed(() => {
   if (!isNew.value) return null
   const id = form.value.id.trim()
@@ -118,7 +139,6 @@ async function save() {
   saveError.value = null
   const body: SyntheticInput = {
     title: form.value.title.trim() || null,
-    supersedes: form.value.supersedes,
     tags: tagList.value,
     segments: segments.value.map((s) => ({
       vod_id: s.vod_id.trim(),
@@ -230,6 +250,15 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
           <div><dt>Visibility</dt><dd><UiChip :tone="vod.hidden ? 'warn' : 'ok'">{{ vod.hidden ? 'hidden' : 'public' }}</UiChip></dd></div>
         </dl>
         <p class="vods-muted small">Hide it, or change its chapters and the like, on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>
+        <div v-if="sources.length" class="srcs">
+          <span class="small">
+            Sources:
+            <template v-if="hiddenSources">{{ hiddenSources.size }} of {{ sources.length }} hidden</template>
+            <template v-else>{{ sources.length }}</template>
+          </span>
+          <UiButton size="sm" :loading="sourcesBusy" :disabled="!hiddenSources || hiddenSources.size === sources.length" title="They leave the lists; their links lead here" @click="setSources(true)">Hide all sources</UiButton>
+          <UiButton size="sm" :loading="sourcesBusy" :disabled="!hiddenSources || hiddenSources.size === 0" @click="setSources(false)">Show all sources</UiButton>
+        </div>
       </section>
 
       <section class="panel vods-panel vx-glass-rim">
@@ -241,12 +270,14 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
           <UiField label="Title" help="Empty: the first source's.">
             <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.title" /></template>
           </UiField>
-          <UiField label="Tags" help="Comma-separated; a playthrough is tagged compilation, and complete once played to the end.">
-            <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.tags" placeholder="compilation" /></template>
+          <UiField label="Tags" help="Comma-separated: vods lists it on /vods, playthroughs on Playthroughs. compilation is set while it keeps up to date.">
+            <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.tags" placeholder="playthroughs" /></template>
           </UiField>
         </div>
-        <UiCheckbox v-model="complete" label="Played to the end: shows a complete tag on its thumbnail" />
-        <UiCheckbox v-model="form.supersedes" label="Stands in for its sources (a merge or split): they leave the public lists and redirect here" />
+        <div v-if="tagSuggestions.length" class="suggest" aria-label="Add a tag">
+          <span class="vods-muted small">Add:</span>
+          <UiChip v-for="t in tagSuggestions" :key="t" clickable @click="addTag(t)">+ {{ t }}</UiChip>
+        </div>
         <UiCheckbox
           v-if="follow"
           v-model="keepUp"
@@ -327,7 +358,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
     </UiDialog>
 
     <UiDialog v-model:open="deleteOpen" :title="`Delete ${id}?`">
-      Its link stops working and, if it stood in for its sources, they come back. The sources themselves aren't touched.
+      Its link stops working. VODs its merge or split hid are shown again; other hidden sources stay hidden.
       <template #actions="{ close }">
         <UiButton @click="close">Cancel</UiButton>
         <UiButton variant="danger-solid" :loading="deleting" @click="destroy">Delete</UiButton>
@@ -362,4 +393,6 @@ dd { margin: 0; }
 .other summary { cursor: pointer; }
 .acts { display: flex; gap: 2px; }
 .save { display: flex; flex-wrap: wrap; gap: 8px; }
+.suggest { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.srcs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 </style>

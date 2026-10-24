@@ -161,7 +161,7 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
 
       <section v-if="!vod.synthetic" class="panel vods-panel vx-glass-rim">
         <h2 class="vods-eyebrow">Merge and split</h2>
-        <SplicePanel :vod="vod" @changed="load" @job="jobStarted" />
+        <SplicePanel :vod="vod" />
       </section>
 
       <section class="panel vods-panel vx-glass-rim">
