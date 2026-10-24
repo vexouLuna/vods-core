@@ -694,18 +694,26 @@ interface SiteTag {
   name: string; label: string; drawn: boolean; color: string | null; width: number | null; height: number | null; rotate: number | null
   text: string | null; textColor: string | null; textSize: number | null; textX: number | null; textY: number | null; textRotate: number | null
   pattern: 'stripes' | 'checks' | null; patternColor: string | null; patternSize: number | null
+  /** A home category (ADR 0005): its page and title; homeCard follows the page. */
+  page: string | null; pageLabel: string | null; homeCard: boolean
 }
 const NO_TEXT = { text: null, textColor: null, textSize: null, textX: null, textY: null, textRotate: null, pattern: null, patternColor: null, patternSize: null }
+const NO_PAGE = { page: null, pageLabel: null, homeCard: false }
+const pageOf = (page: string, pageLabel: string) => ({ page, pageLabel, homeCard: true })
 let siteTags: SiteTag[] = [
-  { name: 'new', label: 'new', drawn: true, color: 'var(--vods-tag-new)', width: null, height: null, rotate: null, ...NO_TEXT },
-  { name: 'updated', label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', width: null, height: null, rotate: null, ...NO_TEXT },
-  { name: 'complete', label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', width: null, height: null, rotate: null, ...NO_TEXT },
-  { name: 'compilation', label: 'playthrough', drawn: false, color: null, width: null, height: null, rotate: null, ...NO_TEXT },
+  { name: 'vods', label: 'VOD', drawn: false, color: null, width: null, height: null, rotate: null, ...NO_TEXT, ...pageOf('vods', 'VODs') },
+  { name: 'new', label: 'new', drawn: true, color: 'var(--vods-tag-new)', width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PAGE },
+  { name: 'updated', label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PAGE },
+  { name: 'complete', label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PAGE },
+  { name: 'playthroughs', label: 'playthrough', drawn: false, color: null, width: null, height: null, rotate: null, ...NO_TEXT, ...pageOf('playthroughs', 'Playthroughs') },
+  { name: 'compilation', label: 'auto-updating', drawn: false, color: null, width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PAGE },
 ]
 /** Cleaned SVGs by tag name, with the hash that versions their URL. */
 const tagShapes = new Map<string, { svg: string; v: string }>()
 let tagsChanged: { at: string; by: string } | null = null
-let homeCards: Json[] = [{ kind: 'latest' }, { kind: 'tag', tag: 'compilation' }, { kind: 'games' }]
+let homeCards: Json[] = [{ kind: 'latest' }, { kind: 'tag', tag: 'playthroughs' }, { kind: 'games' }]
+/** The archive's site_options.load: a tag card only while its tag is a home category. */
+const shownCards = () => homeCards.filter((c) => !c.tag || siteTags.some((t) => t.name === c.tag && t.page))
 let playDefault = 'segments'
 let optionsChanged: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: null, updatedBy: null }
 const siteTagsOff = () => process.env.MOCK_SITE_TAGS === 'no'
@@ -744,9 +752,12 @@ function checkTags(list: unknown): SiteTag[] | string {
     if (t.textRotate != null && !(Number.isInteger(t.textRotate) && t.textRotate >= -180 && t.textRotate <= 180)) return `${t.name}: textRotate must be -180 to 180`
     const pattern = t.pattern ? { pattern: t.pattern, patternColor: t.patternColor ?? null, patternSize: t.patternSize ?? null } : { pattern: null, patternColor: null, patternSize: null }
     const style = text ? { textColor: t.textColor ?? null, textSize: t.textSize ?? null, textX: t.textX ?? null, textY: t.textY ?? null, textRotate: t.textRotate ?? null } : NO_TEXT
-    out.push({ name: t.name, label: t.label.trim(), drawn: t.drawn, color: t.color ?? null, width: t.width ?? null, height: t.height ?? null, rotate: t.rotate ?? null, ...style, text, ...pattern })
+    const page = typeof t.page === 'string' && t.page ? t.page : null
+    if (page && (t.name === 'vods' ? page !== 'vods' : ['vods', 'live', 'youtube', 'games', 'manage', 'admin', 'playthrough'].includes(page))) return `${t.name}: page ${page} is the site's own`
+    const type = page ? pageOf(page, String(t.pageLabel ?? page)) : NO_PAGE
+    out.push({ name: t.name, label: t.label.trim(), drawn: t.drawn, color: t.color ?? null, width: t.width ?? null, height: t.height ?? null, rotate: t.rotate ?? null, ...style, text, ...pattern, ...type })
   }
-  const gone = ['new', 'updated', 'compilation'].find((name) => !seen.has(name))
+  const gone = ['new', 'updated', 'compilation', 'vods'].find((name) => !seen.has(name))
   if (gone) return `${gone} is set automatically and can't be removed`
   return out
 }
@@ -850,7 +861,10 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
       server.middlewares.use('/backend', (req, res, next) => {
         const tagsPath = (req.url ?? '').split('?')[0]!
         if (tagsPath === '/v1/site/tags' && !siteTagsOff()) return send(res, 200, siteTagsJson(false))
-        if (tagsPath === '/v1/site/options') return send(res, 200, { homeCards, playDefault })
+        if (tagsPath === '/v1/site/options') return send(res, 200, { homeCards: shownCards(), playDefault })
+        // The public archive may predate ADR 0005 (no `vods` or `playthroughs` tags on its VODs): ask it what they
+        // were then, the default list and `compilation`.
+        if (tagsPath === '/vods') req.url = req.url!.replace(/([?&])\$tag=vods(&|$)/, '$1').replace(/([?&]\$tag=)playthroughs(&|$)/, '$1compilation$2')
         const shm = /^\/v1\/site\/tags\/([a-z0-9-]+)\.svg$/.exec(tagsPath)
         if (shm && !siteTagsOff()) {
           const sh = tagShapes.get(shm[1]!)
@@ -1188,7 +1202,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- site options ----
-        if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { homeCards, playDefault, ...optionsChanged })
+        if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { homeCards: shownCards(), playDefault, ...optionsChanged })
         if (path === '/admin/site/options' && method === 'PUT') {
           if (!Array.isArray(b.homeCards)) return fail(res, 400, 'homeCards must be a list of at most 12 cards')
           homeCards = b.homeCards as Json[]
