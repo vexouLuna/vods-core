@@ -71,7 +71,7 @@ const rows = computed(() =>
     vod: f.vod?.title ?? '',
     bytes: f.bytes,
     files: f.files,
-    modified: f.modifiedAt ?? '',
+    modified: f.modified_at ?? '',
     jobs: f.jobs.active.length,
     actions: '',
     folder: f,
@@ -126,7 +126,7 @@ onMounted(() => {
         <div class="disk-head">
           <h2 class="vods-eyebrow">Disk</h2>
           <span class="spacer" />
-          <span class="vods-muted small">Sizes are cached for {{ view.cacheSeconds }} s</span>
+          <span class="vods-muted small">Sizes are cached for {{ view.cache_seconds }} s</span>
           <UiButton size="sm" :loading="loading" @click="load(true)">Refresh</UiButton>
         </div>
         <template v-if="disk">

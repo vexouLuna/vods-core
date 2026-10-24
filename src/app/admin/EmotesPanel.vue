@@ -90,7 +90,7 @@ async function run(name: string, action: () => Promise<{ msg: string; jobId?: nu
           </UiChip>
           <UiChip v-else tone="warn" k="globals">not saved</UiChip>
           <span v-if="data.global_emotes_at" class="vods-muted small" :title="stamp(data.global_emotes_at)">globals from {{ timeAgo(data.global_emotes_at) }}</span>
-          <span v-if="data.updatedAt" class="vods-muted small" :title="stamp(data.updatedAt)">· row updated {{ timeAgo(data.updatedAt) }}</span>
+          <span v-if="data.updated_at" class="vods-muted small" :title="stamp(data.updated_at)">· row updated {{ timeAgo(data.updated_at) }}</span>
         </div>
         <p v-if="empty.length" class="vods-muted small">Empty: {{ empty.join(', ') }}. "Fill missing sets" tries them again.</p>
         <UiTabs v-model="shown" :options="tabs" label="Emote set" class="tabs" />
