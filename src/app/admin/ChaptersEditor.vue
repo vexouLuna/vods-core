@@ -39,9 +39,9 @@ const palette = computed(() => gamePalette(rows.value.map(label)))
         <span class="n vods-mono vods-muted">{{ i + 1 }}</span>
         <GameSearch class="g" :model-value="game(r)" :label="`chapter ${i + 1}`" @update:model-value="setGame(r, $event)" />
         <div class="times">
-          <TimeInput v-model="r.start" :label="`Chapter ${i + 1} start`" :invalid="errors.has(r.key)" />
+          <TimeInput v-model="r.start" seekable :label="`Chapter ${i + 1} start`" :invalid="errors.has(r.key)" />
           <span class="vods-muted" aria-hidden="true">→</span>
-          <TimeInput v-model="r.end" :label="`Chapter ${i + 1} end`" :invalid="errors.has(r.key)" />
+          <TimeInput v-model="r.end" seekable :label="`Chapter ${i + 1} end`" :invalid="errors.has(r.key)" />
           <span class="len vods-mono vods-muted" :title="'Length'">{{ Number.isFinite(r.end - r.start) && r.end > r.start ? toClock(r.end - r.start) : '—' }}</span>
         </div>
         <UiChip v-if="r.kind === 'gap'" class="restricted" title="The stream was down here, between two merged Twitch VODs. Undo the merge to remove it.">stream down</UiChip>
