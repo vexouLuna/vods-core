@@ -5,6 +5,7 @@
 // never its build.
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createHash, randomBytes } from 'node:crypto'
+import { createReadStream, statSync } from 'node:fs'
 import type { Plugin } from 'vite'
 import { isTagColor, TAG_NAME } from '../app/lib/tagRules'
 
@@ -201,14 +202,37 @@ async function body(req: IncomingMessage): Promise<Record<string, unknown>> {
   }
 }
 
+// ---- the preview's server files (twitch-archive's api_v2_media.py): one lease for the whole server ----
+// Every VOD "has" the file at VODS_MOCK_MEDIA (an MP4 on this machine), as its source and its censored file; without
+// it, none has a file, as after a job's cleanup.
+const MEDIA_TTL = 30_000
+let mediaLease: { id: string; holder: Json; acquired: number; beat: number } | null = null
+const mediaFile = () => {
+  const path = process.env.VODS_MOCK_MEDIA
+  try {
+    return path ? { path, size: statSync(path).size, mtime: statSync(path).mtime.toISOString() } : null
+  } catch {
+    return null
+  }
+}
+const freshLease = () => (mediaLease && Date.now() - mediaLease.beat < MEDIA_TTL ? mediaLease : null)
+const holderJson = (l: NonNullable<typeof mediaLease>, mine: string | null) => ({
+  ...l.holder, acquired_at: new Date(l.acquired).toISOString(), heartbeat_at: new Date(l.beat).toISOString(), yours: l.id === mine,
+})
+function browserOf(ua = ''): string {
+  const name = [['Edg/', 'Edge'], ['OPR/', 'Opera'], ['Firefox/', 'Firefox'], ['Chrome/', 'Chrome'], ['Safari/', 'Safari']].find(([k]) => ua.includes(k!))?.[1] ?? 'A browser'
+  const os = [['iPhone', 'iOS'], ['iPad', 'iOS'], ['Android', 'Android'], ['Windows', 'Windows'], ['Mac OS X', 'macOS'], ['Linux', 'Linux']].find(([k]) => ua.includes(k!))?.[1]
+  return os ? `${name} on ${os}` : name
+}
+
 function send(res: ServerResponse, status: number, data?: unknown, headers: Record<string, string> = {}) {
   res.writeHead(status, { 'content-type': 'application/json', ...headers })
   res.end(data === undefined ? undefined : JSON.stringify(data))
 }
 const fail = (res: ServerResponse, status: number, msg: string) => send(res, status, { error: true, msg })
 /** vex-platform's errors: RFC 9457 problem details. */
-const problem = (res: ServerResponse, status: number, code: string, detail: string, errors?: Record<string, unknown>[]) =>
-  send(res, status, { type: 'about:blank', title: code, status, detail, code, ...(errors ? { errors } : {}) }, { 'content-type': 'application/problem+json' })
+const problem = (res: ServerResponse, status: number, code: string, detail: string, errors?: Record<string, unknown>[], extra: Record<string, unknown> = {}) =>
+  send(res, status, { type: 'about:blank', title: code, status, detail, code, ...(errors ? { errors } : {}), ...extra }, { 'content-type': 'application/problem+json' })
 const ok = (res: ServerResponse, msg: string, job?: Job) => send(res, 200, { error: false, msg, jobId: job?.id })
 
 // ---- VODs: real ones from the public archive API, edited in memory ----
@@ -1005,6 +1029,46 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             cancel_mode: k.cooperative ? 'cooperative' : 'interrupt', max_attempts: 3,
           })))
 
+        // ---- the preview's server files and their lease ----
+        const mm = /^\/api\/v2\/vods\/([^/]+)\/media(?:\/(source|covered|censored))?$/.exec(path)
+        if (mm && method === 'GET') {
+          const f = mediaFile()
+          const lease = url.searchParams.get('lease')
+          if (!mm[2]) {
+            const items = f ? (['source', 'censored'] as const).map((name) => ({ name, label: name === 'source' ? 'Source (uncensored)' : 'Censored', size: f.size, modified_at: f.mtime })) : []
+            const l = freshLease()
+            return send(res, 200, { items, lease: l ? holderJson(l, lease) : null, keep_mp4: false, keep_files_days: 3 })
+          }
+          const l = freshLease()
+          if (!l || l.id !== lease) return problem(res, 410, 'lease_lost', "This tab doesn't hold the server's video files", undefined, { holder: l ? holderJson(l, null) : null })
+          if (!f) return problem(res, 404, 'media_not_found', `no ${mm[2]} file on the server`)
+          const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''))
+          const start = m?.[1] ? Number(m[1]) : m?.[2] ? Math.max(0, f.size - Number(m[2])) : 0
+          const end = m?.[1] && m[2] ? Math.min(Number(m[2]), f.size - 1) : f.size - 1
+          res.writeHead(m ? 206 : 200, { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'content-length': String(end - start + 1), ...(m ? { 'content-range': `bytes ${start}-${end}/${f.size}` } : {}) })
+          return void createReadStream(f.path, { start, end }).pipe(res)
+        }
+        if (path === '/api/v2/media/lease' && method === 'POST') {
+          const id = String(b.lease_id ?? '')
+          if (!/^[A-Za-z0-9_-]{16,64}$/.test(id)) return problem(res, 422, 'invalid_lease', 'lease_id must be 16-64 letters, digits, - or _')
+          const l = freshLease()
+          if (l && l.id !== id && !b.take_over) return problem(res, 409, 'media_in_use', "Another tab is using the server's video files", undefined, { holder: holderJson(l, null) })
+          const now = Date.now()
+          const holder = { login: s.user?.login ?? null, kind: s.user ? 'twitch' : 'password', browser: browserOf(req.headers['user-agent']), vod_id: b.vod_id ?? null, file: b.file ?? null }
+          mediaLease = { id, holder, acquired: l?.id === id ? l.acquired : now, beat: now }
+          return send(res, 200, holderJson(mediaLease, id))
+        }
+        const ml = /^\/api\/v2\/media\/lease\/([^/]+)$/.exec(path)
+        if (ml && method === 'PUT') {
+          if (!mediaLease || mediaLease.id !== ml[1]) return problem(res, 410, 'lease_lost', "Another tab took the server's video files", undefined, { holder: freshLease() ? holderJson(freshLease()!, null) : null })
+          mediaLease.beat = Date.now()
+          return send(res, 204)
+        }
+        if (ml && method === 'DELETE') {
+          if (mediaLease?.id === ml[1]) mediaLease = null
+          return send(res, 204)
+        }
+
         // ---- VOD list (every VOD, hidden and merged ones too) ----
         if (path === '/admin/vods' && method === 'GET') {
           const before = url.searchParams.get('before')
@@ -1543,11 +1607,15 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
                 if (!Number.isFinite(start) || start < 0) return fail(res, 400, `censor[${i}].start must be a number of seconds >= 0`)
                 if (!Number.isFinite(end) || end <= start) return fail(res, 400, `censor[${i}] must end after it starts`)
                 if (dur > 0 && end > dur + 1) return fail(res, 400, `censor[${i}] ends at ${end}s, after the end of the VOD (${dur}s)`)
-                if (![null, 'blur', 'black'].includes(c.video ?? null)) return fail(res, 400, `censor[${i}].video must be blur, black or null`)
+                if (![null, 'blur', 'black', 'pixelate', 'color'].includes(c.video ?? null)) return fail(res, 400, `censor[${i}].video must be blur, black, pixelate, color or null`)
+                if (c.video === 'color' && !/^#[0-9a-f]{6}$/i.test(String(c.color))) return fail(res, 400, `censor[${i}].color must be #rrggbb`)
+                const r = c.region as Json | undefined
+                if (r && (!c.video || ![r.x, r.y, r.w, r.h].every(Number.isFinite) || r.x < 0 || r.y < 0 || r.w < 0.01 || r.h < 0.01 || r.x + r.w > 1 || r.y + r.h > 1))
+                  return fail(res, 400, `censor[${i}].region must be a box inside the frame, on a range that covers the video`)
                 if (typeof c.mute !== 'boolean') return fail(res, 400, `censor[${i}].mute must be true or false`)
                 if (!c.video && !c.mute) return fail(res, 400, `censor[${i}] neither covers the video nor mutes`)
                 const note = typeof c.note === 'string' && c.note.trim() ? c.note.trim() : undefined
-                out.push({ start, end, video: c.video ?? null, mute: c.mute, ...(note ? { note } : {}) })
+                out.push({ start, end, video: c.video ?? null, ...(c.video === 'color' ? { color: String(c.color).toLowerCase() } : {}), ...(r ? { region: r } : {}), mute: c.mute, ...(note ? { note } : {}) })
               }
               vod.censor = out.sort((x, y) => x.start - y.start || x.end - y.end)
               return send(res, 200, adminVod(vod))
