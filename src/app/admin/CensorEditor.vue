@@ -4,7 +4,7 @@
 // keep what they had until the VOD is re-archived (the actions above).
 import { useToast } from '@vex/ui/utils'
 import type { Option } from '@vex/ui'
-import { computed, onBeforeUnmount, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, watch, watchEffect } from 'vue'
 import { toClock } from '../../index'
 import type { AdminVod } from './api'
 import { CENSOR_NOTE_MAX, censorDrafts, censorEdits, censorErrors, censoredSeconds, duplicateCensor, newCensor, type CensorDraft, type CensorVideo } from './edits'
@@ -15,7 +15,7 @@ import TimeInput from './TimeInput.vue'
 import { useDraftEditor } from './useDraftEditor'
 
 const props = defineProps<{ vod: AdminVod; duration: number }>()
-const emit = defineEmits<{ saved: [vod: AdminVod] }>()
+const emit = defineEmits<{ saved: [vod: AdminVod]; draft: [rows: number, dirty: boolean] }>()
 const toast = useToast()
 
 const VIDEO: Option<CensorVideo>[] = [
@@ -37,7 +37,10 @@ const { rows, error, saving, dirty, errors, reset, save, remove } = useDraftEdit
   },
 })
 
-// The preview above draws and edits the selected range's box: it gets the same draft rows.
+// The Timeline workbench's tab shows the row count and marks unsaved changes.
+watch([() => rows.value.length, dirty], ([n, d]) => emit('draft', n, d), { immediate: true })
+
+// The preview beside it draws and edits the selected range's box: it gets the same draft rows.
 const preview = usePreview()
 watchEffect(() => preview && (preview.censor.value = rows.value))
 onBeforeUnmount(() => preview && ((preview.censor.value = null), (preview.selected.value = null)))
