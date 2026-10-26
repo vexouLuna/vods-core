@@ -1132,9 +1132,11 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           }
           if ('tags' in b) {
             if (!Array.isArray(b.tags)) return problem(res, 422, 'invalid_vod', 'tags must be a list')
-            vod.tags = [...new Set((b.tags as unknown[]).map((t) => String(t).trim()).filter(Boolean))]
+            // A synthetic VOD's row is its Synth (vodOf hands back a copy).
+            ;(synthetics.get(id) ?? vod).tags = [...new Set((b.tags as unknown[]).map((t) => String(t).trim()).filter(Boolean))]
           }
-          return send(res, 200, { id, title: vod.title ?? null, hidden: hidden.has(id), tags: vod.tags ?? [] })
+          const tags = synthetics.get(id)?.tags ?? vod.tags ?? []
+          return send(res, 200, { id, title: vod.title ?? null, hidden: hidden.has(id), tags })
         }
 
         // ---- synthetic VODs (/api/v2/synthetic) ----
