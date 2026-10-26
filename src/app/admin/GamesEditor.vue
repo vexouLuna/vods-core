@@ -73,38 +73,37 @@ const sortRows = () => (rows.value = [...rows.value].sort((a, b) => a.start - b.
       row-height="60px"
       @retry="load"
     >
+      <EditorRows
+        :rows="rows"
+        :errors="errors"
+        :error="error"
+        error-title="Couldn't save the games"
+        empty-text="No games rows: this VOD isn't on any game's page. Add one, or copy them from the chapters."
+        :dirty="dirty"
+        :saving="saving"
+        save-label="Save games"
+        @undo="reset"
+        @save="save"
+      >
+        <TimeStrip :segments="segments" :total="total" :label="`${rows.length} games over ${toClock(total)}`" />
+        <template #row="{ row: r, index: i }">
+          <span class="n vods-mono vods-muted">{{ i + 1 }}</span>
+          <GameSearch class="g" :model-value="game(r)" :label="`games row ${i + 1}`" :invalid="!r.name" @update:model-value="setGame(r, $event)" />
+          <div class="times">
+            <TimeInput v-model="r.start" seekable :label="`Games row ${i + 1} start`" :invalid="errors.has(r.key)" />
+            <span class="vods-muted" aria-hidden="true">→</span>
+            <TimeInput v-model="r.end" seekable :label="`Games row ${i + 1} end`" :invalid="errors.has(r.key)" />
+            <span class="len vods-mono vods-muted" title="Length">{{ Number.isFinite(r.end - r.start) && r.end > r.start ? toClock(r.end - r.start) : '—' }}</span>
+          </div>
+          <UiButton class="rm" variant="ghost" icon :label="`Remove games row ${i + 1}`" @click="remove(r)">×</UiButton>
+        </template>
+        <template #actions>
+          <UiButton @click="add">+ Add row</UiButton>
+          <UiButton variant="ghost" :disabled="!vod.chapters?.length" @click="fromChapters">Copy from chapters</UiButton>
+          <UiButton v-if="!sorted" variant="ghost" @click="sortRows">Sort by start</UiButton>
+        </template>
+      </EditorRows>
     </UiLoadState>
-    <EditorRows
-      v-else
-      :rows="rows"
-      :errors="errors"
-      :error="error"
-      error-title="Couldn't save the games"
-      empty-text="No games rows: this VOD isn't on any game's page. Add one, or copy them from the chapters."
-      :dirty="dirty"
-      :saving="saving"
-      save-label="Save games"
-      @undo="reset"
-      @save="save"
-    >
-      <TimeStrip :segments="segments" :total="total" :label="`${rows.length} games over ${toClock(total)}`" />
-      <template #row="{ row: r, index: i }">
-        <span class="n vods-mono vods-muted">{{ i + 1 }}</span>
-        <GameSearch class="g" :model-value="game(r)" :label="`games row ${i + 1}`" :invalid="!r.name" @update:model-value="setGame(r, $event)" />
-        <div class="times">
-          <TimeInput v-model="r.start" seekable :label="`Games row ${i + 1} start`" :invalid="errors.has(r.key)" />
-          <span class="vods-muted" aria-hidden="true">→</span>
-          <TimeInput v-model="r.end" seekable :label="`Games row ${i + 1} end`" :invalid="errors.has(r.key)" />
-          <span class="len vods-mono vods-muted" title="Length">{{ Number.isFinite(r.end - r.start) && r.end > r.start ? toClock(r.end - r.start) : '—' }}</span>
-        </div>
-        <UiButton class="rm" variant="ghost" icon :label="`Remove games row ${i + 1}`" @click="remove(r)">×</UiButton>
-      </template>
-      <template #actions>
-        <UiButton @click="add">+ Add row</UiButton>
-        <UiButton variant="ghost" :disabled="!vod.chapters?.length" @click="fromChapters">Copy from chapters</UiButton>
-        <UiButton v-if="!sorted" variant="ghost" @click="sortRows">Sort by start</UiButton>
-      </template>
-    </EditorRows>
   </div>
 </template>
 
