@@ -742,9 +742,14 @@ let siteTags: SiteTag[] = [
 /** Cleaned SVGs by tag name, with the hash that versions their URL. */
 const tagShapes = new Map<string, { svg: string; v: string }>()
 let tagsChanged: { at: string; by: string } | null = null
-let homeCards: Json[] = [{ kind: 'latest' }, { kind: 'tag', tag: 'playthroughs' }, { kind: 'games' }]
-/** The archive's site_options.load: a tag card only while its tag is a home category. */
-const shownCards = () => homeCards.filter((c) => !c.tag || siteTags.some((t) => t.name === c.tag && t.page))
+/** The homepage cards in the archive's per-card shape; `homeCards` (the old `{kind, tag}`) is served alongside. */
+let cards: Json[] = [{ id: 'c0', type: 'live' }, { id: 'c1', type: 'vods', tag: 'playthroughs', count: 2 }, { id: 'c2', type: 'games' }]
+/** The archive's site_options.load: a tag card only while its tag is a home category (`vods` always). */
+const shownCards = () => cards.filter((c) => c.type !== 'vods' || c.tag === 'vods' || siteTags.some((t) => t.name === c.tag && t.page))
+const oldCards = (cs: Json[]) => cs.map((c) => (c.type === 'live' ? { kind: 'latest' } : c.type === 'games' ? { kind: 'games' } : { kind: c.count === 1 ? 'one' : 'tag', tag: c.tag }))
+const newCards = (cs: Json[]) =>
+  cs.map((c, i) => (c.kind === 'latest' ? { id: `c${i}`, type: 'live' } : c.kind === 'games' ? { id: `c${i}`, type: 'games' } : { id: `c${i}`, type: 'vods', tag: c.tag, count: c.kind === 'one' ? 1 : 2 }))
+const optionsJson = (cs: Json[]) => ({ homeCards: oldCards(cs), cards: cs, playDefault })
 let playDefault = 'segments'
 let optionsChanged: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: null, updatedBy: null }
 const siteTagsOff = () => process.env.MOCK_SITE_TAGS === 'no'
@@ -892,7 +897,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
       server.middlewares.use('/backend', (req, res, next) => {
         const tagsPath = (req.url ?? '').split('?')[0]!
         if (tagsPath === '/v1/site/tags' && !siteTagsOff()) return send(res, 200, siteTagsJson(false))
-        if (tagsPath === '/v1/site/options') return send(res, 200, { homeCards: shownCards(), playDefault })
+        if (tagsPath === '/v1/site/options') return send(res, 200, optionsJson(shownCards()))
         // The public archive may predate ADR 0005 (no `vods` or `playthroughs` tags on its VODs): ask it what they
         // were then, the default list and `compilation`.
         if (tagsPath === '/vods') req.url = req.url!.replace(/([?&])\$tag=vods(&|$)/, '$1').replace(/([?&]\$tag=)playthroughs(&|$)/, '$1compilation$2')
@@ -1283,13 +1288,17 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- site options ----
-        if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { homeCards: shownCards(), playDefault, ...optionsChanged })
+        if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { ...optionsJson(cards), ...optionsChanged })
         if (path === '/admin/site/options' && method === 'PUT') {
-          if (!Array.isArray(b.homeCards)) return fail(res, 400, 'homeCards must be a list of at most 12 cards')
-          homeCards = b.homeCards as Json[]
+          // Only the options sent change; cards come as `cards` or the old `homeCards`, never both.
+          if ('cards' in b && 'homeCards' in b) return fail(res, 400, 'Send cards or homeCards, not both')
+          const sent = 'cards' in b ? b.cards : 'homeCards' in b ? b.homeCards : undefined
+          if (sent !== undefined && (!Array.isArray(sent) || sent.length > 12)) return fail(res, 400, 'cards must be a list of at most 12 cards')
+          const next = Array.isArray(sent) ? ('cards' in b ? (sent as Json[]).map((c, i) => ({ ...c, id: c.id || `n${i}` })) : newCards(sent as Json[])) : cards
+          cards = next
           if (b.playDefault === 'segments' || b.playDefault === 'compiled') playDefault = b.playDefault
           optionsChanged = { updatedAt: iso(), updatedBy: s.user ? `twitch:${s.user.id}` : 'password' }
-          return send(res, 200, { homeCards, playDefault, ...optionsChanged })
+          return send(res, 200, { ...optionsJson(cards), ...optionsChanged })
         }
 
         // ---- site tags ----
