@@ -15,7 +15,7 @@ import TimeInput from './TimeInput.vue'
 import { useDraftEditor } from './useDraftEditor'
 
 const props = defineProps<{ vod: AdminVod; duration: number }>()
-const emit = defineEmits<{ saved: [vod: AdminVod]; dirty: [dirty: boolean] }>()
+const emit = defineEmits<{ saved: [vod: AdminVod]; draft: [rows: number, dirty: boolean] }>()
 const toast = useToast()
 
 const VIDEO: Option<CensorVideo>[] = [
@@ -37,8 +37,8 @@ const { rows, error, saving, dirty, errors, reset, save, remove } = useDraftEdit
   },
 })
 
-// The Timeline workbench marks the tab of an editor with unsaved changes.
-watch(dirty, (d) => emit('dirty', d))
+// The Timeline workbench's tab shows the row count and marks unsaved changes.
+watch([() => rows.value.length, dirty], ([n, d]) => emit('draft', n, d), { immediate: true })
 
 // The preview beside it draws and edits the selected range's box: it gets the same draft rows.
 const preview = usePreview()

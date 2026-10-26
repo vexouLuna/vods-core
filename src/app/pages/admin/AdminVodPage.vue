@@ -5,7 +5,7 @@
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import type { Option } from '@vex/ui'
 import { useRoute, useRouter } from 'vue-router'
 import { isSpliced, type AdminVod } from '../../admin/api'
@@ -88,7 +88,12 @@ async function setHidden(hidden: boolean) {
 // The Timeline workbench's tabs. A link to #censor (the censor review) opens that tab.
 type TimelineTab = 'chapters' | 'games' | 'censor'
 const tab = ref<TimelineTab>(route.hash === '#censor' ? 'censor' : 'chapters')
-const dirty = ref<Record<TimelineTab, boolean>>({ chapters: false, games: false, censor: false })
+// Each editor's row count and whether it has unsaved changes. `saved` is the count while it was last clean, so a
+// draft reads "Chapters 12 → 13 •".
+const drafts = ref<Partial<Record<TimelineTab, { saved: number; rows: number; dirty: boolean }>>>({})
+function draft(t: TimelineTab, rows: number, dirty: boolean) {
+  drafts.value[t] = { saved: dirty ? (drafts.value[t]?.saved ?? rows) : rows, rows, dirty }
+}
 const tabs = computed<Option<TimelineTab>[]>(() =>
   (
     [
@@ -96,8 +101,24 @@ const tabs = computed<Option<TimelineTab>[]>(() =>
       ['games', 'Games'],
       ['censor', 'Censor'],
     ] as const
-  ).map(([value, label]) => (dirty.value[value] ? { value, label: `${label} •` } : { value, label })),
+  ).map(([value, label]) => {
+    const d = drafts.value[value]
+    if (!d) return { value, label }
+    if (!d.dirty) return { value, label: `${label} ${d.rows}` }
+    return { value, label: `${label} ${d.saved === d.rows ? d.rows : `${d.saved} → ${d.rows}`} •` }
+  }),
 )
+// The router doesn't scroll to a hash: a link to #censor lands on the Timeline panel once the VOD has loaded.
+watch(
+  vod,
+  async () => {
+    if (route.hash !== '#censor') return
+    await nextTick()
+    document.getElementById('timeline')?.scrollIntoView({ block: 'start' })
+  },
+  { once: true },
+)
+
 // The censor box being edited is only drawn while its editor is showing.
 watch(tab, (t) => t !== 'censor' && (preview.selected.value = null))
 
@@ -209,13 +230,13 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
               <div class="editors">
                 <UiTabs v-model="tab" :options="tabs" label="Timeline editor" class="tabs" />
                 <div v-show="tab === 'chapters'" role="tabpanel" aria-label="Chapters">
-                  <ChaptersEditor :vod="vod" :duration="duration" @saved="saved" @dirty="dirty.chapters = $event" />
+                  <ChaptersEditor :vod="vod" :duration="duration" @saved="saved" @draft="(rows, dirty) => draft('chapters', rows, dirty)" />
                 </div>
                 <div v-show="tab === 'games'" role="tabpanel" aria-label="Games">
-                  <GamesEditor :vod="vod" :duration="duration" @saved="saved" @dirty="dirty.games = $event" />
+                  <GamesEditor :vod="vod" :duration="duration" @saved="saved" @draft="(rows, dirty) => draft('games', rows, dirty)" />
                 </div>
                 <div v-show="tab === 'censor'" role="tabpanel" aria-label="Censor">
-                  <CensorEditor :vod="vod" :duration="duration" @saved="saved" @dirty="dirty.censor = $event" />
+                  <CensorEditor :vod="vod" :duration="duration" @saved="saved" @draft="(rows, dirty) => draft('censor', rows, dirty)" />
                 </div>
               </div>
             </div>
@@ -256,6 +277,7 @@ h2 { margin: 0 0 12px; }
 .visibility label { cursor: pointer; }
 /* Phones: the preview sticks to the top edge, its picture shorter, over the editor scrolling under it. Wide screens: a
    sticky left column beside the editor. align-items: start keeps the column short enough to stick. */
+#timeline { scroll-margin-top: 16px; }
 .workbench { display: grid; gap: 14px; align-items: start; }
 .preview { position: sticky; top: 0; z-index: 2; padding-block: 6px; background: var(--vods-bg); }
 .preview :deep(.stage) { max-height: 20vh; }

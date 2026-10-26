@@ -13,14 +13,14 @@ import TimeStrip from './TimeStrip.vue'
 import { useChaptersDraft } from '../composables/useChaptersDraft'
 
 const props = defineProps<{ vod: AdminVod; duration: number }>()
-const emit = defineEmits<{ saved: [vod: AdminVod]; dirty: [dirty: boolean] }>()
+const emit = defineEmits<{ saved: [vod: AdminVod]; draft: [rows: number, dirty: boolean] }>()
 const toast = useToast()
 
 const { rows, error, saving, dirty, errors, reset, save, remove, locked, gaps, sorted, label, total, game, setGame, add, split, sortRows } =
   useChaptersDraft(props, { saved: (vod) => emit('saved', vod), notify: (message, options) => toast.show(message, options) })
 
-// The Timeline workbench marks the tab of an editor with unsaved changes.
-watch(dirty, (d) => emit('dirty', d))
+// The Timeline workbench's tab shows the row count and marks unsaved changes.
+watch([() => rows.value.length, dirty], ([n, d]) => emit('draft', n, d), { immediate: true })
 const palette = computed(() => gamePalette(rows.value.map(label)))
 const segments = computed(() =>
   rows.value.map((r) => ({ ...r, label: label(r), color: palette.value.get(label(r)), bad: errors.value.has(r.key) })),
