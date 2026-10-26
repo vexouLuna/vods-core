@@ -999,9 +999,10 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           return send(res, 200, {
             worker: { ok: true, runningJobs: jobs.filter((j) => j.state === 'running').length, startedAt: iso(3 * 86400_000) },
             api: { ok: true },
-            youtube: { authorized: true, valid: true, error: null, checkedAt: iso(4 * 60_000), channel: { id: 'UCmock', title: 'vexoul VODs', url: 'https://www.youtube.com/@vexoul' }, connectedAt: iso(3 * 86_400_000), refreshTokenExpiresAt: null, quota: quotaJson() },
+            youtube: { authorized: true, valid: true, error: null, checkedAt: iso(4 * 60_000), channel: { id: 'UCmock', title: 'vexoul VODs', url: 'https://www.youtube.com/@vexoul', status: { longUploadsStatus: 'allowed', isLinked: true, privacyStatus: 'public' } }, grantedScopes: ['https://www.googleapis.com/auth/youtube'], connectedAt: iso(3 * 86_400_000), refreshTokenExpiresAt: null, quota: quotaJson() },
             live: { live: false, streamId: null, startedAt: null },
             twitchViewer: viewerStatus(),
+            twitchApp: { configured: true, clientId: 'k3x9…q7wz', tokenOk: true, error: null },
             doomtp: { configured: true, keyed: true, login: 'vexouluna', ok: true, listening: true, since: iso(26 * 3_600_000), error: null, checkedAt: iso(30_000) },
             jobs: { counts: counts() },
           })

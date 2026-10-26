@@ -15,6 +15,8 @@ import {
   splitProblems,
   stuckLine,
   stuckVods,
+  twitchAppLine,
+  uploadStandingLine,
   youtubeCheckLine,
   youtubeCheckMessage,
 } from '../../admin/health'
@@ -93,6 +95,9 @@ const tiles = computed(() => {
   if (!h) return []
   const yt = h.youtube
   const bot = h.doomtp ? doomtpLine(h.doomtp, timeAgo) : null
+  const app = h.twitchApp ? twitchAppLine(h.twitchApp) : null
+  // Whether YouTube lets the channel upload; a refused upload's job error points here.
+  const standing = yt?.authorized && yt.valid ? uploadStandingLine(yt) : null
   return [
     {
       name: 'Worker',
@@ -108,6 +113,7 @@ const tiles = computed(() => {
       // The channel uploads go to, so a wrong account is caught before a job uploads there.
       link: yt?.channel ? { text: yt.channel.title, href: yt.channel.url } : undefined,
       age: yt?.authorized ? tokenAge(yt) : undefined,
+      standing: standing ?? undefined,
       sub: yt?.error ?? (yt?.checkedAt ? `checked ${timeAgo(yt.checkedAt)}` : ''),
       action: !yt ? undefined : yt.authorized && yt.valid ? 'switch' : 'connect',
     },
@@ -119,6 +125,8 @@ const tiles = computed(() => {
     },
     // doomtp-bot, where bot chat comes from; a worker from before it leaves `doomtp` out.
     ...(bot ? [{ name: 'DTP bot', status: bot.status as Dot, text: bot.text, sub: bot.sub }] : []),
+    // The app behind the censor check (IGDB), not the ad-free account below; a worker from before it leaves it out.
+    ...(app ? [{ name: 'Twitch app', status: app.status as Dot, text: app.text, sub: app.sub }] : []),
   ]
 })
 
@@ -198,6 +206,10 @@ async function connectYoutube() {
           <UiStatTile v-for="t in tiles" :key="t.name" :label="t.name" :status="t.status" :headline="t.text" :sub="t.sub">
             <a v-if="t.link" class="tile-link small" :href="t.link.href" target="_blank" rel="noopener">{{ t.link.text }}</a>
             <div v-if="t.age" class="small" :class="t.age.soon ? 'tile-soon' : 'vods-muted'">{{ t.age.text }}</div>
+            <div v-if="t.standing" class="small standing" :class="t.standing.warn ? 'tile-soon' : 'vods-muted'" title="What decides whether YouTube accepts an upload">
+              <div>Uploads: {{ t.standing.text }}</div>
+              <div>{{ t.standing.sub }}</div>
+            </div>
             <UiButton v-if="t.action === 'connect'" @click="connectYoutube">Connect YouTube</UiButton>
             <UiButton v-else-if="t.action === 'switch'" size="sm" title="Connect a different Google account or channel" @click="connectYoutube">Switch account</UiButton>
           </UiStatTile>
@@ -260,6 +272,7 @@ async function connectYoutube() {
 .tile-link:hover { color: var(--vods-ink); }
 .tile-soon { color: var(--vods-warn); }
 .small { font-size: 12px; }
+.standing { overflow-wrap: anywhere; }
 section { margin-bottom: 28px; }
 h2 { margin: 0 0 10px; }
 .counts { display: flex; flex-wrap: wrap; gap: 8px; }
