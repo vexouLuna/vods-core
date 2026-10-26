@@ -293,7 +293,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.states { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 1px 3px; margin-right: 2px; border: 1px dashed var(--vods-line); border-radius: 999px; vertical-align: middle; }
+.states { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 1px 3px; margin-right: 2px; border: 1px dashed var(--vods-muted); border-radius: 999px; vertical-align: middle; }
 a { color: inherit; }
 .search { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .search { align-items: center; }
