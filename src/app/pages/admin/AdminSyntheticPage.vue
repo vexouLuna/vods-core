@@ -422,6 +422,6 @@ a { color: inherit; }
 .other { margin-bottom: 12px; }
 .other summary { cursor: pointer; }
 .acts { display: flex; gap: 2px; }
-.save { display: flex; flex-wrap: wrap; gap: 8px; }
+.save { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .srcs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 </style>
