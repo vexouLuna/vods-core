@@ -200,7 +200,10 @@ export function tagChanges(saved: RawTag[], drafts: TagDraft[]) {
   const now = body.map((t) => JSON.stringify(t))
   const changed = now.join() !== was.join()
   const count = changed ? Math.max(1, now.filter((t) => !was.includes(t)).length + Math.max(0, was.length - now.length)) : 0
-  return { body, errors, changed, count }
+  /** The drafts that differ from their saved tag (by name; a new one always does), for the rows' unsaved dot. */
+  const savedByName = new Map(saved.map((t) => [t.name, JSON.stringify(inputOf(t))]))
+  const dirty = new Set(drafts.filter((d, i) => !d.saved || savedByName.get(body[i]!.name) !== now[i]).map((d) => d.key))
+  return { body, errors, changed, count, dirty }
 }
 
 /** How a draft shows in the preview, with its saved shape resolved against the public API. */
