@@ -133,7 +133,10 @@ function whole(value: Typed, range: { min: number; max: number }, bad: () => voi
   return n
 }
 
-/** The list to save, the problems by draft key and field, and whether anything differs from `saved`. */
+/**
+ * The list to save, the problems by draft key and field, whether anything differs from `saved`, and how many changes
+ * that is (tags added, edited or removed; a new order alone counts as one).
+ */
 export function tagChanges(saved: RawTag[], drafts: TagDraft[]) {
   const errors = new Map<number, Partial<Record<TagField, string>>>()
   const flag = (key: number, field: TagField, msg: string) => errors.set(key, { ...errors.get(key), [field]: msg })
@@ -193,8 +196,11 @@ export function tagChanges(saved: RawTag[], drafts: TagDraft[]) {
       textRotate: whole(d.textRotate, TAG_TEXT_ROTATE, () => flag(d.key, 'textRotate', `${TAG_TEXT_ROTATE.min} to ${TAG_TEXT_ROTATE.max}°`)),
     }
   })
-  const changed = JSON.stringify(body) !== JSON.stringify(saved.map(inputOf))
-  return { body, errors, changed }
+  const was = saved.map((t) => JSON.stringify(inputOf(t)))
+  const now = body.map((t) => JSON.stringify(t))
+  const changed = now.join() !== was.join()
+  const count = changed ? Math.max(1, now.filter((t) => !was.includes(t)).length + Math.max(0, was.length - now.length)) : 0
+  return { body, errors, changed, count }
 }
 
 /** How a draft shows in the preview, with its saved shape resolved against the public API. */

@@ -10,6 +10,8 @@ import type {
   VxChapterBar,
   VxCheckbox,
   VxChip,
+  VxConfirm,
+  VxDateInput,
   VxDateRange,
   VxDialog,
   VxEmptyState,
@@ -17,21 +19,27 @@ import type {
   VxInput,
   VxKbd,
   VxLink,
+  VxLoadState,
   VxMenuItem,
+  VxNavBar,
+  VxPageHead,
   VxPlaceholder,
   VxPopover,
   VxPosters,
   VxProgress,
+  VxSaveBar,
   VxSegmented,
   VxSelect,
   VxSkeleton,
   VxSlider,
   VxSpinner,
+  VxStatTile,
   VxStatusDot,
   VxStepper,
   VxSwitch,
   VxTable,
   VxTabs,
+  VxTextarea,
   VxTooltip,
 } from '@vex/ui'
 
@@ -50,6 +58,8 @@ export interface VodsUiComponents {
   ChapterBar: typeof VxChapterBar
   Checkbox: typeof VxCheckbox
   Chip: typeof VxChip
+  Confirm: typeof VxConfirm
+  DateInput: typeof VxDateInput
   DateRange: typeof VxDateRange
   Dialog: typeof VxDialog
   EmptyState: typeof VxEmptyState
@@ -57,22 +67,28 @@ export interface VodsUiComponents {
   Input: typeof VxInput
   Kbd: typeof VxKbd
   Link: typeof VxLink
+  LoadState: typeof VxLoadState
   MenuItem: typeof VxMenuItem
+  NavBar: typeof VxNavBar
+  PageHead: typeof VxPageHead
   Placeholder: typeof VxPlaceholder
   Popover: typeof VxPopover
   Posters: typeof VxPosters
   Progress: typeof VxProgress
+  SaveBar: typeof VxSaveBar
   Segmented: typeof VxSegmented
   Select: typeof VxSelect
   Shell: UiShellComponent
   Skeleton: typeof VxSkeleton
   Slider: typeof VxSlider
   Spinner: typeof VxSpinner
+  StatTile: typeof VxStatTile
   StatusDot: typeof VxStatusDot
   Stepper: typeof VxStepper
   Switch: typeof VxSwitch
   Table: typeof VxTable
   Tabs: typeof VxTabs
+  Textarea: typeof VxTextarea
   Tooltip: typeof VxTooltip
 }
 
@@ -90,9 +106,10 @@ declare module 'vue' {
 }
 
 const KEYS: (keyof VodsUiComponents)[] = [
-  'AccountMenu', 'Button', 'Callout', 'ChapterBar', 'Checkbox', 'Chip', 'DateRange', 'Dialog', 'EmptyState', 'Field',
-  'Input', 'Kbd', 'Link', 'MenuItem', 'Placeholder', 'Popover', 'Posters', 'Progress', 'Segmented', 'Select', 'Shell',
-  'Skeleton', 'Slider', 'Spinner', 'StatusDot', 'Stepper', 'Switch', 'Table', 'Tabs', 'Tooltip',
+  'AccountMenu', 'Button', 'Callout', 'ChapterBar', 'Checkbox', 'Chip', 'Confirm', 'DateInput', 'DateRange',
+  'Dialog', 'EmptyState', 'Field', 'Input', 'Kbd', 'Link', 'LoadState', 'MenuItem', 'NavBar', 'PageHead',
+  'Placeholder', 'Popover', 'Posters', 'Progress', 'SaveBar', 'Segmented', 'Select', 'Shell', 'Skeleton', 'Slider',
+  'Spinner', 'StatTile', 'StatusDot', 'Stepper', 'Switch', 'Table', 'Tabs', 'Textarea', 'Tooltip',
 ]
 
 /** Registers the site's controls as Ui*; throws naming any that are missing (a plain-JS site skips the type check). */

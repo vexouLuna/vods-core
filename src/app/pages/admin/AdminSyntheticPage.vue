@@ -230,97 +230,103 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
     <p class="back"><RouterLink to="/manage/vods?synthetic=true">← Synthetic VODs</RouterLink></p>
 
     <UiCallout v-if="notFound" tone="warn" title="No such synthetic VOD">The archive has no synthetic VOD {{ id }}.</UiCallout>
-    <UiCallout v-else-if="loadError" tone="error" title="Couldn't load it">
-      {{ loadError }}
-      <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
-    </UiCallout>
-    <div v-else-if="!isNew && !vod" class="sk" aria-busy="true"><UiSkeleton h="90px" /><UiSkeleton h="200px" /></div>
-
-    <form v-else @submit.prevent="save">
-      <section v-if="vod" class="panel vods-panel vx-glass-rim">
-        <dl class="facts">
-          <div><dt>Length</dt><dd class="vods-mono">{{ vod.duration ?? '—' }}</dd></div>
-          <div><dt>Streamed</dt><dd>{{ when(vod.created_at) }}</dd></div>
-          <div><dt>Made</dt><dd :title="when(vod.made_at)">{{ vod.made_at ? timeAgo(vod.made_at) : '—' }}</dd></div>
-          <div><dt>Changed</dt><dd :title="when(vod.changed_at)">{{ vod.changed_at ? timeAgo(vod.changed_at) : '—' }}</dd></div>
-          <div v-if="vod.compiled"><dt>Compiled</dt><dd><UiChip :tone="vod.compiled.outdated ? 'warn' : 'ok'">{{ vod.compiled.outdated ? 'outdated: the segments changed' : 'up to date' }}</UiChip></dd></div>
-          <div><dt>Visibility</dt><dd><UiChip :tone="vod.hidden ? 'warn' : 'ok'">{{ vod.hidden ? 'hidden' : 'public' }}</UiChip></dd></div>
-        </dl>
-        <p class="vods-muted small">Hide it, or change its chapters and the like, on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>
-        <div v-if="sources.length" class="srcs">
-          <span class="small">
-            Sources:
-            <template v-if="hiddenSources">{{ hiddenSources.size }} of {{ sources.length }} hidden</template>
-            <template v-else>{{ sources.length }}</template>
-          </span>
-          <UiButton size="sm" :loading="sourcesBusy" :disabled="!hiddenSources || hiddenSources.size === sources.length" title="They leave the lists; their links lead here" @click="setSources(true)">Hide all sources</UiButton>
-          <UiButton size="sm" :loading="sourcesBusy" :disabled="!hiddenSources || hiddenSources.size === 0" @click="setSources(false)">Show all sources</UiButton>
-        </div>
-      </section>
-
-      <section class="panel vods-panel vx-glass-rim">
-        <h2 class="vods-eyebrow sec">Details</h2>
-        <div class="fields">
-          <UiField v-if="isNew" label="Id" :error="form.id && idError ? idError : undefined" help="In its link: /vods/<id>. Can't change later.">
-            <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.id" mono placeholder="elden-ring" /></template>
-          </UiField>
-          <UiField label="Title" help="Empty: the first source's.">
-            <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.title" /></template>
-          </UiField>
-          <UiField label="Tags" help="Comma-separated: vods lists it on /vods, playthroughs on Playthroughs. compilation is set while it keeps up to date.">
-            <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.tags" placeholder="playthroughs" /></template>
-          </UiField>
-        </div>
-        <div v-if="tagSuggestions.length" class="suggest" aria-label="Add a tag">
-          <span class="vods-muted small">Add:</span>
-          <UiChip v-for="t in tagSuggestions" :key="t" clickable @click="addTag(t)">+ {{ t }}</UiChip>
-        </div>
-        <UiCheckbox
-          v-if="follow"
-          v-model="keepUp"
-          :label="`Keep up to date: every window of ${follow.name ?? `game ${follow.id}`}, new streams included (the segments below then aren't saved)`"
-        />
-      </section>
-
-      <section class="panel vods-panel vx-glass-rim">
-        <div class="head">
-          <h2 class="vods-eyebrow sec">Segments</h2>
-          <span class="vods-muted small">{{ segments.length }} · {{ total == null ? 'some run to their source’s end' : toClock(total) }}</span>
-          <UiButton size="sm" class="push" @click="builderOpen = !builderOpen">{{ builderOpen ? 'Close builder' : 'Build a playthrough…' }}</UiButton>
-        </div>
-        <div v-if="builderOpen" class="builder"><PlaythroughBuilder @add="addWindows" /></div>
-        <p class="vods-muted small">
-          Each is a window of a Twitch VOD, played one after another. Empty start or end: the source's own; empty
-          “at”: right after the one before.
-        </p>
-        <ol class="segs">
-          <li v-for="(s, i) in segments" :key="s.key" class="seg">
-            <span class="n vods-mono">{{ i + 1 }}</span>
-            <UiField label="VOD" :error="s.vod_id && segErrors[i] ? segErrors[i]! : undefined">
-              <template #default="{ id: fid }"><UiInput :id="fid" v-model="s.vod_id" mono placeholder="2200000000" class="vodid" /></template>
-            </UiField>
-            <UiField label="Start"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.start" optional placeholder="start" /></template></UiField>
-            <UiField label="End"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.end" optional placeholder="end" /></template></UiField>
-            <UiField label="At"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.at" optional placeholder="next" /></template></UiField>
-            <UiField label="Label" class="grow">
-              <template #default="{ id: fid }"><UiInput :id="fid" v-model="s.label" placeholder="Part 1" /></template>
-            </UiField>
-            <span class="acts">
-              <UiButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move segment ${i + 1} up`" @click="move(i, -1)">↑</UiButton>
-              <UiButton size="sm" variant="ghost" :disabled="i === segments.length - 1" :aria-label="`Move segment ${i + 1} down`" @click="move(i, 1)">↓</UiButton>
-              <UiButton size="sm" variant="ghost" :aria-label="`Remove segment ${i + 1}`" @click="remove(i)">✕</UiButton>
+    <UiLoadState
+      v-else
+      :error="loadError"
+      :loading="!isNew && !vod"
+      error-title="Couldn't load it"
+      @retry="load"
+    >
+      <template #loading>
+        <UiSkeleton h="90px" />
+        <UiSkeleton h="200px" />
+      </template>
+      <form @submit.prevent="save">
+        <section v-if="vod" class="panel vods-panel vx-glass-rim">
+          <dl class="vods-facts">
+            <div><dt>Length</dt><dd class="vods-mono">{{ vod.duration ?? '—' }}</dd></div>
+            <div><dt>Streamed</dt><dd>{{ when(vod.created_at) }}</dd></div>
+            <div><dt>Made</dt><dd :title="when(vod.made_at)">{{ vod.made_at ? timeAgo(vod.made_at) : '—' }}</dd></div>
+            <div><dt>Changed</dt><dd :title="when(vod.changed_at)">{{ vod.changed_at ? timeAgo(vod.changed_at) : '—' }}</dd></div>
+            <div v-if="vod.compiled"><dt>Compiled</dt><dd><UiChip :tone="vod.compiled.outdated ? 'warn' : 'ok'">{{ vod.compiled.outdated ? 'outdated: the segments changed' : 'up to date' }}</UiChip></dd></div>
+            <div><dt>Visibility</dt><dd><UiChip :tone="vod.hidden ? 'warn' : 'ok'">{{ vod.hidden ? 'hidden' : 'public' }}</UiChip></dd></div>
+          </dl>
+          <p class="vods-muted small">Hide it, or change its chapters and the like, on <RouterLink :to="`/manage/vods/${encodeURIComponent(vod.id)}`">its VOD page</RouterLink>.</p>
+          <div v-if="sources.length" class="srcs">
+            <span class="small">
+              Sources:
+              <template v-if="hiddenSources">{{ hiddenSources.size }} of {{ sources.length }} hidden</template>
+              <template v-else>{{ sources.length }}</template>
             </span>
-          </li>
-        </ol>
-        <UiButton size="sm" @click="addRow">Add a segment</UiButton>
-      </section>
+            <UiButton size="sm" :loading="sourcesBusy" :disabled="!hiddenSources || hiddenSources.size === sources.length" title="They leave the lists; their links lead here" @click="setSources(true)">Hide all sources</UiButton>
+            <UiButton size="sm" :loading="sourcesBusy" :disabled="!hiddenSources || hiddenSources.size === 0" @click="setSources(false)">Show all sources</UiButton>
+          </div>
+        </section>
 
-      <UiCallout v-if="saveError" tone="error" title="Couldn't save">{{ saveError }}</UiCallout>
-      <div class="save">
-        <UiButton type="submit" variant="primary" :loading="saving" :disabled="!valid">{{ isNew ? 'Make it' : 'Save' }}</UiButton>
-        <UiButton v-if="!isNew" :disabled="saving" @click="fill(vod)">Undo changes</UiButton>
-      </div>
-    </form>
+        <section class="panel vods-panel vx-glass-rim">
+          <h2 class="vods-eyebrow sec">Details</h2>
+          <div class="fields">
+            <UiField v-if="isNew" label="Id" :error="form.id && idError ? idError : undefined" help="In its link: /vods/<id>. Can't change later.">
+              <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.id" mono placeholder="elden-ring" /></template>
+            </UiField>
+            <UiField label="Title" help="Empty: the first source's.">
+              <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.title" /></template>
+            </UiField>
+            <UiField label="Tags" help="Comma-separated: vods lists it on /vods, playthroughs on Playthroughs. compilation is set while it keeps up to date.">
+              <template #default="{ id: fid }"><UiInput :id="fid" v-model="form.tags" placeholder="playthroughs" /></template>
+            </UiField>
+          </div>
+          <div v-if="tagSuggestions.length" class="suggest" aria-label="Add a tag">
+            <span class="vods-muted small">Add:</span>
+            <UiChip v-for="t in tagSuggestions" :key="t" clickable @click="addTag(t)">+ {{ t }}</UiChip>
+          </div>
+          <UiCheckbox
+            v-if="follow"
+            v-model="keepUp"
+            :label="`Keep up to date: every window of ${follow.name ?? `game ${follow.id}`}, new streams included (the segments below then aren't saved)`"
+          />
+        </section>
+
+        <section class="panel vods-panel vx-glass-rim">
+          <div class="head">
+            <h2 class="vods-eyebrow sec">Segments</h2>
+            <span class="vods-muted small">{{ segments.length }} · {{ total == null ? 'some run to their source’s end' : toClock(total) }}</span>
+            <UiButton size="sm" class="push" @click="builderOpen = !builderOpen">{{ builderOpen ? 'Close builder' : 'Build a playthrough…' }}</UiButton>
+          </div>
+          <div v-if="builderOpen" class="builder"><PlaythroughBuilder @add="addWindows" /></div>
+          <p class="vods-muted small">
+            Each is a window of a Twitch VOD, played one after another. Empty start or end: the source's own; empty
+            “at”: right after the one before.
+          </p>
+          <ol class="segs">
+            <li v-for="(s, i) in segments" :key="s.key" class="seg">
+              <span class="n vods-mono">{{ i + 1 }}</span>
+              <UiField label="VOD" :error="s.vod_id && segErrors[i] ? segErrors[i]! : undefined">
+                <template #default="{ id: fid }"><UiInput :id="fid" v-model="s.vod_id" mono placeholder="2200000000" class="vodid" /></template>
+              </UiField>
+              <UiField label="Start"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.start" optional placeholder="start" /></template></UiField>
+              <UiField label="End"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.end" optional placeholder="end" /></template></UiField>
+              <UiField label="At"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.at" optional placeholder="next" /></template></UiField>
+              <UiField label="Label" class="grow">
+                <template #default="{ id: fid }"><UiInput :id="fid" v-model="s.label" placeholder="Part 1" /></template>
+              </UiField>
+              <span class="acts">
+                <UiButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move segment ${i + 1} up`" @click="move(i, -1)">↑</UiButton>
+                <UiButton size="sm" variant="ghost" :disabled="i === segments.length - 1" :aria-label="`Move segment ${i + 1} down`" @click="move(i, 1)">↓</UiButton>
+                <UiButton size="sm" variant="ghost" :aria-label="`Remove segment ${i + 1}`" @click="remove(i)">✕</UiButton>
+              </span>
+            </li>
+          </ol>
+          <UiButton size="sm" @click="addRow">Add a segment</UiButton>
+        </section>
+
+        <UiCallout v-if="saveError" tone="error" title="Couldn't save">{{ saveError }}</UiCallout>
+        <div class="save">
+          <UiButton type="submit" variant="primary" :loading="saving" :disabled="!valid">{{ isNew ? 'Make it' : 'Save' }}</UiButton>
+          <UiButton v-if="!isNew" :disabled="saving" @click="fill(vod)">Undo changes</UiButton>
+        </div>
+      </form>
+    </UiLoadState>
 
     <UiDialog v-model:open="claimsOpen" title="Its sources have DMCA claims">
       <UiCallout tone="error" title="The compiled file copies the claimed content">
@@ -354,26 +360,18 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
       </template>
     </UiDialog>
 
-    <UiDialog v-model:open="deleteOpen" :title="`Delete ${id}?`">
+    <UiConfirm v-model:open="deleteOpen" :title="`Delete ${id}?`" tone="danger" confirm-label="Delete" :loading="deleting" @confirm="destroy">
       Its link stops working. VODs its merge or split hid are shown again; other hidden sources stay hidden.
-      <template #actions="{ close }">
-        <UiButton @click="close">Cancel</UiButton>
-        <UiButton variant="danger-solid" :loading="deleting" @click="destroy">Delete</UiButton>
-      </template>
-    </UiDialog>
+    </UiConfirm>
   </ManageShell>
 </template>
 
 <style scoped>
 a { color: inherit; }
 .back { margin: -8px 0 16px; font-size: 13px; }
-.sk { display: flex; flex-direction: column; gap: 12px; }
 .panel { padding: 14px 16px; margin-bottom: 16px; }
 .sec { margin: 0 0 8px; }
 .small { font-size: 13px; margin: 8px 0; }
-.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 16px; margin: 0; }
-dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; margin-bottom: 2px; }
-dd { margin: 0; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 4px 12px; margin-bottom: 8px; }
 .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .head .sec { margin: 0; }

@@ -65,11 +65,15 @@ const sortRows = () => (rows.value = [...rows.value].sort((a, b) => a.start - b.
 
 <template>
   <div class="games">
-    <UiCallout v-if="loadError" tone="error" title="Couldn't load the games">
-      {{ loadError }}
-      <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
-    </UiCallout>
-    <UiSkeleton v-else-if="!loaded" h="60px" />
+    <UiLoadState
+      :error="loadError"
+      :loading="!loaded"
+      error-title="Couldn't load the games"
+      :rows="1"
+      row-height="60px"
+      @retry="load"
+    >
+    </UiLoadState>
     <EditorRows
       v-else
       :rows="rows"

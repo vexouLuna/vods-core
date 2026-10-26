@@ -115,117 +115,117 @@ onMounted(() => {
 
 <template>
   <ManageShell title="Storage">
-    <UiCallout v-if="loadError" tone="error" title="Couldn't read the storage">
-      {{ loadError }}
-      <template #actions><UiButton size="sm" @click="load()">Try again</UiButton></template>
-    </UiCallout>
-    <div v-else-if="!view" class="sk" aria-busy="true"><UiSkeleton h="70px" /><UiSkeleton h="300px" /></div>
-
-    <template v-else>
-      <section class="disk vods-panel vx-glass-rim">
-        <div class="disk-head">
-          <h2 class="vods-eyebrow">Disk</h2>
-          <span class="spacer" />
-          <span class="vods-muted small">Sizes are cached for {{ view.cache_seconds }} s</span>
-          <UiButton size="sm" :loading="loading" @click="load(true)">Refresh</UiButton>
-        </div>
-        <template v-if="disk">
-          <div
-            class="usage"
-            role="img"
-            :aria-label="`${bytes(disk.used)} of ${bytes(disk.total)} used: ${bytes(archiveBytes)} archive, ${bytes(staleBytes)} stale`"
-          >
-            <template v-if="usage">
-              <span class="seg is-archive" :style="{ width: usage.archive }"></span>
-              <span class="seg is-stale" :style="{ width: usage.stale }"></span>
-              <span class="seg is-other" :style="{ width: usage.other }"></span>
-            </template>
+    <UiLoadState
+      :error="loadError"
+      :loading="!view"
+      error-title="Couldn't read the storage"
+      @retry="load()"
+    >
+      <template #loading>
+        <UiSkeleton h="70px" />
+        <UiSkeleton h="300px" />
+      </template>
+      <template v-if="view">
+        <section class="disk vods-panel vx-glass-rim">
+          <div class="disk-head">
+            <h2 class="vods-eyebrow">Disk</h2>
+            <span class="spacer" />
+            <span class="vods-muted small">Sizes are cached for {{ view.cache_seconds }} s</span>
+            <UiButton size="sm" :loading="loading" @click="load(true)">Refresh</UiButton>
           </div>
-          <p class="facts vods-mono small">
-            <span><i class="key is-archive"></i>{{ bytes(archiveBytes) }} archive</span>
-            <span v-if="staleCount"><i class="key is-stale"></i>{{ bytes(staleBytes) }} stale</span>
-            <span><i class="key is-other"></i>{{ bytes(Math.max(0, disk.used - archiveBytes - staleBytes)) }} other</span>
-            <span>{{ bytes(disk.used) }} used</span>
-            <span>{{ bytes(disk.free) }} free</span>
-            <span>{{ bytes(disk.total) }} total</span>
-            <span v-if="staleCount" class="stale-sum">{{ bytes(staleBytes) }} in {{ staleCount }} stale {{ staleCount === 1 ? 'folder' : 'folders' }}</span>
-          </p>
-        </template>
-        <p v-else class="vods-muted small">The worker couldn't read the disk's size.</p>
-      </section>
+          <template v-if="disk">
+            <div
+              class="usage"
+              role="img"
+              :aria-label="`${bytes(disk.used)} of ${bytes(disk.total)} used: ${bytes(archiveBytes)} archive, ${bytes(staleBytes)} stale`"
+            >
+              <template v-if="usage">
+                <span class="seg is-archive" :style="{ width: usage.archive }"></span>
+                <span class="seg is-stale" :style="{ width: usage.stale }"></span>
+                <span class="seg is-other" :style="{ width: usage.other }"></span>
+              </template>
+            </div>
+            <p class="facts vods-mono small">
+              <span><i class="key is-archive"></i>{{ bytes(archiveBytes) }} archive</span>
+              <span v-if="staleCount"><i class="key is-stale"></i>{{ bytes(staleBytes) }} stale</span>
+              <span><i class="key is-other"></i>{{ bytes(Math.max(0, disk.used - archiveBytes - staleBytes)) }} other</span>
+              <span>{{ bytes(disk.used) }} used</span>
+              <span>{{ bytes(disk.free) }} free</span>
+              <span>{{ bytes(disk.total) }} total</span>
+              <span v-if="staleCount" class="stale-sum">{{ bytes(staleBytes) }} in {{ staleCount }} stale {{ staleCount === 1 ? 'folder' : 'folders' }}</span>
+            </p>
+          </template>
+          <p v-else class="vods-muted small">The worker couldn't read the disk's size.</p>
+        </section>
 
-      <div class="filters">
-        <UiSegmented v-model="area" :options="AREAS" label="Area" />
-        <UiCheckbox v-model="staleOnly">Stale only</UiCheckbox>
-        <span class="vods-muted small">{{ folders.length }} {{ folders.length === 1 ? 'folder' : 'folders' }}</span>
-      </div>
+        <div class="filters">
+          <UiSegmented v-model="area" :options="AREAS" label="Area" />
+          <UiCheckbox v-model="staleOnly">Stale only</UiCheckbox>
+          <span class="vods-muted small">{{ folders.length }} {{ folders.length === 1 ? 'folder' : 'folders' }}</span>
+        </div>
 
-      <div class="table">
-        <UiTable
-          :columns="columns"
-          :rows="rows"
-          row-key="key"
-          label="Folders"
-          :empty="staleOnly ? 'No stale folders.' : 'No folders.'"
-        >
-          <template #cell-name="{ row }">
-            <span class="vods-mono folder">{{ row.name }}</span>
-            <UiChip v-if="row.folder.stale" tone="warn" title="No job needs it: not linked to a VOD, or its last job failed or was cancelled">stale</UiChip>
-          </template>
-          <template #cell-vod="{ row }">
-            <RouterLink v-if="row.folder.vod" :to="`/manage/vods/${row.folder.vod.id}`" class="vod">{{ row.folder.vod.title ?? row.folder.vod.id }}</RouterLink>
-            <UiChip v-if="row.folder.vod?.hidden" tone="warn">hidden</UiChip>
-            <span v-if="!row.folder.vod" class="vods-muted">—</span>
-          </template>
-          <template #cell-bytes="{ row }">{{ bytes(row.bytes) }}</template>
-          <template #cell-modified="{ row }">
-            <span v-if="row.modified" :title="row.modified">{{ timeAgo(row.modified) }}</span>
-            <span v-else class="vods-muted">—</span>
-          </template>
-          <template #cell-jobs="{ row }">
-            <RouterLink v-for="j in row.folder.jobs.active" :key="j.id" :to="`/manage/jobs/${j.id}`" class="job">
-              <UiChip tone="accent" :title="`${j.kind}${j.step ? ` · ${j.step}` : ''}`">#{{ j.id }} {{ j.state }}</UiChip>
-            </RouterLink>
-            <RouterLink v-if="!row.folder.jobs.active.length && row.folder.jobs.last" :to="`/manage/jobs/${row.folder.jobs.last.id}`" class="job">
-              <UiChip :tone="row.folder.jobs.last.state === 'failed' ? 'bad' : 'default'" :title="`Last: ${row.folder.jobs.last.kind}`">#{{ row.folder.jobs.last.id }} {{ row.folder.jobs.last.state }}</UiChip>
-            </RouterLink>
-            <span v-if="!row.folder.jobs.active.length && !row.folder.jobs.last" class="vods-muted">none</span>
-          </template>
-          <template #cell-actions="{ row }">
-            <UiButton
-              size="sm"
-              variant="danger"
-              :disabled="row.folder.jobs.active.length > 0"
-              :title="row.folder.jobs.active.length ? 'A job is using it' : undefined"
-              @click="ask(row.folder)"
-            >Delete files</UiButton>
-          </template>
-        </UiTable>
-      </div>
+        <div class="table">
+          <UiTable
+            :columns="columns"
+            :rows="rows"
+            row-key="key"
+            label="Folders"
+            :empty="staleOnly ? 'No stale folders.' : 'No folders.'"
+          >
+            <template #cell-name="{ row }">
+              <span class="vods-mono folder">{{ row.name }}</span>
+              <UiChip v-if="row.folder.stale" tone="warn" title="No job needs it: not linked to a VOD, or its last job failed or was cancelled">stale</UiChip>
+            </template>
+            <template #cell-vod="{ row }">
+              <RouterLink v-if="row.folder.vod" :to="`/manage/vods/${row.folder.vod.id}`" class="vod">{{ row.folder.vod.title ?? row.folder.vod.id }}</RouterLink>
+              <UiChip v-if="row.folder.vod?.hidden" tone="warn">hidden</UiChip>
+              <span v-if="!row.folder.vod" class="vods-muted">—</span>
+            </template>
+            <template #cell-bytes="{ row }">{{ bytes(row.bytes) }}</template>
+            <template #cell-modified="{ row }">
+              <span v-if="row.modified" :title="row.modified">{{ timeAgo(row.modified) }}</span>
+              <span v-else class="vods-muted">—</span>
+            </template>
+            <template #cell-jobs="{ row }">
+              <RouterLink v-for="j in row.folder.jobs.active" :key="j.id" :to="`/manage/jobs/${j.id}`" class="job">
+                <UiChip tone="accent" :title="`${j.kind}${j.step ? ` · ${j.step}` : ''}`">#{{ j.id }} {{ j.state }}</UiChip>
+              </RouterLink>
+              <RouterLink v-if="!row.folder.jobs.active.length && row.folder.jobs.last" :to="`/manage/jobs/${row.folder.jobs.last.id}`" class="job">
+                <UiChip :tone="row.folder.jobs.last.state === 'failed' ? 'bad' : 'default'" :title="`Last: ${row.folder.jobs.last.kind}`">#{{ row.folder.jobs.last.id }} {{ row.folder.jobs.last.state }}</UiChip>
+              </RouterLink>
+              <span v-if="!row.folder.jobs.active.length && !row.folder.jobs.last" class="vods-muted">none</span>
+            </template>
+            <template #cell-actions="{ row }">
+              <UiButton
+                size="sm"
+                variant="danger"
+                :disabled="row.folder.jobs.active.length > 0"
+                :title="row.folder.jobs.active.length ? 'A job is using it' : undefined"
+                @click="ask(row.folder)"
+              >Delete files</UiButton>
+            </template>
+          </UiTable>
+        </div>
 
-      <UiDialog v-model:open="dialogOpen" title="Delete these files?" width="460px">
-        <template v-if="target">
-          <p>
-            <span class="vods-mono">{{ target.area }}/{{ target.name }}</span>: {{ bytes(target.bytes) }} in {{ target.files }}
-            {{ target.files === 1 ? 'file' : 'files' }}. They're gone for good; nothing on YouTube or Drive is touched.
-          </p>
-          <p v-if="target.vod" class="vods-muted">
-            It belongs to “{{ target.vod.title ?? target.vod.id }}”. A job for that VOD would have to download again.
-          </p>
-          <p v-if="!target.stale" class="warn">This folder isn't stale.</p>
-          <UiCallout v-if="deleteError" tone="error" title="Nothing was deleted">{{ deleteError }}</UiCallout>
-        </template>
-        <template #actions="{ close }">
-          <UiButton @click="close">Cancel</UiButton>
-          <UiButton variant="danger-solid" :loading="deleting" @click="remove">Delete files</UiButton>
-        </template>
-      </UiDialog>
-    </template>
+        <UiConfirm v-model:open="dialogOpen" title="Delete these files?" width="460px" tone="danger" confirm-label="Delete files" :loading="deleting" @confirm="remove">
+          <template v-if="target">
+            <p>
+              <span class="vods-mono">{{ target.area }}/{{ target.name }}</span>: {{ bytes(target.bytes) }} in {{ target.files }}
+              {{ target.files === 1 ? 'file' : 'files' }}. They're gone for good; nothing on YouTube or Drive is touched.
+            </p>
+            <p v-if="target.vod" class="vods-muted">
+              It belongs to “{{ target.vod.title ?? target.vod.id }}”. A job for that VOD would have to download again.
+            </p>
+            <p v-if="!target.stale" class="warn">This folder isn't stale.</p>
+            <UiCallout v-if="deleteError" tone="error" title="Nothing was deleted">{{ deleteError }}</UiCallout>
+          </template>
+        </UiConfirm>
+      </template>
+    </UiLoadState>
   </ManageShell>
 </template>
 
 <style scoped>
-.sk { display: flex; flex-direction: column; gap: 12px; }
 .disk { padding: 14px 16px; margin-bottom: 16px; }
 .disk-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
 h2 { margin: 0; }

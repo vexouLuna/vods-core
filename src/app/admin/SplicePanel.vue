@@ -59,28 +59,34 @@ const {
       </p>
 
       <div class="sub vods-muted small">Suggested: starting less than 24 h after this one ends, or ending less than 24 h before it starts</div>
-      <UiCallout v-if="candsError" tone="error">
-        {{ candsError }}
-        <template #actions><UiButton size="sm" @click="loadCandidates">Try again</UiButton></template>
-      </UiCallout>
-      <UiSkeleton v-else-if="!cands" h="40px" />
-      <p v-else-if="!suggestions.length" class="vods-muted note">{{ cands.length ? 'All of them are in the merge.' : 'None.' }}</p>
-      <ul v-else class="list">
-        <li v-for="c in suggestions" :key="c.id" class="row">
-          <div class="what">
-            <RouterLink :to="`/manage/vods/${c.id}`" class="vods-mono">{{ c.id }}</RouterLink>
-            <span class="title">{{ c.title || 'Untitled' }}</span>
-            <span class="vods-muted small" :title="stamp(c.created_at)">{{ new Date(c.created_at).toLocaleString() }} · {{ c.duration ?? '—' }}</span>
-          </div>
-          <div class="chips">
-            <UiChip v-if="c.gap < 0" tone="bad" title="They overlap">overlaps {{ span(c.gap) }}</UiChip>
-            <UiChip v-else>{{ span(c.gap) }} apart</UiChip>
-            <UiChip v-if="c.titles_match" tone="ok">same title</UiChip>
-            <UiChip v-else tone="warn">other title</UiChip>
-          </div>
-          <UiButton size="sm" @click="pick(c)">Add</UiButton>
-        </li>
-      </ul>
+      <UiLoadState
+        :error="candsError"
+        :loading="!cands"
+        :empty="!suggestions.length"
+        :rows="1"
+        row-height="40px"
+        @retry="loadCandidates"
+      >
+        <template #empty>
+          <p class="vods-muted note">{{ cands?.length ? 'All of them are in the merge.' : 'None.' }}</p>
+        </template>
+        <ul class="list">
+          <li v-for="c in suggestions" :key="c.id" class="row">
+            <div class="what">
+              <RouterLink :to="`/manage/vods/${c.id}`" class="vods-mono">{{ c.id }}</RouterLink>
+              <span class="title">{{ c.title || 'Untitled' }}</span>
+              <span class="vods-muted small" :title="stamp(c.created_at)">{{ new Date(c.created_at).toLocaleString() }} · {{ c.duration ?? '—' }}</span>
+            </div>
+            <div class="chips">
+              <UiChip v-if="c.gap < 0" tone="bad" title="They overlap">overlaps {{ span(c.gap) }}</UiChip>
+              <UiChip v-else>{{ span(c.gap) }} apart</UiChip>
+              <UiChip v-if="c.titles_match" tone="ok">same title</UiChip>
+              <UiChip v-else tone="warn">other title</UiChip>
+            </div>
+            <UiButton size="sm" @click="pick(c)">Add</UiButton>
+          </li>
+        </ul>
+      </UiLoadState>
 
       <form class="inline" @submit.prevent="addById">
         <UiField label="Add a VOD by id" :error="addError ?? undefined">

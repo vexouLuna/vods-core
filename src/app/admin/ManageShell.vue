@@ -11,18 +11,9 @@ defineProps<{ title: string }>()
 <template>
   <VodsShell sky="dim">
     <ManageBar v-if="session.authenticated" />
-    <div class="head">
-      <div class="vods-eyebrow">Manage</div>
-      <h1 class="vods-display">{{ title }}</h1>
-      <div v-if="$slots.actions" class="actions"><slot name="actions"></slot></div>
-    </div>
+    <UiPageHead eyebrow="Manage" :title="title">
+      <template v-if="$slots.actions" #actions><slot name="actions"></slot></template>
+    </UiPageHead>
     <slot></slot>
   </VodsShell>
 </template>
-
-<style scoped>
-.head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 16px; margin-bottom: 20px; }
-.head .vods-eyebrow { flex-basis: 100%; }
-.head h1 { font-size: 28px; margin: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
-</style>

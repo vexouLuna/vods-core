@@ -126,6 +126,16 @@ describe('tagChanges', () => {
     expect(r.changed).toBe(false)
     expect(r.errors.size).toBe(0)
   })
+  it('counts the tags added, edited and removed, and a new order as one', () => {
+    const drafts = () => saved.map((t) => draftOf(t))
+    expect(tagChanges(saved, drafts()).count).toBe(0)
+    const edited = drafts()
+    edited[0]!.label = 'fresh'
+    expect(tagChanges(saved, edited).count).toBe(1)
+    expect(tagChanges(saved, [...edited, Object.assign(blankDraft(), { name: 'x', label: 'x' })]).count).toBe(2)
+    expect(tagChanges(saved, drafts().slice(1)).count).toBe(1)
+    expect(tagChanges(saved, drafts().reverse()).count).toBe(1)
+  })
   it('builds the list to save, sizes as numbers and empty as null', () => {
     const drafts = saved.map((t) => draftOf(t))
     drafts[0]!.width = '70'

@@ -58,6 +58,10 @@ const empty = computed(() => sets.value.filter((s) => !s.emotes?.length).map((s)
 
 const busy = ref<string | null>(null)
 const confirmForce = ref(false)
+function replace() {
+  confirmForce.value = false
+  void run('force', () => admin.captureEmotes(props.vodId, true))
+}
 async function run(name: string, action: () => Promise<{ msg: string; jobId?: number }>) {
   busy.value = name
   try {
@@ -74,12 +78,14 @@ async function run(name: string, action: () => Promise<{ msg: string; jobId?: nu
 
 <template>
   <div class="emotes">
-    <UiCallout v-if="error" tone="error" title="Couldn't load the saved emotes">
-      {{ error }}
-      <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
-    </UiCallout>
-    <UiSkeleton v-else-if="loading && !data" h="120px" />
-    <template v-else>
+    <UiLoadState
+      :error="error"
+      :loading="loading && !data"
+      error-title="Couldn't load the saved emotes"
+      :rows="1"
+      row-height="120px"
+      @retry="load"
+    >
       <UiCallout v-if="!data" tone="warn" title="No emotes saved">
         Chat for this VOD shows the channel's current emotes. Capture them to keep today's sets with it.
       </UiCallout>
@@ -117,16 +123,12 @@ async function run(name: string, action: () => Promise<{ msg: string; jobId?: nu
         </UiButton>
         <UiButton variant="ghost" :loading="loading" @click="load">Reload</UiButton>
       </div>
-    </template>
+    </UiLoadState>
 
-    <UiDialog v-model:open="confirmForce" title="Replace the saved emotes?">
+    <UiConfirm v-model:open="confirmForce" title="Replace the saved emotes?" tone="danger" confirm-label="Replace" cancel-label="Keep them" @confirm="replace">
       The sets saved with this VOD are history: they show what was an emote when it streamed. Replacing them puts today's
       channel and global sets in their place, and old chat may lose emotes that were removed since.
-      <template #actions="{ close }">
-        <UiButton @click="close">Keep them</UiButton>
-        <UiButton variant="danger-solid" @click="confirmForce = false; run('force', () => admin.captureEmotes(vodId, true))">Replace</UiButton>
-      </template>
-    </UiDialog>
+    </UiConfirm>
   </div>
 </template>
 

@@ -138,146 +138,144 @@ onMounted(() => {
       placeholder until it has one; the rest are chips by the date. A tag not listed here is a chip with its own name.
     </p>
 
-    <UiCallout v-if="loadError" tone="error" title="Couldn't load the tags">
-      {{ loadError }}
-      <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
-    </UiCallout>
-    <div v-else-if="!data" class="sk" aria-busy="true"><UiSkeleton v-for="i in 3" :key="i" h="150px" /></div>
+    <UiLoadState
+      :error="loadError"
+      :loading="!data"
+      error-title="Couldn't load the tags"
+      :rows="3"
+      row-height="150px"
+      @retry="load"
+    >
+      <template v-if="data">
+        <form @submit.prevent="save">
+          <UiCallout v-if="unavailable" tone="warn" title="The archive doesn't keep tags yet" class="gap">
+            These are the site's built-in tags (the site's createVodsApp() options). Saving needs the archive's site tags endpoints
+            (docs/admin-api.md, "Site tags").
+          </UiCallout>
+          <p v-else-if="data.updatedAt" class="when vods-muted">
+            Last changed {{ timeAgo(data.updatedAt) }}<template v-if="data.updatedBy"> by {{ data.updatedBy }}</template>
+          </p>
 
-    <form v-else @submit.prevent="save">
-      <UiCallout v-if="unavailable" tone="warn" title="The archive doesn't keep tags yet" class="gap">
-        These are the site's built-in tags (the site's createVodsApp() options). Saving needs the archive's site tags endpoints
-        (docs/admin-api.md, "Site tags").
-      </UiCallout>
-      <p v-else-if="data.updatedAt" class="when vods-muted">
-        Last changed {{ timeAgo(data.updatedAt) }}<template v-if="data.updatedBy"> by {{ data.updatedBy }}</template>
-      </p>
-
-      <section v-for="(d, i) in drafts" :key="d.key" class="tag vods-panel vx-glass-rim" :aria-label="d.name || 'New tag'">
-        <div class="preview" aria-hidden="true">
-          <div class="thumb"><TagMark v-if="d.drawn" class="mark" :tag="previewOf(d, vodsConfig.apiBase)" /></div>
-          <UiChip
-            v-if="!d.drawn"
-            class="chip"
-            :style="previewOf(d, vodsConfig.apiBase).color ? { color: d.color, borderColor: d.color } : undefined"
-          >{{ d.label || d.name || 'tag' }}</UiChip>
-        </div>
-
-        <div class="fields">
-          <UiField label="Name" :error="err(d, 'name')" :help="d.auto ? ABOUT[d.name] : d.saved ? undefined : 'Can\'t change once saved.'">
-            <template #default="{ id }"><UiInput :id="id" v-model="d.name" mono :disabled="d.saved || d.auto" :invalid="!!err(d, 'name')" placeholder="speedrun" /></template>
-          </UiField>
-          <UiField label="Label" :error="err(d, 'label')" help="On its chip, or read out when drawn.">
-            <template #default="{ id }"><UiInput :id="id" v-model="d.label" :invalid="!!err(d, 'label')" /></template>
-          </UiField>
-          <UiField label="Color" :error="err(d, 'color')" help="Empty: the default look.">
-            <template #default="{ id }">
-              <TagColorInput :id="id" v-model="d.color" :swatches="SWATCHES" :invalid="!!err(d, 'color')" placeholder="var(--vods-accent)" :pick-label="`Pick a color for ${d.name || 'the tag'}`" />
-            </template>
-          </UiField>
-          <div class="drawn">
-            <UiSwitch :model-value="!!d.page.trim()" :label="'Home category'" @update:model-value="homeCategory(d, $event)" />
-          </div>
-          <template v-if="d.page.trim()">
-            <UiField label="Page" :error="err(d, 'page')" help="Its list page and header link; it can also be a home card (Homepage).">
-              <template #default="{ id }"><UiInput :id="id" v-model="d.page" mono :invalid="!!err(d, 'page')" placeholder="highlights" /></template>
-            </UiField>
-            <UiField label="Page title" :error="err(d, 'pageLabel')" help="The page's heading and header link.">
-              <template #default="{ id }"><UiInput :id="id" v-model="d.pageLabel" :invalid="!!err(d, 'pageLabel')" placeholder="Highlights" /></template>
-            </UiField>
-          </template>
-          <div class="drawn">
-            <UiSwitch v-model="d.drawn" :label="'Drawn on the thumbnail'" />
-          </div>
-          <template v-if="d.drawn">
-            <UiField label="Width" :error="err(d, 'width')" :help="`px, ${TAG_SIZE.min}–${TAG_SIZE.max}; empty: 62`">
-              <template #default="{ id }"><UiInput :id="id" v-model="d.width" type="number" mono :invalid="!!err(d, 'width')" placeholder="62" /></template>
-            </UiField>
-            <UiField label="Height" :error="err(d, 'height')" :help="`px; empty: 22`">
-              <template #default="{ id }"><UiInput :id="id" v-model="d.height" type="number" mono :invalid="!!err(d, 'height')" placeholder="22" /></template>
-            </UiField>
-            <UiField label="Tag rotate" :error="err(d, 'rotate')" :help="`degrees, ${TAG_ROTATE.min} to ${TAG_ROTATE.max}; + is clockwise; empty: -4`">
-              <template #default="{ id }"><UiInput :id="id" v-model="d.rotate" type="number" mono :invalid="!!err(d, 'rotate')" placeholder="-4" /></template>
-            </UiField>
-            <div class="shape">
-              <span class="vods-eyebrow">Shape</span>
-              <span class="vods-muted">{{ d.shape ? 'SVG: its currentColor parts (or black, if none) take the color' : 'Placeholder' }}</span>
-              <template v-if="d.saved && !unavailable">
-                <label class="vods-btn is-sm upload" :class="{ 'is-busy': shaping === d.name }">
-                  {{ d.shape ? 'Replace SVG' : 'Upload SVG' }}
-                  <input type="file" accept=".svg,image/svg+xml" class="file" :disabled="shaping === d.name" @change="upload(d, $event)" />
-                </label>
-                <UiButton v-if="d.shape" size="sm" variant="ghost" :loading="shaping === d.name" @click="dropShape(d)">Use the placeholder</UiButton>
-              </template>
-              <span v-else-if="!unavailable" class="vods-muted note">Save the tag first.</span>
+          <section v-for="(d, i) in drafts" :key="d.key" class="tag vods-panel vx-glass-rim" :aria-label="d.name || 'New tag'">
+            <div class="preview" aria-hidden="true">
+              <div class="thumb"><TagMark v-if="d.drawn" class="mark" :tag="previewOf(d, vodsConfig.apiBase)" /></div>
+              <UiChip
+                v-if="!d.drawn"
+                class="chip"
+                :style="previewOf(d, vodsConfig.apiBase).color ? { color: d.color, borderColor: d.color } : undefined"
+              >{{ d.label || d.name || 'tag' }}</UiChip>
             </div>
-            <UiField label="Pattern" help="Over the parts in the tag's color.">
-              <template #default="{ id }">
-                <UiSelect :id="id" :model-value="d.pattern" :options="PATTERNS" width="100%" @update:model-value="d.pattern = $event ?? ''" />
-              </template>
-            </UiField>
-            <template v-if="d.pattern">
-              <UiField label="Pattern color" :error="err(d, 'patternColor')" help="Empty: the page background.">
+
+            <div class="fields">
+              <UiField label="Name" :error="err(d, 'name')" :help="d.auto ? ABOUT[d.name] : d.saved ? undefined : 'Can\'t change once saved.'">
+                <template #default="{ id }"><UiInput :id="id" v-model="d.name" mono :disabled="d.saved || d.auto" :invalid="!!err(d, 'name')" placeholder="speedrun" /></template>
+              </UiField>
+              <UiField label="Label" :error="err(d, 'label')" help="On its chip, or read out when drawn.">
+                <template #default="{ id }"><UiInput :id="id" v-model="d.label" :invalid="!!err(d, 'label')" /></template>
+              </UiField>
+              <UiField label="Color" :error="err(d, 'color')" help="Empty: the default look.">
                 <template #default="{ id }">
-                  <TagColorInput :id="id" v-model="d.patternColor" :swatches="TEXT_SWATCHES" :invalid="!!err(d, 'patternColor')" placeholder="var(--vods-bg)" :pick-label="`Pick a pattern color for ${d.name || 'the tag'}`" />
+                  <TagColorInput :id="id" v-model="d.color" :swatches="SWATCHES" :invalid="!!err(d, 'color')" placeholder="var(--vods-accent)" :pick-label="`Pick a color for ${d.name || 'the tag'}`" />
                 </template>
               </UiField>
-              <UiField label="Pattern size" :error="err(d, 'patternSize')" :help="`px per stripe or square, ${TAG_PATTERN_SIZE.min}–${TAG_PATTERN_SIZE.max}; empty: 4`">
-                <template #default="{ id }"><UiInput :id="id" v-model="d.patternSize" type="number" mono :invalid="!!err(d, 'patternSize')" placeholder="4" /></template>
-              </UiField>
-            </template>
-            <div class="drawn wide">
-              <UiSwitch v-model="d.textOn" :label="'Text on the tag'" />
-            </div>
-            <template v-if="d.textOn">
-              <UiField label="Text" :error="err(d, 'text')" :help="`Up to ${TAG_TEXT_MAX}; the label stays as it is.`">
-                <template #default="{ id }"><UiInput :id="id" v-model="d.text" :invalid="!!err(d, 'text')" :placeholder="d.label" /></template>
-              </UiField>
-              <UiField label="Text color" :error="err(d, 'textColor')" help="Empty: the page background.">
-                <template #default="{ id }">
-                  <TagColorInput :id="id" v-model="d.textColor" :swatches="TEXT_SWATCHES" :invalid="!!err(d, 'textColor')" placeholder="var(--vods-bg)" :pick-label="`Pick a text color for ${d.name || 'the tag'}`" />
+              <div class="drawn">
+                <UiSwitch :model-value="!!d.page.trim()" :label="'Home category'" @update:model-value="homeCategory(d, $event)" />
+              </div>
+              <template v-if="d.page.trim()">
+                <UiField label="Page" :error="err(d, 'page')" help="Its list page and header link; it can also be a home card (Homepage).">
+                  <template #default="{ id }"><UiInput :id="id" v-model="d.page" mono :invalid="!!err(d, 'page')" placeholder="highlights" /></template>
+                </UiField>
+                <UiField label="Page title" :error="err(d, 'pageLabel')" help="The page's heading and header link.">
+                  <template #default="{ id }"><UiInput :id="id" v-model="d.pageLabel" :invalid="!!err(d, 'pageLabel')" placeholder="Highlights" /></template>
+                </UiField>
+              </template>
+              <div class="drawn">
+                <UiSwitch v-model="d.drawn" :label="'Drawn on the thumbnail'" />
+              </div>
+              <template v-if="d.drawn">
+                <UiField label="Width" :error="err(d, 'width')" :help="`px, ${TAG_SIZE.min}–${TAG_SIZE.max}; empty: 62`">
+                  <template #default="{ id }"><UiInput :id="id" v-model="d.width" type="number" mono :invalid="!!err(d, 'width')" placeholder="62" /></template>
+                </UiField>
+                <UiField label="Height" :error="err(d, 'height')" :help="`px; empty: 22`">
+                  <template #default="{ id }"><UiInput :id="id" v-model="d.height" type="number" mono :invalid="!!err(d, 'height')" placeholder="22" /></template>
+                </UiField>
+                <UiField label="Tag rotate" :error="err(d, 'rotate')" :help="`degrees, ${TAG_ROTATE.min} to ${TAG_ROTATE.max}; + is clockwise; empty: -4`">
+                  <template #default="{ id }"><UiInput :id="id" v-model="d.rotate" type="number" mono :invalid="!!err(d, 'rotate')" placeholder="-4" /></template>
+                </UiField>
+                <div class="shape">
+                  <span class="vods-eyebrow">Shape</span>
+                  <span class="vods-muted">{{ d.shape ? 'SVG: its currentColor parts (or black, if none) take the color' : 'Placeholder' }}</span>
+                  <template v-if="d.saved && !unavailable">
+                    <label class="vods-btn is-sm upload" :class="{ 'is-busy': shaping === d.name }">
+                      {{ d.shape ? 'Replace SVG' : 'Upload SVG' }}
+                      <input type="file" accept=".svg,image/svg+xml" class="file" :disabled="shaping === d.name" @change="upload(d, $event)" />
+                    </label>
+                    <UiButton v-if="d.shape" size="sm" variant="ghost" :loading="shaping === d.name" @click="dropShape(d)">Use the placeholder</UiButton>
+                  </template>
+                  <span v-else-if="!unavailable" class="vods-muted note">Save the tag first.</span>
+                </div>
+                <UiField label="Pattern" help="Over the parts in the tag's color.">
+                  <template #default="{ id }">
+                    <UiSelect :id="id" :model-value="d.pattern" :options="PATTERNS" width="100%" @update:model-value="d.pattern = $event ?? ''" />
+                  </template>
+                </UiField>
+                <template v-if="d.pattern">
+                  <UiField label="Pattern color" :error="err(d, 'patternColor')" help="Empty: the page background.">
+                    <template #default="{ id }">
+                      <TagColorInput :id="id" v-model="d.patternColor" :swatches="TEXT_SWATCHES" :invalid="!!err(d, 'patternColor')" placeholder="var(--vods-bg)" :pick-label="`Pick a pattern color for ${d.name || 'the tag'}`" />
+                    </template>
+                  </UiField>
+                  <UiField label="Pattern size" :error="err(d, 'patternSize')" :help="`px per stripe or square, ${TAG_PATTERN_SIZE.min}–${TAG_PATTERN_SIZE.max}; empty: 4`">
+                    <template #default="{ id }"><UiInput :id="id" v-model="d.patternSize" type="number" mono :invalid="!!err(d, 'patternSize')" placeholder="4" /></template>
+                  </UiField>
                 </template>
-              </UiField>
-              <UiField label="Text size" :error="err(d, 'textSize')" :help="`px, ${TAG_TEXT_SIZE.min}–${TAG_TEXT_SIZE.max}; empty: half the height`">
-                <template #default="{ id }"><UiInput :id="id" v-model="d.textSize" type="number" mono :invalid="!!err(d, 'textSize')" /></template>
-              </UiField>
-              <UiField label="Nudge across" :error="err(d, 'textX')" :help="`px from the middle, ${TAG_TEXT_NUDGE.min} to ${TAG_TEXT_NUDGE.max}; + is right`">
-                <template #default="{ id }"><UiInput :id="id" v-model="d.textX" type="number" mono :invalid="!!err(d, 'textX')" placeholder="0" /></template>
-              </UiField>
-              <UiField label="Nudge down" :error="err(d, 'textY')" help="px from the middle; + is down">
-                <template #default="{ id }"><UiInput :id="id" v-model="d.textY" type="number" mono :invalid="!!err(d, 'textY')" placeholder="0" /></template>
-              </UiField>
-              <UiField label="Rotate" :error="err(d, 'textRotate')" :help="`degrees, ${TAG_TEXT_ROTATE.min} to ${TAG_TEXT_ROTATE.max}; + is clockwise`">
-                <template #default="{ id }"><UiInput :id="id" v-model="d.textRotate" type="number" mono :invalid="!!err(d, 'textRotate')" placeholder="0" /></template>
-              </UiField>
-            </template>
-          </template>
-        </div>
+                <div class="drawn wide">
+                  <UiSwitch v-model="d.textOn" :label="'Text on the tag'" />
+                </div>
+                <template v-if="d.textOn">
+                  <UiField label="Text" :error="err(d, 'text')" :help="`Up to ${TAG_TEXT_MAX}; the label stays as it is.`">
+                    <template #default="{ id }"><UiInput :id="id" v-model="d.text" :invalid="!!err(d, 'text')" :placeholder="d.label" /></template>
+                  </UiField>
+                  <UiField label="Text color" :error="err(d, 'textColor')" help="Empty: the page background.">
+                    <template #default="{ id }">
+                      <TagColorInput :id="id" v-model="d.textColor" :swatches="TEXT_SWATCHES" :invalid="!!err(d, 'textColor')" placeholder="var(--vods-bg)" :pick-label="`Pick a text color for ${d.name || 'the tag'}`" />
+                    </template>
+                  </UiField>
+                  <UiField label="Text size" :error="err(d, 'textSize')" :help="`px, ${TAG_TEXT_SIZE.min}–${TAG_TEXT_SIZE.max}; empty: half the height`">
+                    <template #default="{ id }"><UiInput :id="id" v-model="d.textSize" type="number" mono :invalid="!!err(d, 'textSize')" /></template>
+                  </UiField>
+                  <UiField label="Nudge across" :error="err(d, 'textX')" :help="`px from the middle, ${TAG_TEXT_NUDGE.min} to ${TAG_TEXT_NUDGE.max}; + is right`">
+                    <template #default="{ id }"><UiInput :id="id" v-model="d.textX" type="number" mono :invalid="!!err(d, 'textX')" placeholder="0" /></template>
+                  </UiField>
+                  <UiField label="Nudge down" :error="err(d, 'textY')" help="px from the middle; + is down">
+                    <template #default="{ id }"><UiInput :id="id" v-model="d.textY" type="number" mono :invalid="!!err(d, 'textY')" placeholder="0" /></template>
+                  </UiField>
+                  <UiField label="Rotate" :error="err(d, 'textRotate')" :help="`degrees, ${TAG_TEXT_ROTATE.min} to ${TAG_TEXT_ROTATE.max}; + is clockwise`">
+                    <template #default="{ id }"><UiInput :id="id" v-model="d.textRotate" type="number" mono :invalid="!!err(d, 'textRotate')" placeholder="0" /></template>
+                  </UiField>
+                </template>
+              </template>
+            </div>
 
-        <div class="row-actions">
-          <UiButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move ${d.name || 'tag'} up`" @click="move(d, -1)">↑</UiButton>
-          <UiButton size="sm" variant="ghost" :disabled="i === drafts.length - 1" :aria-label="`Move ${d.name || 'tag'} down`" @click="move(d, 1)">↓</UiButton>
-          <span v-if="d.auto" class="auto" title="Set automatically; can't be removed">AUTO</span>
-          <UiButton v-else size="sm" variant="ghost" @click="remove(d)">Remove</UiButton>
-        </div>
-      </section>
+            <div class="row-actions">
+              <UiButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move ${d.name || 'tag'} up`" @click="move(d, -1)">↑</UiButton>
+              <UiButton size="sm" variant="ghost" :disabled="i === drafts.length - 1" :aria-label="`Move ${d.name || 'tag'} down`" @click="move(d, 1)">↓</UiButton>
+              <span v-if="d.auto" class="auto" title="Set automatically; can't be removed">AUTO</span>
+              <UiButton v-else size="sm" variant="ghost" @click="remove(d)">Remove</UiButton>
+            </div>
+          </section>
 
-      <UiButton class="add" @click="add">+ Add a tag</UiButton>
+          <UiButton class="add" @click="add">+ Add a tag</UiButton>
 
-      <div class="savebar vods-panel vx-glass-rim" :class="{ 'is-on': pending.changed || saveError }">
-        <UiCallout v-if="saveError" tone="error" title="Nothing was saved" class="save-err">{{ saveError }}</UiCallout>
-        <span class="vods-muted">{{ pending.changed ? 'Unsaved changes' : 'No changes' }}</span>
-        <span class="spacer" />
-        <UiButton :disabled="!pending.changed || saving" @click="undo">Undo changes</UiButton>
-        <UiButton type="submit" variant="primary" :loading="saving" :disabled="unavailable || !pending.changed || pending.errors.size > 0">Save</UiButton>
-      </div>
-    </form>
+          <UiSaveBar :count="pending.count" :saving="saving" :blocked="unavailable || pending.errors.size > 0" :error="saveError" submit @undo="undo" />
+        </form>
+      </template>
+    </UiLoadState>
   </ManageShell>
 </template>
 
 <style scoped>
 .intro { margin: -8px 0 16px; max-width: 70ch; font-size: 13px; }
-.sk { display: flex; flex-direction: column; gap: 12px; }
 .gap { margin-bottom: 16px; }
 .when { margin: -8px 0 12px; font-size: 12px; }
 .tag {
@@ -305,13 +303,6 @@ onMounted(() => {
   font: 600 10px/1 var(--vods-font-mono); letter-spacing: .08em; color: var(--vods-info);
 }
 .add { margin-bottom: 16px; }
-.savebar {
-  position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  padding: 10px 14px; background: var(--vods-bg);
-}
-.savebar.is-on { box-shadow: 0 0 0 1px var(--vods-accent); }
-.save-err { flex-basis: 100%; }
-.spacer { flex: 1; }
 @container vods (max-width: 760px) {
   .tag { grid-template-columns: minmax(0, 1fr); }
   .row-actions { justify-content: flex-end; }

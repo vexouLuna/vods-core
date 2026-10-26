@@ -103,10 +103,7 @@ async function unlink() {
 </script>
 
 <template>
-  <div class="tile vods-panel vx-glass-rim">
-    <div class="vods-eyebrow">Twitch (ad-free)</div>
-    <div class="tile-main"><UiStatusDot :status="tile.status" />{{ tile.text }}</div>
-    <div v-if="tile.sub" class="vods-muted small">{{ tile.sub }}</div>
+  <UiStatTile label="Twitch (ad-free)" :status="tile.status" :headline="tile.text" :sub="tile.sub">
     <template v-if="status">
       <div v-if="!tile.linked" class="buttons">
         <UiButton title="Sign in on Twitch as an account that sees no ads on the channel" @click="startLink">Link Twitch account</UiButton>
@@ -154,20 +151,21 @@ async function unlink() {
       </template>
     </UiDialog>
 
-    <UiDialog v-model:open="unlinkOpen" :title="`Unlink ${status?.login ?? 'the Twitch account'}?`">
+    <UiConfirm
+      v-model:open="unlinkOpen"
+      :title="`Unlink ${status?.login ?? 'the Twitch account'}?`"
+      tone="danger"
+      confirm-label="Unlink"
+      :loading="unlinking"
+      @confirm="unlink"
+    >
       Live recordings are asked for anonymously again, with Twitch's ads cut out as gaps. The token isn't revoked; sign
       out on Twitch to end it.
-      <template #actions="{ close }">
-        <UiButton @click="close">Cancel</UiButton>
-        <UiButton variant="danger-solid" :loading="unlinking" @click="unlink">Unlink</UiButton>
-      </template>
-    </UiDialog>
-  </div>
+    </UiConfirm>
+  </UiStatTile>
 </template>
 
 <style scoped>
-.tile { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; align-items: flex-start; }
-.tile-main { display: flex; align-items: center; gap: 8px; font-size: 16px; }
 .tile-link { color: var(--vods-accent); text-decoration: underline; text-underline-offset: 2px; }
 .tile-link:hover { color: var(--vods-ink); }
 .small { font-size: 12px; }

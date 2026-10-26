@@ -18,48 +18,20 @@ const LINKS = [
   { label: 'Home', to: '/manage/home' },
   { label: 'Audit', to: '/manage/audit' },
 ]
-const current = (to: string, exact = false) => (exact ? route.path === to : route.path === to || route.path.startsWith(`${to}/`))
+const links = computed(() =>
+  LINKS.map(({ label, to, exact }) => ({ label, to, current: exact ? route.path === to : route.path === to || route.path.startsWith(`${to}/`) })),
+)
 
 /** The password has no user: "admin" then. */
 const who = computed(() => (session.user ? `@${session.user.login}` : 'admin (password)'))
 </script>
 
 <template>
-  <nav class="manage vods-panel vx-glass-rim" aria-label="Manage">
-    <span class="vods-eyebrow label">Manage</span>
-    <div class="links">
-      <RouterLink
-        v-for="l in LINKS"
-        :key="l.to"
-        :to="l.to"
-        class="link"
-        :class="{ 'is-current': current(l.to, l.exact) }"
-        :aria-current="current(l.to, l.exact) ? 'page' : undefined"
-      >{{ l.label }}</RouterLink>
-    </div>
-    <span class="who vods-muted vods-mono">{{ who }}</span>
-  </nav>
+  <UiNavBar :links="links" label="Manage" title="Manage">
+    <template #trail><span class="who vods-mono">{{ who }}</span></template>
+  </UiNavBar>
 </template>
 
 <style scoped>
-.manage {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  padding: 8px 12px;
-  margin: 0 0 20px;
-}
-.label { margin: 0; }
-.links { display: flex; flex-wrap: wrap; gap: 2px; }
-.link {
-  padding: 5px 10px;
-  border-radius: var(--vods-radius-sm);
-  color: var(--vods-muted);
-  text-decoration: none;
-  font-size: 13px;
-}
-.link:hover { color: var(--vods-ink); background: var(--vods-hover); }
-.link.is-current { color: var(--vods-accent); background: var(--vods-hover); }
-.who { margin-left: auto; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.who { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
