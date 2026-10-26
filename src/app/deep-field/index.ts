@@ -37,6 +37,7 @@ import {
   VxSwitch,
   VxTable,
   VxTabs,
+  VxTagInput,
   VxTextarea,
   VxTooltip,
 } from '@vex/ui'
@@ -84,6 +85,7 @@ export const deepField: VodsUi = {
     Switch: VxSwitch,
     Table: VxTable,
     Tabs: VxTabs,
+    TagInput: VxTagInput,
     Textarea: VxTextarea,
     Tooltip: VxTooltip,
   },

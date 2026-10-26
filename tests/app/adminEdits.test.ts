@@ -14,7 +14,11 @@ import {
   gameEdits,
   gameErrors,
   gamesFromChapters,
+  headerDraft,
+  headerErrors,
+  headerPatch,
   hhmmss,
+  lockedTags,
   parseTime,
   templateOf,
   youtubeDrafts,
@@ -123,28 +127,63 @@ describe('details draft', () => {
     const v = vod({ thumbnail_url: 'https://x/t.jpg' })
     const d = detailsDraft(v)
     expect(detailsPatch(d, v)).toEqual({})
-    d.title = '  New  '
     d.thumbnailUrl = ''
     d.duration = 3725
-    expect(detailsPatch(d, v)).toEqual({ title: 'New', thumbnailUrl: null, duration: '01:02:05' })
+    expect(detailsPatch(d, v)).toEqual({ thumbnailUrl: null, duration: '01:02:05' })
   })
 
-  it('sends the cut reason trimmed, and empty as null', () => {
-    const v = vod({ cut_reason: 'Music claim' })
-    const d = detailsDraft(v)
-    expect(d.cutReason).toBe('Music claim')
-    d.cutReason = '  '
-    expect(detailsPatch(d, v)).toEqual({ cutReason: null })
-    d.cutReason = ' DMCA '
-    expect(detailsPatch(d, vod())).toEqual({ cutReason: 'DMCA' })
-    expect(detailsErrors({ ...d, cutReason: 'x'.repeat(501) }).get('cutReason')).toMatch(/500/)
-  })
-
-  it('checks the title, URL, duration against the content, and the date', () => {
-    const d = { ...detailsDraft(vod()), title: ' ', thumbnailUrl: 'ftp://x', createdAt: 'nope' }
-    expect([...detailsErrors(d).keys()]).toEqual(['title', 'thumbnailUrl', 'createdAt'])
+  it('checks the URL, duration against the content, and the date', () => {
+    const d = { ...detailsDraft(vod()), thumbnailUrl: 'ftp://x', createdAt: 'nope' }
+    expect([...detailsErrors(d).keys()]).toEqual(['thumbnailUrl', 'createdAt'])
     expect(detailsErrors(detailsDraft(vod()), 4000).get('duration')).toMatch(/shorten/)
     expect(hhmmss(100 * 3600 + 1)).toBe('100:00:01')
+  })
+
+  it('takes only the thumbnail of a synthetic VOD', () => {
+    const v = vod({ synthetic: { supersedes: false, segments: [] } })
+    const d = { ...detailsDraft(v), thumbnailUrl: 'https://x/s.jpg', duration: 10, createdAt: 'nope' }
+    expect([...detailsErrors(d, 4000, true).keys()]).toEqual([])
+    expect(detailsPatch(d, v)).toEqual({ thumbnailUrl: 'https://x/s.jpg' })
+  })
+
+  it("reads a synthetic VOD's own thumbnail, not the first source's it shows without one", () => {
+    expect(detailsDraft(vod({ thumbnail_url: 'https://x/src.jpg', synthetic: { supersedes: false, segments: [] } })).thumbnailUrl).toBe('')
+    const v = vod({ thumbnail_url: 'https://x/own.jpg', synthetic: { supersedes: false, segments: [], thumbnailUrl: 'https://x/own.jpg' } })
+    const d = detailsDraft(v)
+    expect(d.thumbnailUrl).toBe('https://x/own.jpg')
+    expect(detailsPatch({ ...d, thumbnailUrl: '' }, v)).toEqual({ thumbnailUrl: null })
+  })
+})
+
+describe('header draft', () => {
+  it('sends the title, the cut reason (empty as null) and only what changed', () => {
+    const v = vod({ cut_reason: 'Music claim' })
+    const d = headerDraft(v)
+    expect(d.cutReason).toBe('Music claim')
+    expect(headerPatch(d, v)).toEqual({})
+    d.title = '  New  '
+    d.cutReason = '  '
+    expect(headerPatch(d, v)).toEqual({ title: 'New', cutReason: null })
+    expect(headerErrors({ ...d, title: ' ', cutReason: 'x'.repeat(501) }).get('cutReason')).toMatch(/500/)
+    expect([...headerErrors({ ...d, title: ' ' }).keys()]).toEqual(['title'])
+  })
+
+  it('edits only the own tags, and sends the stored automatic ones along', () => {
+    const v = vod({ tags: ['vods', 'compilation', 'complete'] })
+    const d = headerDraft(v)
+    expect(d.tags).toEqual(['complete'])
+    d.tags = ['complete']
+    expect(headerPatch(d, v)).toEqual({})
+    d.tags = ['playthroughs']
+    expect(headerPatch(d, v)).toEqual({ tags: ['vods', 'compilation', 'playthroughs'] })
+  })
+
+  it('locks the states first, then the automatic tags', () => {
+    const now = Date.parse('2026-09-03T00:00:00Z')
+    const v = vod({ hidden: true, tags: ['vods', 'complete'], merged_into: { id: '2', offset: 0 } })
+    expect(lockedTags(v, now).map((l) => l.value)).toEqual(['hidden', 'merged', 'new', 'vods'])
+    const s = vod({ tags: ['compilation'], synthetic: { supersedes: true, segments: [] } })
+    expect(lockedTags(s, now + 30 * 86400_000).map((l) => l.value)).toEqual(['merge or split', 'compilation'])
   })
 })
 
@@ -195,8 +234,8 @@ describe('settings drafts', () => {
     expect(fromDraft(s, ' 4 ')).toEqual({ value: 4 })
   })
 
-  it('reads lists one per line, and keeps steps in the job order', () => {
-    expect(fromDraft(setting({ type: 'list' }), 'a\n\n b \na')).toEqual({ value: ['a', 'b'] })
+  it('trims lists and drops repeats, and keeps steps in the job order', () => {
+    expect(fromDraft(setting({ type: 'list' }), ['a', '', ' b ', 'a'])).toEqual({ value: ['a', 'b'] })
     const steps = setting({ type: 'steps', choices: { vod: ['download', 'upload', 'cleanup'] } })
     expect(fromDraft(steps, { vod: ['cleanup', 'download'], live: [] })).toEqual({ value: { vod: ['download', 'cleanup'] } })
   })
@@ -211,7 +250,7 @@ describe('settings drafts', () => {
     expect(settingChanges(items, drafts)).toEqual({ changes: {}, errors: new Map() })
     drafts.on = false
     drafts.n = '0'
-    drafts.l = 'x\ny'
+    drafts.l = ['x', 'y']
     const r = settingChanges(items, drafts)
     expect(r.changes).toEqual({ on: false, l: ['x', 'y'] })
     expect([...r.errors.keys()]).toEqual(['n'])

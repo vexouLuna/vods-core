@@ -294,7 +294,7 @@ export interface DeleteUploadsResult extends ActionResult {
   vod: AdminVod
 }
 
-/** The fields the details editor changes (PATCH /api/v2/vods/:id, snake_case there). A merged VOD takes only `hidden`. */
+/** The fields the header panel and details editor change (PATCH /api/v2/vods/:id, snake_case there). A merged VOD takes only `hidden`. */
 export interface VodPatch {
   title?: string
   hidden?: boolean
@@ -306,6 +306,8 @@ export interface VodPatch {
   createdAt?: string
   /** Why the VOD was cut (500 characters at most), or null for none. */
   cutReason?: string | null
+  /** Replaces the VOD's tags (the automatic ones included: the archive keeps only known site tags). */
+  tags?: string[]
 }
 
 /** A games row (the public `/games` shape): which game was played when, for the games pages. */
