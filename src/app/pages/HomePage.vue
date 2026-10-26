@@ -1,25 +1,28 @@
 <script setup lang="ts">
 // The home page: the cards set on /manage/home, in order (lib/siteOptions): the newest VOD in its own panel (the live
-// stream instead, while the channel is live), the newest VODs of a tag (playthroughs) with what each one is, and the
-// most played games. The full lists are their own pages (the header and each card's "see all" button); a game card
+// stream instead, while the channel is live), the newest VOD of a tag in that panel, the two newest of a tag
+// (playthroughs) with what each one is, and the most played games. A tag card shows only while its tag is a home
+// category, whatever the saved cards say. The full lists are their own pages (the header and each card's "see all" button); a game card
 // opens the VODs list narrowed to that game.
 import { resumeProgress, type GamePlayed, type LiveStatus, type Progress, type Vod } from '../../index'
 import { useVods, useVodsContext } from '../../vue/index'
 import { computed, ref, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
+import LatestOne from '../components/LatestOne.vue'
 import LatestTagged from '../components/LatestTagged.vue'
 import LatestVod from '../components/LatestVod.vue'
 import LiveNow from '../components/LiveNow.vue'
 import MostPlayed from '../components/MostPlayed.vue'
 import VodsShell from '../components/VodsShell.vue'
 import { loadGamesPlayed } from '../lib/gamesPlayed'
-import { siteOptions } from '../lib/siteOptions'
+import { homeCardKey, shownHomeCards, siteOptions } from '../lib/siteOptions'
+import { tagConfig } from '../lib/vodTags'
 import { listPath, parseListQuery, toApiFilter, toListQuery } from '../lib/listQuery'
 
 const { client, progress } = useVodsContext()
 const router = useRouter()
 
-const cards = computed(() => siteOptions.value.homeCards)
+const cards = computed(() => shownHomeCards(siteOptions.value.homeCards, tagConfig.value))
 
 const { vods: latestVods } = useVods(() => ({ ...toApiFilter(parseListQuery({}, 'vods')), page: 1, perPage: 1 }))
 const latest = computed(() => latestVods.value[0] ?? null)
@@ -51,11 +54,12 @@ const resumeOf = (v: Vod) => resumeProgress(saved.value.get(v.id), v.duration)
 <template>
   <VodsShell>
     <section class="top">
-      <template v-for="c in cards" :key="c.kind === 'tag' ? `tag:${c.tag}` : c.kind">
+      <template v-for="c in cards" :key="homeCardKey(c)">
         <template v-if="c.kind === 'latest'">
           <LiveNow v-if="live" :live="live" />
           <LatestVod v-else-if="latest" :vod="latest" :progress="resumeOf(latest)" />
         </template>
+        <LatestOne v-else-if="c.kind === 'one'" :tag="c.tag" :resume="resumeOf" />
         <LatestTagged v-else-if="c.kind === 'tag'" :tag="c.tag" :resume="resumeOf" />
         <MostPlayed v-else :games="games" :error="gamesError" @game="openGame" @retry="fetchGames(true)" />
       </template>

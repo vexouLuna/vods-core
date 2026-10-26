@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// /manage/home: which cards the homepage shows, in order (GET /admin/site/options). A tag card is any tag whose type
-// can be a home card (/manage/tags). Also which version of a compiled synthetic VOD plays first. One Save sends both.
+// /manage/home: which cards the homepage shows, in order (GET /admin/site/options). A tag card is for any home
+// category (a tag with a page, /manage/tags): its newest VOD, or its two newest. Also which version of a compiled synthetic VOD plays first. One Save sends both.
 import { useToast } from '@vex/ui/utils'
 import { errorText } from '@vex/platform-web'
 import { computed, onMounted, ref } from 'vue'
@@ -37,11 +37,11 @@ async function load() {
   }
 }
 
-/** Cards not on the homepage yet: the latest VOD, the games, and each tag that can be a home card. */
+/** Cards not on the homepage yet: latest live, the games, and two per home category. */
 const addable = computed(() => {
   const all: HomeCard[] = [
     { kind: 'latest' },
-    ...Object.entries(tagConfig.value).flatMap(([tag, s]) => (s.homeCard ? [{ kind: 'tag' as const, tag }] : [])),
+    ...Object.entries(tagConfig.value).flatMap(([tag, s]) => (s.page ? [{ kind: 'one' as const, tag }, { kind: 'tag' as const, tag }] : [])),
     { kind: 'games' },
   ]
   const have = new Set(cards.value.map(homeCardKey))
@@ -84,8 +84,9 @@ onMounted(() => {
 <template>
   <ManageShell title="Homepage">
     <p class="intro vods-muted">
-      The cards on the homepage, top to bottom. A tag's card shows its newest VODs; a tag gets one when its type can be a
-      home card (Tags).
+      The cards on the homepage, top to bottom. "Latest live" is the stream while live, else the newest VOD. A home
+      category (a tag with a page, Tags) can have a "Latest VOD" card (its newest, never the stream) and a "Latest 2"
+      card (its two newest).
     </p>
     <UiCallout v-if="loadError" tone="error" title="Couldn't load the homepage cards">
       {{ loadError }}

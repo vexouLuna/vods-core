@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Vod } from '../../src/index'
-import { hasFilters, listPath, parseListQuery, tabOf, tagLink, toApiFilter, toListQuery } from '../../src/app/lib/listQuery'
+import { hasFilters, kindLabel, listPath, parseListQuery, tabOf, tabs, tagLink, toApiFilter, toListQuery } from '../../src/app/lib/listQuery'
 import { RECENT_MS } from '../../src/app/lib/vodTags'
 
 describe('parseListQuery', () => {
@@ -60,7 +60,7 @@ describe('the tag filter', () => {
     expect(parseListQuery({ tag: 'complete' }, 'playthroughs').tag).toBe('complete')
     // Plain VODs have no tags; a tab's own tag isn't a filter; nor is a bad name.
     expect(parseListQuery({ tag: 'complete' }).tag).toBe('')
-    expect(parseListQuery({ tag: 'compilation' }, 'playthroughs').tag).toBe('')
+    expect(parseListQuery({ tag: 'playthroughs' }, 'playthroughs').tag).toBe('')
     expect(parseListQuery({ tag: 'Bad Tag' }, 'playthroughs').tag).toBe('')
     expect(toListQuery(parseListQuery({ tag: 'complete' }, 'playthroughs'))).toEqual({ tag: 'complete' })
     expect(hasFilters(parseListQuery({ tag: 'new' }))).toBe(true)
@@ -71,15 +71,15 @@ describe('the tag filter', () => {
     const week = new Date(now - RECENT_MS)
     expect(toApiFilter(parseListQuery({ tag: 'new' }), now)).toMatchObject({ tag: undefined, firstLiveFrom: week })
     const updated = toApiFilter(parseListQuery({ tag: 'updated' }, 'playthroughs'), now)
-    expect(updated).toMatchObject({ tag: 'compilation', firstLiveBefore: week, lastLiveFrom: week })
+    expect(updated).toMatchObject({ tag: 'playthroughs', firstLiveBefore: week, lastLiveFrom: week })
     expect(updated.tags).toBeUndefined()
-    expect(toApiFilter(parseListQuery({ tag: 'complete' }, 'playthroughs'), now)).toMatchObject({ tag: 'compilation', tags: ['complete'] })
+    expect(toApiFilter(parseListQuery({ tag: 'complete' }, 'playthroughs'), now)).toMatchObject({ tag: 'playthroughs', tags: ['complete'] })
   })
 
   it("links a VOD's tag to its own tab", () => {
     const vod = (tags: string[]) => ({ tags }) as unknown as Vod
-    expect(tabOf(vod(['compilation', 'complete']))).toBe('playthroughs')
-    expect(tagLink(vod(['compilation', 'complete']), 'complete')).toBe('/playthroughs?tag=complete')
+    expect(tabOf(vod(['playthroughs', 'complete']))).toBe('playthroughs')
+    expect(tagLink(vod(['playthroughs', 'complete']), 'complete')).toBe('/playthroughs?tag=complete')
     expect(tagLink(vod([]), 'new')).toBe('/vods?tag=new')
     expect(tagLink(vod(['complete']), 'complete')).toBeNull()
   })
@@ -93,7 +93,7 @@ describe('toApiFilter', () => {
   })
 
   it('omits empty filters', () => {
-    expect(toApiFilter(parseListQuery({}, 'playthroughs')).tag).toBe('compilation')
+    expect(toApiFilter(parseListQuery({}, 'playthroughs')).tag).toBe('playthroughs')
     expect(toApiFilter(parseListQuery({}))).toEqual({ tag: undefined, title: undefined, game: undefined, from: undefined, to: undefined })
   })
 })
@@ -102,5 +102,19 @@ describe('hasFilters', () => {
   it('ignores the page and the tab', () => {
     expect(hasFilters(parseListQuery({ page: '4' }, 'playthroughs'))).toBe(false)
     expect(hasFilters(parseListQuery({ game: 'A' }))).toBe(true)
+  })
+})
+
+describe('tabs', () => {
+  it('puts /vods first: the vods tag when there is one, else the default list', () => {
+    const pt = { label: 'pt', drawn: false, page: 'playthroughs', pageLabel: 'Playthroughs' }
+    expect(tabs({ playthroughs: pt }).map((t) => [t.value, t.tag])).toEqual([['vods', undefined], ['playthroughs', 'playthroughs']])
+    const withVods = tabs({ playthroughs: pt, vods: { label: 'VOD', drawn: false, page: 'vods', pageLabel: 'All VODs' } })
+    expect(withVods.map((t) => [t.value, t.tag, t.label])).toEqual([['vods', 'vods', 'All VODs'], ['playthroughs', 'playthroughs', 'Playthroughs']])
+  })
+  it('never calls a VOD "a VOD"', () => {
+    const vod = (tags: string[]) => ({ tags }) as unknown as Vod
+    expect(kindLabel(['vods'])).toBeUndefined()
+    expect(tabOf(vod(['vods', 'playthroughs']))).toBe('playthroughs')
   })
 })

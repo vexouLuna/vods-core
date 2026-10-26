@@ -35,7 +35,7 @@ export interface TagStyle {
   page?: string | null
   /** That page's title and link, e.g. "Playthroughs". Unset: the slug. */
   pageLabel?: string
-  /** Whether the home page can show its newest VODs as a "latest" card. */
+  /** Whether it has a page (a home category: a header link, and the home page can show its newest VODs). */
   homeCard?: boolean
   /** The pattern's second color (any CSS color) and the width of one stripe or square in px. Unset: the page
    * background's color, and 4. */
@@ -53,7 +53,8 @@ export const DEFAULT_TAGS: Record<string, TagStyle> = {
     new: { label: 'new', drawn: true, color: 'var(--vods-tag-new)', shape: null },
     updated: { label: 'updated', drawn: true, color: 'var(--vods-tag-updated)', shape: null },
     complete: { label: 'complete', drawn: true, color: 'var(--vods-tag-complete)', shape: null },
-    compilation: { label: 'playthrough', drawn: false, page: 'playthroughs', pageLabel: 'Playthroughs', homeCard: true },
+    playthroughs: { label: 'playthrough', drawn: false, page: 'playthroughs', pageLabel: 'Playthroughs', homeCard: true },
+    compilation: { label: 'auto-updating', drawn: false },
   }
 
 /** What tells one vods site from another. Everything else (the pages, the player, Manage) is the same. */

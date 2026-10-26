@@ -3,7 +3,7 @@
 import type { TagInput } from './api'
 import {
   AUTO_TAGS, isAutoTag, isTagColor, TAG_LABEL_MAX, TAG_NAME, TAG_SIZE, TAG_TEXT_MAX, TAG_TEXT_NUDGE, TAG_TEXT_ROTATE, TAG_TEXT_SIZE, TAG_ROTATE,
-  TAG_PATTERN_SIZE, TAG_PATTERNS, TAG_PAGE_LABEL_MAX, RESERVED_PAGES, type RawTag, type TagPattern,
+  TAG_PATTERN_SIZE, TAG_PATTERNS, TAG_PAGE_LABEL_MAX, VODS_TAG, pageAllowed, type RawTag, type TagPattern,
 } from '../lib/vodTags'
 import { site, type TagStyle } from '../site'
 
@@ -35,7 +35,7 @@ export interface TagDraft {
   /** Its own list page and header link: the slug ('' for none) and the page's title. */
   page: string
   pageLabel: string
-  /** Can feed a "latest" card on the home page. */
+  /** Has a page (a home category); kept in step with `page` by homeCategory(). */
   homeCard: boolean
   /** The shape as saved (a path under the public API); uploads and removals apply straight away. */
   shape: string | null
@@ -54,6 +54,19 @@ const bare = (name: string, label: string, drawn: boolean): RawTag => ({
   name, label, drawn, color: null, shape: null, width: null, height: null, rotate: null, ...NO_TEXT, ...NO_PATTERN, ...NO_TYPE,
 })
 const typed = (n: number | null) => (n == null ? '' : String(n))
+
+/** The "Home category" switch: on gives the tag a page (its name) and a title (its label, capitalised) unless it has
+ * them; off takes the page away. */
+export function homeCategory(d: TagDraft, on: boolean): void {
+  d.homeCard = on
+  if (!on) {
+    d.page = ''
+    return
+  }
+  const label = d.pageLabel.trim() || d.label.trim() || d.name.trim()
+  d.page = d.page.trim() || d.name.trim()
+  d.pageLabel = label.charAt(0).toUpperCase() + label.slice(1)
+}
 
 let nextKey = 0
 export const draftOf = (t: RawTag, saved = true): TagDraft => ({
@@ -97,7 +110,9 @@ export const rawOf = (tags: Record<string, TagStyle>): RawTag[] =>
 export function draftsOf(list: RawTag[]): TagDraft[] {
   const builtIn = rawOf(site.tags)
   const missing = AUTO_TAGS.filter((name) => !list.some((t) => t.name === name)).map(
-    (name) => builtIn.find((t) => t.name === name) ?? bare(name, name, false),
+    (name) =>
+      builtIn.find((t) => t.name === name) ??
+      (name === VODS_TAG ? { ...bare(name, 'VOD', false), page: VODS_TAG, pageLabel: 'VODs', homeCard: true } : bare(name, name, false)),
   )
   return [...list.map((t) => draftOf(t)), ...missing.map((t) => draftOf(t, false))]
 }
@@ -126,16 +141,16 @@ export function tagChanges(saved: RawTag[], drafts: TagDraft[]) {
   const pages = new Set<string>()
   const colorOf = (key: number, field: 'color' | 'textColor' | 'patternColor', value: string) => {
     const c = value.trim()
-    if (c && !isTagColor(c)) flag(key, field, 'A hex, a theme token like var(--vods-ok), a color name, or a color function: oklch(from var(--vods-ok) calc(l - 0.1) c h)')
+    if (c && !isTagColor(c)) flag(key, field, 'A hex, a theme token like var(--vods-tag-new), a color name, or a color function: oklch(from var(--vods-tag-new) calc(l - 0.1) c h)')
     return c || null
   }
   const typeOf = (d: TagDraft) => {
     const page = d.page.trim()
-    const homeCard = d.homeCard
+    const homeCard = !!page
     if (!page) return { page: null, pageLabel: null, homeCard }
     const pageLabel = d.pageLabel.trim()
     if (!TAG_NAME.test(page)) flag(d.key, 'page', 'Lowercase letters, digits and dashes, up to 32')
-    else if (RESERVED_PAGES.includes(page)) flag(d.key, 'page', `The site has its own /${page}`)
+    else if (!pageAllowed(d.name.trim(), page)) flag(d.key, 'page', d.name.trim() === VODS_TAG ? 'The vods tag can only have /vods' : `The site has its own /${page}`)
     else if (pages.has(page)) flag(d.key, 'page', 'Another tag has this page')
     pages.add(page)
     if (!pageLabel) flag(d.key, 'pageLabel', 'Needs a title, or no page')

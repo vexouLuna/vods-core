@@ -1,27 +1,19 @@
-// Manage's merge and split for one VOD, without its look. Merge: when a stream dropped and Twitch made two VODs of one
-// broadcast, the later one is appended to this one, the time between becoming a "Technical difficulties" gap chapter.
-// Split: from a point between two parts on becomes a new VOD. Both move chat with the video and can be undone (latest
-// first). SplicePanel.vue draws it; a site with its own UI binds the same refs.
+// Manage's merge and split for one VOD, without its look. Both make synthetic VODs tagged `vods` and hide the VODs
+// they're made of (ADR 0005 in twitch-archive); deleting the synthetic VOD undoes it. Merge: this VOD and any others
+// (suggested: those starting less than 24 h after it ends or ending less than 24 h before it starts; or by id), in
+// start order, with a gap before each, as `<first id>-m` or an id of your own. Split: before and after any second, as
+// `<id>-1` and `<id>-2` or ids of your own. SplicePanel.vue draws it; a site with its own UI binds the same refs.
 import { computed, ref, watch } from 'vue'
 import { duration as formatDuration, errorText } from '@vex/platform-web'
 import { normalizeVod, Timeline, toClock, toSeconds } from '../../index'
-import { editedSince, validPoints, type AdminVod, type MergeCandidate, type MergeCandidates, type Splice, type SpliceResult, type SplitPoint } from '../admin/api'
+import type { AdminVod, MergeCandidate, SyntheticVod } from '../admin/api'
 import { admin } from '../admin/session'
 import type { Notify } from '../lib/notify'
 
 /** "4m 12s", "1h 02m", "40s", for a gap either way. */
 export const gapText = (seconds: number) => formatDuration(Math.abs(seconds))
 
-/** One line of a VOD's merge and split history. */
-export function describeSplice(sp: Splice): string {
-  if (sp.kind === 'merge') {
-    const down = sp.gap == null ? '' : sp.gap < 0 ? ` (overlapped ${gapText(sp.gap)})` : ` (down ${gapText(sp.gap)})`
-    return `${sp.otherId} merged into ${sp.vodId} at ${toClock(sp.offset)}${down}`
-  }
-  return `${sp.vodId} split at ${toClock(sp.offset)}; the rest became ${sp.otherId}`
-}
-
-/** Where one part ends and the next starts: the places a split works without cutting an upload. */
+/** Where one part ends and the next starts: handy places to split. */
 export function splitJoins(timeline: Pick<Timeline, 'partSpans'> | null): { at: number; label: string }[] {
   const spans = timeline?.partSpans() ?? []
   return spans.slice(0, -1).map((s, i) => ({ at: Math.round(s.end), label: `after P${i + 1}` }))
@@ -33,107 +25,144 @@ export function badGap(draft: string): boolean {
   return draft.trim() !== '' && !(Number.isFinite(s) && s >= 0)
 }
 
+/** A VOD in a merge: what ordering it and working out the gaps need. */
+export interface MergeVod {
+  id: string
+  title: string | null
+  createdAt: string
+  /** Seconds. */
+  duration: number
+}
+
+/** One join of a merge, in start order: the gap from `before`'s end to `after`'s start, by their times. */
+export interface MergeJoin {
+  key: string
+  before: MergeVod
+  after: MergeVod
+  gap: number
+}
+
+const startOf = (v: MergeVod) => Date.parse(v.createdAt)
+
+/** The VODs in start order (ties by id), and each join between them. */
+export function mergeOrder(vods: MergeVod[]): { order: MergeVod[]; joins: MergeJoin[] } {
+  const order = [...vods].sort((a, b) => startOf(a) - startOf(b) || a.id.localeCompare(b.id))
+  const joins = order.slice(1).map((after, i) => {
+    const before = order[i]!
+    return { key: `${before.id}>${after.id}`, before, after, gap: Math.round((startOf(after) - startOf(before)) / 1000 - before.duration) }
+  })
+  return { order, joins }
+}
+
 export interface SpliceOptions {
-  /** The VOD changed (reload it). */
-  changed: () => void
-  /** A job started (the descriptions' update). */
-  job: (jobId: number) => void
+  /** A synthetic VOD was made (open it). */
+  made: (id: string) => void
   notify: Notify
 }
+
+const asMergeVod = (v: AdminVod | MergeCandidate): MergeVod =>
+  'created_at' in v
+    ? { id: v.id, title: v.title, createdAt: v.created_at, duration: toSeconds(v.duration ?? '') || 0 }
+    : { id: v.id, title: v.title ?? null, createdAt: v.createdAt, duration: v.duration_seconds ?? (toSeconds(v.duration ?? '') || 0) }
 
 /** The merge and split panel's logic for `props.vod`. */
 export function useSplice(props: { vod: AdminVod }, options: SpliceOptions) {
   const { notify } = options
-  const mergedInto = computed(() => props.vod.merged_into ?? null)
-  const splices = computed(() => [...(props.vod.splices ?? [])].reverse())
+  const busy = ref<'merge' | 'split' | 'add' | null>(null)
 
-  // ---- after a merge or split: the YouTube descriptions still list the old parts ----
-  const touched = ref<string[]>([])
-  /** A merge's warnings (the other upload type plays a few seconds off), kept until dismissed. */
-  const warnings = ref<string[]>([])
-  const describing = ref(false)
-  const uploadTypes = computed(() => [...new Set((props.vod.youtube ?? []).map((u) => u.type))])
-  async function describe() {
-    describing.value = true
+  // ---- merge ----
+  const cands = ref<MergeCandidate[] | null>(null)
+  const candsError = ref<string | null>(null)
+  async function loadCandidates() {
+    candsError.value = null
     try {
-      for (const id of touched.value)
-        for (const type of uploadTypes.value.length ? uploadTypes.value : (['vod'] as const)) {
-          const res = await admin.updateDescriptions(id, type)
-          if (res.jobId != null) options.job(res.jobId)
-        }
-      notify(`Updating the descriptions of ${touched.value.join(' and ')}`, { duration: 3500 })
-      touched.value = []
+      cands.value = (await admin.mergeCandidates(props.vod.id, 24)).items
     } catch (e) {
-      notify(errorText(e), { kind: 'error', duration: 6000 })
-    } finally {
-      describing.value = false
+      candsError.value = errorText(e)
     }
   }
 
-  const busy = ref<string | null>(null)
-  /** An undo refused over edits made since; confirming retries it with force. */
-  const forceAsk = ref<{ edited: string[]; retry: () => Promise<SpliceResult> } | null>(null)
+  /** The VODs merged with this one. */
+  const picked = ref<MergeVod[]>([])
+  const self = computed(() => asMergeVod(props.vod))
+  const has = (id: string) => id === props.vod.id || picked.value.some((v) => v.id === id)
+  const suggestions = computed(() => (cands.value ?? []).filter((c) => !has(c.id)))
+  function pick(c: MergeCandidate) {
+    if (!has(c.id)) picked.value = [...picked.value, asMergeVod(c)]
+  }
+  const unpick = (id: string) => (picked.value = picked.value.filter((v) => v.id !== id))
 
-  async function run(name: string, action: (force: boolean) => Promise<SpliceResult>, ids: (res: SpliceResult) => string[], force = false) {
-    busy.value = name
+  const addDraft = ref('')
+  const addError = ref<string | null>(null)
+  watch(addDraft, () => (addError.value = null))
+  async function addById() {
+    const id = addDraft.value.trim()
+    if (!id) return
+    if (has(id)) {
+      addError.value = id === props.vod.id ? "That's this VOD." : 'Already in the merge.'
+      return
+    }
+    busy.value = 'add'
     try {
-      const res = await action(force)
-      notify(res.msg, { duration: 4000 })
-      warnings.value = res.warnings ?? []
-      touched.value = [...new Set(ids(res))]
-      splitErr.value = null
-      options.changed()
-      void loadCandidates()
+      const v = await admin.vod(id)
+      if (!has(v.id)) picked.value = [...picked.value, asMergeVod(v)]
+      addDraft.value = ''
     } catch (e) {
-      const edited = editedSince(e)
-      if (edited.length && !force) {
-        forceAsk.value = { edited, retry: () => action(true) }
-        return
-      }
-      const points = name === 'split' ? validPoints(e) : []
-      if (points.length) {
-        splitErr.value = { msg: errorText(e), points }
-        return
-      }
+      addError.value = (e as { status?: number }).status === 404 ? `No VOD ${id}.` : errorText(e)
+    } finally {
+      busy.value = null
+    }
+  }
+
+  const merge_ = computed(() => mergeOrder([self.value, ...picked.value]))
+  const order = computed(() => merge_.value.order)
+  const joins = computed(() => merge_.value.joins)
+  /** One gap per join, typed or filled from the start times (empty: where it started, as when they overlap). */
+  const gapDrafts = ref<Record<string, string>>({})
+  watch(
+    joins,
+    (list) => {
+      const next: Record<string, string> = {}
+      for (const j of list) next[j.key] = gapDrafts.value[j.key] ?? (j.gap >= 0 ? toClock(j.gap) : '')
+      gapDrafts.value = next
+    },
+    { immediate: true },
+  )
+  const gapBad = (key: string) => badGap(gapDrafts.value[key] ?? '')
+  const gapsBad = computed(() => joins.value.some((j) => gapBad(j.key)))
+  const mergeIdDraft = ref('')
+  const mergeId = computed(() => mergeIdDraft.value.trim() || `${order.value[0]!.id}-m`)
+  const canMerge = computed(() => picked.value.length > 0 && !gapsBad.value && busy.value === null)
+
+  async function merge() {
+    if (!canMerge.value) return
+    busy.value = 'merge'
+    try {
+      const gaps = joins.value.map((j) => {
+        const d = (gapDrafts.value[j.key] ?? '').trim()
+        return d ? toSeconds(d) : null
+      })
+      const made: SyntheticVod = await admin.merge(props.vod.id, { sources: picked.value.map((v) => v.id), gaps, id: mergeIdDraft.value.trim() || undefined })
+      notify(`Merged into ${made.id}; ${order.value.map((v) => v.id).join(', ')} are hidden now`, { duration: 4000 })
+      picked.value = []
+      mergeIdDraft.value = ''
+      options.made(made.id)
+    } catch (e) {
       notify(errorText(e), { kind: 'error', duration: 8000 })
     } finally {
       busy.value = null
     }
   }
-  function forceUndo() {
-    const ask = forceAsk.value
-    forceAsk.value = null
-    if (ask) void run('force', () => ask.retry(), (r) => [r.splice.vodId, r.splice.otherId], true)
-  }
 
-  // ---- merge ----
-  const cands = ref<MergeCandidates | null>(null)
-  const candsError = ref<string | null>(null)
-  async function loadCandidates() {
-    if (mergedInto.value) return
-    candsError.value = null
-    try {
-      cands.value = await admin.mergeCandidates(props.vod.id)
-    } catch (e) {
-      candsError.value = errorText(e)
-    }
-  }
-  watch(() => props.vod.id, () => ((cands.value = null), loadCandidates()), { immediate: true })
-
-  const mergeOf = ref<MergeCandidate | null>(null)
-  const gapDraft = ref('')
-  const gapBad = computed(() => badGap(gapDraft.value))
-  function askMerge(c: MergeCandidate) {
-    mergeOf.value = c
-    gapDraft.value = c.overlaps ? '0' : ''
-  }
-  function merge() {
-    const c = mergeOf.value
-    if (!c) return
-    mergeOf.value = null
-    const gap = gapDraft.value.trim() ? toSeconds(gapDraft.value) : undefined
-    void run(`merge-${c.id}`, () => admin.merge(props.vod.id, c.id, gap), (r) => [r.splice.vodId])
-  }
+  watch(
+    () => props.vod.id,
+    () => {
+      cands.value = null
+      picked.value = []
+      void loadCandidates()
+    },
+    { immediate: true },
+  )
 
   // ---- split ----
   const timeline = computed(() => {
@@ -143,64 +172,60 @@ export function useSplice(props: { vod: AdminVod }, options: SpliceOptions) {
       return null
     }
   })
-  const joins = computed(() => splitJoins(timeline.value))
-  const duration = computed(() => props.vod.duration_seconds ?? toSeconds(props.vod.duration ?? ''))
+  const partEnds = computed(() => splitJoins(timeline.value))
   const atDraft = ref('')
   const at = computed(() => (atDraft.value.trim() ? toSeconds(atDraft.value) : NaN))
-  const atBad = computed(() => atDraft.value.trim() !== '' && !(Number.isFinite(at.value) && at.value > 0 && at.value < duration.value))
-  const splitErr = ref<{ msg: string; points: SplitPoint[] } | null>(null)
-  const splitOpen = ref(false)
-  watch(atDraft, () => (splitErr.value = null))
-  function split() {
-    splitOpen.value = false
-    const t = at.value
-    void run('split', () => admin.split(props.vod.id, t), (r) => (r.newVodId ? [r.splice.vodId, r.newVodId] : [r.splice.vodId]))
-  }
-  /** The split point is inside a merge's gap chapter: splitting there undoes that merge. */
-  const inGap = computed(() => timeline.value?.chapters.some((c) => c.kind === 'gap' && at.value >= c.start && at.value <= c.end) ?? false)
+  const atBad = computed(() => atDraft.value.trim() !== '' && !(Number.isFinite(at.value) && at.value > 0 && at.value < self.value.duration))
+  const splitIdDrafts = ref<[string, string]>(['', ''])
+  const splitIds = computed<[string, string]>(() => [splitIdDrafts.value[0].trim() || `${props.vod.id}-1`, splitIdDrafts.value[1].trim() || `${props.vod.id}-2`])
+  const canSplit = computed(() => atDraft.value.trim() !== '' && !atBad.value && busy.value === null)
 
-  // ---- history ----
-  function undo(sp: Splice) {
-    void run(
-      `undo-${sp.id}`,
-      (force) => (sp.kind === 'merge' ? admin.unmerge(sp.vodId, sp.otherId, force) : admin.unsplit(sp.vodId, sp.otherId, force)),
-      () => [sp.vodId, sp.otherId].filter((id) => id !== sp.otherId || sp.kind === 'merge'),
-    )
-  }
-  function unmergeHere() {
-    const m = mergedInto.value
-    if (m) void run('unmerge', (force) => admin.unmerge(m.id, props.vod.id, force), () => [m.id, props.vod.id])
+  async function split() {
+    if (!canSplit.value) return
+    busy.value = 'split'
+    try {
+      const custom = splitIdDrafts.value.some((d) => d.trim())
+      const made = await admin.split(props.vod.id, at.value, custom ? splitIds.value : undefined)
+      notify(`Split into ${made.map((m) => m.id).join(' and ')}; ${props.vod.id} is hidden now`, { duration: 4000 })
+      atDraft.value = ''
+      splitIdDrafts.value = ['', '']
+      if (made[0]) options.made(made[0].id)
+    } catch (e) {
+      notify(errorText(e), { kind: 'error', duration: 8000 })
+    } finally {
+      busy.value = null
+    }
   }
 
   return {
     span: gapText,
-    describeSplice,
-    mergedInto,
-    splices,
-    touched,
-    warnings,
-    describing,
-    describe,
     busy,
-    forceAsk,
-    forceUndo,
     cands,
     candsError,
     loadCandidates,
-    mergeOf,
-    gapDraft,
-    gapBad,
-    askMerge,
-    merge,
+    suggestions,
+    picked,
+    pick,
+    unpick,
+    addDraft,
+    addError,
+    addById,
+    order,
     joins,
+    gapDrafts,
+    gapBad,
+    gapsBad,
+    mergeIdDraft,
+    mergeId,
+    canMerge,
+    merge,
+    partEnds,
     atDraft,
     at,
     atBad,
-    splitErr,
-    splitOpen,
+    splitIdDrafts,
+    splitIds,
+    canSplit,
     split,
-    inGap,
-    undo,
-    unmergeHere,
   }
 }

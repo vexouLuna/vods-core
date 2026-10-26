@@ -2,9 +2,9 @@
 // ?tag=&title=&game=&from=&to=&page=
 import type { Vod, VodListOptions } from '../../index'
 import type { TagStyle } from '../site'
-import { DATE_TAGS, RECENT_MS, TAG_NAME, tagConfig, tagStyle } from './vodTags'
+import { DATE_TAGS, RECENT_MS, TAG_NAME, tagConfig, tagStyle, VODS_TAG } from './vodTags'
 
-/** One list page: the plain VODs, or the VODs of a tag with a page (its `page` on /manage/tags). */
+/** One list page: the VODs, or the VODs of a tag with a page (its `page` on /manage/tags). */
 export interface ListTab {
   value: string
   label: string
@@ -13,12 +13,13 @@ export interface ListTab {
 }
 
 /**
- * The lists, each its own page: plain VODs (no tags) first, then one per tag with a page, in the tags' order. A tag
- * without one has no list, so its VODs stay out of every list until it gets one.
+ * The lists, each its own page: /vods first (the `vods` tag's; without that tag, the archive's default list), then one
+ * per tag with a page, in the tags' order. A tag without one has no list.
  */
 export function tabs(tags: Record<string, TagStyle> = tagConfig.value): ListTab[] {
   const own = Object.entries(tags).flatMap(([tag, s]) => (s.page ? [{ value: s.page, label: s.pageLabel || s.page, tag, path: `/${s.page}` }] : []))
-  return [{ value: 'vods', label: 'VODs', tag: undefined, path: '/vods' }, ...own]
+  const vods = own.find((t) => t.value === 'vods') ?? { value: 'vods', label: 'VODs', tag: undefined, path: '/vods' }
+  return [vods, ...own.filter((t) => t !== vods)]
 }
 
 /** How a VOD tag reads (`site.tags`). */
@@ -26,7 +27,7 @@ export const tagLabel = (tag: string) => tagStyle(tag).label
 
 /** What a VOD is, by the first of its tags with a page (e.g. "playthrough"), or undefined for a plain one. */
 export function kindLabel(tags: readonly string[]): string | undefined {
-  const tag = tabs().find((t) => t.tag && tags.includes(t.tag))?.tag
+  const tag = tabs().find((t) => t.tag && t.tag !== VODS_TAG && tags.includes(t.tag))?.tag
   return tag ? tagLabel(tag) : undefined
 }
 
@@ -38,8 +39,8 @@ const tabFor = (tab: Tab) => tabs().find((t) => t.value === tab)
 /** The page that lists `tab` (an unknown one: its own slug, which shows "not found"). */
 export const listPath = (tab: Tab): string => tabFor(tab)?.path ?? `/${tab}`
 
-/** The tab a VOD is listed in: the first whose tag it has, else the plain VODs. */
-export const tabOf = (vod: Vod): Tab => tabs().find((t) => t.tag && vod.tags.includes(t.tag))?.value ?? 'vods'
+/** The tab a VOD is listed in: the first tag page it's on other than /vods, else /vods. */
+export const tabOf = (vod: Vod): Tab => tabs().find((t) => t.tag && t.tag !== VODS_TAG && vod.tags.includes(t.tag))?.value ?? 'vods'
 
 /**
  * Whether the list can be narrowed to `tag` within `tab`: the date tags anywhere; a tag set on VODs only in a tab of

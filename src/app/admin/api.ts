@@ -361,45 +361,26 @@ export interface Splice {
 /** Whether Twitch's VOD of this id no longer matches it (merged or split), so the Twitch re-fetches refuse it. */
 export const isSpliced = (v: Pick<AdminVod, 'merged_into' | 'splices'>) => !!v.merged_into || (v.splices ?? []).some((s) => !s.undoneAt)
 
+/** GET /api/v2/vods/{id}/merge-candidates?hours=: a VOD starting less than `hours` after this one ends, or ending less
+ * than that before it starts. */
 export interface MergeCandidate {
   id: string
-  streamId: string | null
+  stream_id: string | null
   title: string | null
-  createdAt: string
+  created_at: string
   /** "HH:MM:SS". */
-  duration: string
-  /** Seconds between the end of this VOD and the start of that one; negative when they overlap. */
+  duration: string | null
+  /** Seconds from the earlier one's end to the later one's start; negative when they overlap. */
   gap: number
-  overlaps: boolean
-  titlesMatch: boolean
+  titles_match: boolean
 }
 
-/** GET /admin/vods/{id}/merge-candidates: VODs that started up to `withinMinutes` after this one ended. */
-export interface MergeCandidates {
-  vod: { id: string; streamId: string | null; title: string | null; createdAt: string; duration: string; endsAt: string; mergedInto: { id: string; offset: number } | null }
-  withinMinutes: number
-  candidates: MergeCandidate[]
-}
-
-/** What merge, unmerge, split and unsplit answer: the splice and this VOD as it is now. */
-export interface SpliceResult {
-  error: false
-  msg: string
-  splice: Splice
-  vod: AdminVod
-  /** Merges: the source's other upload type now plays a few seconds off. */
-  warnings?: string[]
-  /** Splits: the id of the new VOD. */
-  newVodId?: string
-  /** Set when the split point was a merge's join, so the split undid that merge instead. */
-  undid?: 'merge'
-}
-
-/** Where a split can go instead (a 409's `validPoints`): `at`, anywhere from `from` to `to` works too. */
-export interface SplitPoint {
-  at: number
-  from: number
-  to: number
+/** POST /api/v2/vods/{id}/merge: this VOD and `sources`, in start order; `gaps[i]` the seconds before the (i+1)-th
+ * (null: where it started); `id` defaults to the first one's and `-m`. The archive hides the sources. */
+export interface MergeInput {
+  sources: string[]
+  gaps?: (number | null)[]
+  id?: string
 }
 
 /** The fields PATCH /api/v2/vods/:id changes here. `tags` replaces the VOD's list; only site tags are taken. */
@@ -424,7 +405,7 @@ export interface VodListRow {
   stream_id: string | null
   hidden: boolean
   merged_into: { id: string; offset: number } | null
-  /** [] for a regular VOD; a playthrough is tagged `compilation`. */
+  /** `vods` on a real VOD and a merge or split; a playthrough is tagged `playthroughs`. */
   tags: string[]
   /** Set on a synthetic VOD. */
   synthetic: { supersedes?: boolean } | null
@@ -458,7 +439,7 @@ export interface SyntheticSegment {
 export interface SyntheticVod {
   id: string
   title: string | null
-  /** Its sources leave the public lists and redirect into it (a merge or split); otherwise it's listed beside them. */
+  /** Always false from an archive with ADR 0005: a merge's sources are hidden instead. */
   supersedes: boolean
   tags: string[]
   hidden: boolean
@@ -569,18 +550,6 @@ export interface AdminEmotes extends RawEmoteSets {
   vod_id?: string
   created_at?: string
   updated_at?: string
-}
-
-/** A split refused inside an upload: the nearest points where it would work. */
-export function validPoints(e: unknown): SplitPoint[] {
-  const points = e instanceof ProblemError ? e.extra.validPoints : null
-  return Array.isArray(points) ? (points as SplitPoint[]) : []
-}
-
-/** An undo refused because it would throw away edits made since ("vodId.field", …); retry with force. */
-export function editedSince(e: unknown): string[] {
-  const edited = e instanceof ProblemError && e.status === 409 ? e.extra.edited : null
-  return Array.isArray(edited) ? (edited as string[]) : []
 }
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>
@@ -749,24 +718,16 @@ export class AdminClient {
     return this.request('GET', `/admin/twitch/games?query=${encodeURIComponent(query)}`, undefined, signal)
   }
 
-  // ---- merges and splits (one broadcast that Twitch cut in two, or two streams in one VOD) ----
-  mergeCandidates(id: string, signal?: AbortSignal): Promise<MergeCandidates> {
-    return this.request('GET', `/admin/vods/${enc(id)}/merge-candidates`, undefined, signal)
+  // ---- merges and splits: synthetic VODs that hide their sources (ADR 0005 in twitch-archive) ----
+  mergeCandidates(id: string, hours = 24, signal?: AbortSignal): Promise<{ items: MergeCandidate[] }> {
+    return this.request('GET', `/api/v2/vods/${enc(id)}/merge-candidates?hours=${hours}`, undefined, signal)
   }
-  /** Appends `source` (the later VOD) to `id`; `gap` (seconds) replaces the gap worked out from the start times. */
-  merge(id: string, source: string, gap?: number): Promise<SpliceResult> {
-    return this.request('POST', `/admin/vods/${enc(id)}/merge`, { source, gap: gap ?? undefined })
+  merge(id: string, body: MergeInput): Promise<SyntheticVod> {
+    return this.request('POST', `/api/v2/vods/${enc(id)}/merge`, body)
   }
-  unmerge(id: string, source: string, force = false): Promise<SpliceResult> {
-    return this.request('POST', `/admin/vods/${enc(id)}/unmerge`, { source, force: force || undefined })
-  }
-  /** From `at` (VOD seconds) on becomes a new VOD; at a merge's join, undoes that merge. */
-  split(id: string, at: number, force = false): Promise<SpliceResult> {
-    return this.request('POST', `/admin/vods/${enc(id)}/split`, { at, force: force || undefined })
-  }
-  /** Undoes the latest split of `id`, or the one that made `source`. */
-  unsplit(id: string, source?: string, force = false): Promise<SpliceResult> {
-    return this.request('POST', `/admin/vods/${enc(id)}/unsplit`, { source: source || undefined, force: force || undefined })
+  /** Two synthetic VODs, before and after `at` (seconds); `ids` defaults to `<id>-1` and `<id>-2`. */
+  split(id: string, at: number, ids?: [string, string]): Promise<SyntheticVod[]> {
+    return this.request('POST', `/api/v2/vods/${enc(id)}/split`, ids ? { at, ids } : { at })
   }
 
   // ---- /api/v2: the VOD list and synthetic VODs ----

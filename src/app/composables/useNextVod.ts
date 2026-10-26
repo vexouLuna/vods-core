@@ -44,7 +44,7 @@ export function useNextVod(currentId: () => string) {
       const c = left.splice(Math.floor(Math.random() * left.length), 1)[0]!
       const vod = c.vod ?? (await client.getVod(c.id).catch(() => null))
       // Gone, or now played inside another VOD (that one's own entry, if any, stands for it).
-      if (!vod || redirectTarget(vod, 0)) continue
+      if (!vod || vod.hidden || redirectTarget(vod, 0)) continue
       if (!c.saved) return { vod, t: null }
       const at = resumeProgress(c.saved, vod.duration)
       if (at) return { vod, t: at.t } // else finished: not a suggestion

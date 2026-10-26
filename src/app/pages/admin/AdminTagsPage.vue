@@ -11,7 +11,7 @@ import { type SiteTags } from '../../admin/api'
 import ManageShell from '../../admin/ManageShell.vue'
 import TagColorInput from '../../admin/TagColorInput.vue'
 import { admin } from '../../admin/session'
-import { blankDraft, draftsOf, previewOf, rawOf, tagChanges, type TagDraft, type TagField } from '../../admin/tags'
+import { blankDraft, draftsOf, homeCategory, previewOf, rawOf, tagChanges, type TagDraft, type TagField } from '../../admin/tags'
 import TagMark from '../../components/TagMark.vue'
 import { loadTagConfig, TAG_PATTERN_SIZE, TAG_SIZE, TAG_TEXT_MAX, TAG_TEXT_NUDGE, TAG_TEXT_ROTATE, TAG_TEXT_SIZE, TAG_ROTATE, type TagPattern } from '../../lib/vodTags'
 import { site, vodsConfig } from '../../site'
@@ -21,7 +21,8 @@ const toast = useToast()
 const ABOUT: Record<string, string> = {
   new: 'Set from the dates: first streamed in the last 7 days.',
   updated: 'Set from the dates: a playthrough with a new stream in the last 7 days.',
-  compilation: 'On every playthrough.',
+  compilation: 'Set by the archive on a synthetic VOD that keeps itself up to date.',
+  vods: 'Set by the archive on every VOD and each merge or split: what /vods lists.',
 }
 const SWATCHES = ['accent', 'info', 'ok', 'warn', 'bad', 'ink', 'muted'].map((t) => `var(--vods-${t})`)
 const TEXT_SWATCHES = ['bg', 'ink', ...['accent', 'info', 'ok', 'warn', 'bad']].map((t) => `var(--vods-${t})`)
@@ -180,15 +181,17 @@ onMounted(() => {
               <TagColorInput :id="id" v-model="d.color" :swatches="SWATCHES" :invalid="!!err(d, 'color')" placeholder="var(--vods-accent)" :pick-label="`Pick a color for ${d.name || 'the tag'}`" />
             </template>
           </UiField>
-          <UiField label="Page" :error="err(d, 'page')" help="Its own list page and header link, e.g. playthroughs. Empty: none.">
-            <template #default="{ id }"><UiInput :id="id" v-model="d.page" mono :invalid="!!err(d, 'page')" placeholder="highlights" /></template>
-          </UiField>
-          <UiField v-if="d.page.trim()" label="Page title" :error="err(d, 'pageLabel')" help="The page's heading and header link.">
-            <template #default="{ id }"><UiInput :id="id" v-model="d.pageLabel" :invalid="!!err(d, 'pageLabel')" placeholder="Highlights" /></template>
-          </UiField>
           <div class="drawn">
-            <UiSwitch v-model="d.homeCard" :label="'Can be a home page card'" />
+            <UiSwitch :model-value="!!d.page.trim()" :label="'Home category'" @update:model-value="homeCategory(d, $event)" />
           </div>
+          <template v-if="d.page.trim()">
+            <UiField label="Page" :error="err(d, 'page')" help="Its list page and header link; it can also be a home card (Homepage).">
+              <template #default="{ id }"><UiInput :id="id" v-model="d.page" mono :invalid="!!err(d, 'page')" placeholder="highlights" /></template>
+            </UiField>
+            <UiField label="Page title" :error="err(d, 'pageLabel')" help="The page's heading and header link.">
+              <template #default="{ id }"><UiInput :id="id" v-model="d.pageLabel" :invalid="!!err(d, 'pageLabel')" placeholder="Highlights" /></template>
+            </UiField>
+          </template>
           <div class="drawn">
             <UiSwitch v-model="d.drawn" :label="'Drawn on the thumbnail'" />
           </div>

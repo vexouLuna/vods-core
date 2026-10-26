@@ -83,13 +83,15 @@ export interface RawVod {
   stream_id?: string | null
   /** Set on a VOD merged into another one: its footage now starts `offset` seconds into VOD `id`. */
   merged_into?: { id: string; offset: number } | null
-  /** Untagged VODs are the regular ones; `compilation` (a playthrough) and others are listed apart. */
+  /** `vods` (every VOD /vods lists), `playthroughs` and the site's own; `compilation` while one keeps up to date. */
   tags?: string[] | null
+  /** Only on a hidden VOD a shown synthetic VOD plays (ADR 0005 in twitch-archive). */
+  hidden?: boolean | null
   /** Only on a synthetic VOD: it has no uploads of its own, it plays windows (`segments`) of other VODs. */
   synthetic?: RawSynthetic | null
-  /** On a VOD a merge or split replaced: where each window of it plays now. */
+  /** On a hidden VOD exactly one shown synthetic VOD plays: where each window of it plays now. */
   superseded_by?: RawSupersededBy[] | null
-  /** On a VOD that synthetic VODs (playthroughs) use without replacing it. */
+  /** The synthetic VODs that use this one (on a hidden VOD: the two or more that play it). */
   appears_in?: RawAppearsIn[] | null
   platform?: string | null
   /** Why the VOD was cut, when an admin gave a reason (missing otherwise). */

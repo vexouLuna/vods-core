@@ -13,7 +13,8 @@ import NoThumbnail from './NoThumbnail.vue'
 import { gamesWithArt } from '../lib/art'
 import { relativeDay } from '../lib/dates'
 
-const props = defineProps<{ vod: Vod; progress?: Progress | null }>()
+// `all`: where "See all" goes (a tag's page for a "Latest VOD" card); unset, the VODs page.
+const props = defineProps<{ vod: Vod; progress?: Progress | null; all?: { to: string; label: string } }>()
 
 const palette = computed(() => gamePalette(props.vod.chapters.map((c) => c.name)))
 const games = computed(() => gamesWithArt(props.vod.chapters).map((g) => ({ ...g, color: palette.value.get(g.name) })))
@@ -85,7 +86,7 @@ const { src: thumb, srcset: thumbSet, onLoad: thumbLoaded, onError: thumbFailed 
             {{ progress ? (grown ? `▶ Watch what's new (${toClock(progress.t)})` : `▶ Resume at ${toClock(progress.t)}`) : '▶ Watch' }}
           </UiButton>
           <UiButton v-if="progress" :to="watchPath(vod, 0)">From the start</UiButton>
-          <SeeAllButton to="/vods" class="all">See all VODs</SeeAllButton>
+          <SeeAllButton :to="all?.to ?? '/vods'" class="all">See all {{ all?.label ?? 'VODs' }}</SeeAllButton>
         </div>
       </div>
     </div>

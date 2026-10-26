@@ -1,198 +1,149 @@
 <script setup lang="ts">
-// Merge and split for one VOD. Merge: when a stream dropped and Twitch made two VODs of one broadcast, the later one
-// is appended to this one, the time between becoming a "Technical difficulties" gap chapter. Split: from a point
-// between two parts on becomes a new VOD. Both move chat with the video and can be undone (latest first). The logic
-// is useSplice's; this draws it.
+// Merge and split for one VOD: both make synthetic VODs tagged `vods` and hide the VODs they're made of; deleting the
+// synthetic VOD undoes it. Merge: this VOD and the ones picked (suggestions within 24 h, or by id), in start order, a
+// gap before each. Split: before and after any second. The logic is useSplice's; this draws it.
 import { useToast } from '@vex/ui/utils'
-import { toClock, toSeconds } from '../../index'
+import { useRouter } from 'vue-router'
+import { toClock } from '../../index'
 import { stamp } from '@vex/platform-web'
 import type { AdminVod } from './api'
 import { useSplice } from '../composables/useSplice'
 
 const props = defineProps<{ vod: AdminVod }>()
-const emit = defineEmits<{ changed: []; job: [jobId: number] }>()
 const toast = useToast()
+const router = useRouter()
 
 const {
   span,
-  describeSplice,
-  mergedInto,
-  splices,
-  touched,
-  warnings,
-  describing,
-  describe,
   busy,
-  forceAsk,
-  forceUndo,
   cands,
   candsError,
   loadCandidates,
-  mergeOf,
-  gapDraft,
-  gapBad,
-  askMerge,
-  merge,
+  suggestions,
+  picked,
+  pick,
+  unpick,
+  addDraft,
+  addError,
+  addById,
+  order,
   joins,
+  gapDrafts,
+  gapBad,
+  gapsBad,
+  mergeIdDraft,
+  mergeId,
+  canMerge,
+  merge,
+  partEnds,
   atDraft,
   at,
   atBad,
-  splitErr,
-  splitOpen,
+  splitIdDrafts,
+  splitIds,
+  canSplit,
   split,
-  inGap,
-  undo,
-  unmergeHere,
 } = useSplice(props, {
-  changed: () => emit('changed'),
-  job: (id) => emit('job', id),
+  made: (id) => void router.push(`/manage/synthetic/${encodeURIComponent(id)}`),
   notify: (message, options) => toast.show(message, options),
 })
 </script>
 
 <template>
   <div class="splices">
-    <UiCallout v-if="touched.length" tone="warn" title="Update the YouTube descriptions">
-      The descriptions of {{ touched.join(' and ') }} still list the parts as they were.
-      <template #actions>
-        <UiButton size="sm" variant="primary" :loading="describing" @click="describe">Update descriptions</UiButton>
-        <UiButton v-for="id in touched.filter((x) => x !== vod.id)" :key="id" size="sm" :to="`/manage/vods/${id}`">Open {{ id }}</UiButton>
-        <UiButton size="sm" @click="touched = []">Later</UiButton>
-      </template>
-    </UiCallout>
+    <div class="group">
+      <div class="vods-eyebrow">Merge</div>
+      <p class="vods-muted note">
+        For a stream that dropped and came back as more Twitch VODs: they play as one synthetic VOD, in the order they
+        started, and are hidden (their links lead into it). Nothing is downloaded or uploaded again. Delete it to undo.
+      </p>
 
-    <UiCallout v-if="warnings.length" tone="warn" title="Merged, with a warning">
-      <p v-for="(w, i) in warnings" :key="i" class="warning">{{ w }}</p>
-      <template #actions><UiButton size="sm" @click="warnings = []">OK</UiButton></template>
-    </UiCallout>
-
-    <UiCallout v-if="mergedInto" tone="info" title="Merged into another VOD">
-      Its video, chapters and chat are part of <RouterLink :to="`/manage/vods/${mergedInto.id}`" class="vods-mono">{{ mergedInto.id }}</RouterLink>
-      now, from {{ toClock(mergedInto.offset) }}. Old links to this VOD open that one at the same moment.
-      <template #actions>
-        <UiButton size="sm" :to="`/manage/vods/${mergedInto.id}`">Open {{ mergedInto.id }}</UiButton>
-        <UiButton size="sm" :loading="busy === 'unmerge'" @click="unmergeHere">Unmerge</UiButton>
-      </template>
-    </UiCallout>
-
-    <template v-else>
-      <div class="group">
-        <div class="vods-eyebrow">Merge the next VOD into this one</div>
-        <p class="vods-muted note">
-          For a stream that dropped and came back as a second Twitch VOD. The time between becomes a “Technical
-          difficulties” chapter; nothing is downloaded or uploaded again. Also for a stream whose first or last section
-          was lost: either VOD may have no uploads, and the site keeps counting its time.
-        </p>
-        <UiCallout v-if="candsError" tone="error">
-          {{ candsError }}
-          <template #actions><UiButton size="sm" @click="loadCandidates">Try again</UiButton></template>
-        </UiCallout>
-        <UiSkeleton v-else-if="!cands" h="40px" />
-        <p v-else-if="!cands.candidates.length" class="vods-muted note">
-          No VOD started within {{ cands.withinMinutes }} minutes of this one's end ({{ stamp(cands.vod.endsAt) }}).
-        </p>
-        <ul v-else class="list">
-          <li v-for="c in cands.candidates" :key="c.id" class="row">
-            <div class="what">
-              <RouterLink :to="`/manage/vods/${c.id}`" class="vods-mono">{{ c.id }}</RouterLink>
-              <span class="title">{{ c.title || 'Untitled' }}</span>
-              <span class="vods-muted small" :title="stamp(c.createdAt)">{{ new Date(c.createdAt).toLocaleString() }} · {{ c.duration }}</span>
-            </div>
-            <div class="chips">
-              <UiChip v-if="c.overlaps" tone="bad" title="It started before this one ended">overlaps {{ span(c.gap) }}</UiChip>
-              <UiChip v-else k="down">{{ span(c.gap) }}</UiChip>
-              <UiChip v-if="c.titlesMatch" tone="ok">same title</UiChip>
-              <UiChip v-else tone="warn">other title</UiChip>
-            </div>
-            <UiButton size="sm" :loading="busy === `merge-${c.id}`" @click="askMerge(c)">Merge…</UiButton>
-          </li>
-        </ul>
-      </div>
-
-      <div class="group">
-        <div class="vods-eyebrow">Split</div>
-        <p class="vods-muted note">
-          From that point on becomes a new VOD ({{ vod.id }}-2), with its parts, chapters and chat. It has to be where
-          one part ends and the next starts; inside a merge's gap chapter it undoes that merge instead.
-        </p>
-        <form class="split" @submit.prevent="!atBad && atDraft.trim() && (splitOpen = true)">
-          <UiInput v-model="atDraft" mono placeholder="H:MM:SS" aria-label="Split at" :invalid="atBad" class="at" />
-          <UiButton type="submit" :disabled="atBad || !atDraft.trim()" :loading="busy === 'split'">Split here…</UiButton>
-          <template v-if="joins.length">
-            <span class="vods-muted small">Part ends:</span>
-            <UiChip v-for="j in joins" :key="j.at" clickable :active="at === j.at" :title="j.label" @click="atDraft = toClock(j.at)">{{ toClock(j.at) }}</UiChip>
-          </template>
-        </form>
-        <UiCallout v-if="splitErr" tone="warn" title="Not there">
-          {{ splitErr.msg }}
-          <div class="points">
-            <UiChip v-for="p in splitErr.points" :key="p.at" clickable :title="p.from !== p.to ? `anywhere from ${toClock(p.from)} to ${toClock(p.to)}` : undefined" @click="atDraft = toClock(p.at)">
-              {{ toClock(p.at) }}<template v-if="p.from !== p.to"> ({{ toClock(p.from) }}–{{ toClock(p.to) }})</template>
-            </UiChip>
-          </div>
-        </UiCallout>
-      </div>
-    </template>
-
-    <div v-if="splices.length" class="group">
-      <div class="vods-eyebrow">History</div>
-      <ul class="list">
-        <li v-for="sp in splices" :key="sp.id" class="row" :class="{ undone: sp.undoneAt }">
+      <div class="sub vods-muted small">Suggested: starting less than 24 h after this one ends, or ending less than 24 h before it starts</div>
+      <UiCallout v-if="candsError" tone="error">
+        {{ candsError }}
+        <template #actions><UiButton size="sm" @click="loadCandidates">Try again</UiButton></template>
+      </UiCallout>
+      <UiSkeleton v-else-if="!cands" h="40px" />
+      <p v-else-if="!suggestions.length" class="vods-muted note">{{ cands.length ? 'All of them are in the merge.' : 'None.' }}</p>
+      <ul v-else class="list">
+        <li v-for="c in suggestions" :key="c.id" class="row">
           <div class="what">
-            <span>{{ describeSplice(sp) }}</span>
-            <span class="vods-muted small">
-              {{ stamp(sp.createdAt) }}<template v-if="sp.undoneAt"> · undone {{ stamp(sp.undoneAt) }}</template>
-            </span>
+            <RouterLink :to="`/manage/vods/${c.id}`" class="vods-mono">{{ c.id }}</RouterLink>
+            <span class="title">{{ c.title || 'Untitled' }}</span>
+            <span class="vods-muted small" :title="stamp(c.created_at)">{{ new Date(c.created_at).toLocaleString() }} · {{ c.duration ?? '—' }}</span>
           </div>
-          <UiChip v-if="sp.undoneAt">undone</UiChip>
-          <UiButton
-            v-else
-            size="sm"
-            :disabled="!sp.undoable"
-            :title="sp.undoable ? undefined : 'A later merge or split of one of these VODs has to be undone first'"
-            :loading="busy === `undo-${sp.id}`"
-            @click="undo(sp)"
-          >
-            {{ sp.kind === 'merge' ? 'Unmerge' : 'Unsplit' }}
-          </UiButton>
+          <div class="chips">
+            <UiChip v-if="c.gap < 0" tone="bad" title="They overlap">overlaps {{ span(c.gap) }}</UiChip>
+            <UiChip v-else>{{ span(c.gap) }} apart</UiChip>
+            <UiChip v-if="c.titles_match" tone="ok">same title</UiChip>
+            <UiChip v-else tone="warn">other title</UiChip>
+          </div>
+          <UiButton size="sm" @click="pick(c)">Add</UiButton>
         </li>
       </ul>
+
+      <form class="inline" @submit.prevent="addById">
+        <UiField label="Add a VOD by id" :error="addError ?? undefined">
+          <template #default="{ id }"><UiInput :id="id" v-model="addDraft" mono placeholder="2200000000" class="vodid" :invalid="!!addError" /></template>
+        </UiField>
+        <UiButton type="submit" :disabled="!addDraft.trim()" :loading="busy === 'add'">Add</UiButton>
+      </form>
+
+      <template v-if="picked.length">
+        <div class="sub vods-muted small">The merge, in start order</div>
+        <ol class="list">
+          <template v-for="(v, i) in order" :key="v.id">
+            <li v-if="i > 0" class="gap">
+              <UiField
+                :label="`Gap before ${v.id}`"
+                :error="gapBad(joins[i - 1]!.key) ? 'Seconds or H:MM:SS, 0 or more.' : undefined"
+                :help="joins[i - 1]!.gap < 0 ? `They overlap by ${span(joins[i - 1]!.gap)}: empty starts it where it started, cutting the end of the one before.` : `From the start times: ${toClock(joins[i - 1]!.gap)}. Empty: where it started.`"
+              >
+                <template #default="{ id }"><UiInput :id="id" v-model="gapDrafts[joins[i - 1]!.key]" mono placeholder="where it started" class="gapin" /></template>
+              </UiField>
+            </li>
+            <li class="row">
+              <div class="what">
+                <span><span class="vods-mono">{{ v.id }}</span><template v-if="v.id === vod.id"> (this VOD)</template></span>
+                <span class="title">{{ v.title || 'Untitled' }}</span>
+                <span class="vods-muted small">{{ new Date(v.createdAt).toLocaleString() }} · {{ toClock(v.duration) }}</span>
+              </div>
+              <UiButton v-if="v.id !== vod.id" size="sm" variant="ghost" :aria-label="`Take ${v.id} out of the merge`" @click="unpick(v.id)">Remove</UiButton>
+            </li>
+          </template>
+        </ol>
+        <form class="inline" @submit.prevent="merge">
+          <UiField label="Id" help="In its link: /vods/<id>.">
+            <template #default="{ id }"><UiInput :id="id" v-model="mergeIdDraft" mono :placeholder="mergeId" class="vodid" /></template>
+          </UiField>
+          <UiButton type="submit" variant="primary" :disabled="!canMerge || gapsBad" :loading="busy === 'merge'">Merge {{ order.length }} VODs</UiButton>
+        </form>
+      </template>
     </div>
 
-    <UiDialog :open="!!mergeOf" :title="`Merge ${mergeOf?.id} into ${vod.id}?`" @update:open="(o: boolean) => !o && (mergeOf = null)">
-      <template v-if="mergeOf">
-        {{ mergeOf.id }} becomes the rest of {{ vod.id }}: its parts, chapters, chat and emotes move here, after a
-        “Technical difficulties” chapter of {{ gapDraft.trim() && !gapBad ? span(toSeconds(gapDraft)) : mergeOf.overlaps ? 'the gap you set' : span(mergeOf.gap) }}. Its page sends
-        viewers here. You can unmerge it later.
-        <div class="form">
-          <UiField label="Gap (optional)" :error="gapBad ? 'Seconds or H:MM:SS, 0 or more.' : mergeOf.overlaps ? 'The start times overlap; set the real gap.' : undefined">
-            <template #default="{ id }"><UiInput :id="id" v-model="gapDraft" mono :placeholder="`${mergeOf.gap} (from the start times)`" :invalid="gapBad" /></template>
-          </UiField>
-        </div>
-      </template>
-      <template #actions="{ close }">
-        <UiButton @click="close">Cancel</UiButton>
-        <UiButton variant="primary" :disabled="gapBad || (mergeOf?.overlaps && !gapDraft.trim())" @click="merge">Merge</UiButton>
-      </template>
-    </UiDialog>
-
-    <UiDialog v-model:open="splitOpen" :title="inGap ? `Undo the merge at ${toClock(at)}?` : `Split ${vod.id} at ${toClock(at)}?`">
-      <template v-if="inGap">That's inside a merge's gap chapter, so this undoes that merge.</template>
-      <template v-else>Everything from {{ toClock(at) }} on becomes a new VOD with its own page. You can unsplit it later.</template>
-      <template #actions="{ close }">
-        <UiButton @click="close">Cancel</UiButton>
-        <UiButton variant="primary" @click="split">{{ inGap ? 'Undo the merge' : 'Split' }}</UiButton>
-      </template>
-    </UiDialog>
-
-    <UiDialog :open="!!forceAsk" title="Undo anyway?" @update:open="(o: boolean) => !o && (forceAsk = null)">
-      These were edited since: <span class="vods-mono">{{ forceAsk?.edited.join(', ') }}</span>. Undoing puts the rows back
-      as they were before, so those edits are lost.
-      <template #actions="{ close }">
-        <UiButton @click="close">Keep them</UiButton>
-        <UiButton variant="danger-solid" @click="forceUndo">Undo and lose them</UiButton>
-      </template>
-    </UiDialog>
+    <div class="group">
+      <div class="vods-eyebrow">Split</div>
+      <p class="vods-muted note">
+        Two synthetic VODs, before and after the point, at any second; {{ vod.id }} is hidden (its links lead to the
+        halves). Delete both to undo.
+      </p>
+      <form class="inline" @submit.prevent="split">
+        <UiField label="At" :error="atBad ? 'Inside the VOD: H:MM:SS or seconds.' : undefined">
+          <template #default="{ id }"><UiInput :id="id" v-model="atDraft" mono placeholder="H:MM:SS" :invalid="atBad" class="at" /></template>
+        </UiField>
+        <UiField label="First id">
+          <template #default="{ id }"><UiInput :id="id" v-model="splitIdDrafts[0]" mono :placeholder="splitIds[0]" class="vodid" /></template>
+        </UiField>
+        <UiField label="Second id">
+          <template #default="{ id }"><UiInput :id="id" v-model="splitIdDrafts[1]" mono :placeholder="splitIds[1]" class="vodid" /></template>
+        </UiField>
+        <UiButton type="submit" :disabled="!canSplit" :loading="busy === 'split'">Split</UiButton>
+      </form>
+      <div v-if="partEnds.length" class="chips">
+        <span class="vods-muted small">Part ends:</span>
+        <UiChip v-for="j in partEnds" :key="j.at" clickable :active="at === j.at" :title="j.label" @click="atDraft = toClock(j.at)">{{ toClock(j.at) }}</UiChip>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -202,15 +153,16 @@ a { color: inherit; }
 .group { display: flex; flex-direction: column; gap: 6px; }
 .note { margin: 0; font-size: 13px; max-width: 72ch; }
 .small { font-size: 12px; }
+.sub { margin-top: 6px; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px; border: 1px solid var(--vods-line); border-radius: 6px; }
-.row.undone { opacity: 0.6; }
+.gap { padding-left: 16px; }
+.gap > * { margin: 0; }
 .what { display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0; }
 .what .title { overflow-wrap: anywhere; }
-.chips, .points { display: flex; flex-wrap: wrap; gap: 6px; }
-.points { margin-top: 8px; }
-.warning { margin: 0 0 4px; }
-.split { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.at { width: 120px; }
-.form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 10px; }
+.inline > * { margin: 0; }
+.vodid { width: 11rem; max-width: 100%; }
+.at, .gapin { width: 9rem; }
 </style>
