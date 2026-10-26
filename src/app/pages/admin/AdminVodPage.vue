@@ -5,7 +5,7 @@
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Option } from '@vex/ui'
 import { useRoute, useRouter } from 'vue-router'
 import { isSpliced, type AdminVod } from '../../admin/api'
@@ -94,6 +94,16 @@ const drafts = ref<Partial<Record<TimelineTab, { saved: number; rows: number; di
 function draft(t: TimelineTab, rows: number, dirty: boolean) {
   drafts.value[t] = { saved: dirty ? (drafts.value[t]?.saved ?? rows) : rows, rows, dirty }
 }
+// Phones (the workbench's one-column layout) get the compact "7→6•", so two drafts still fit the tab strip.
+const narrow = ref(false)
+let wide: MediaQueryList | undefined
+const measure = () => (narrow.value = !wide?.matches)
+onMounted(() => {
+  wide = matchMedia('(min-width: 960px)')
+  measure()
+  wide.addEventListener('change', measure)
+})
+onBeforeUnmount(() => wide?.removeEventListener('change', measure))
 const tabs = computed<Option<TimelineTab>[]>(() =>
   (
     [
@@ -105,7 +115,8 @@ const tabs = computed<Option<TimelineTab>[]>(() =>
     const d = drafts.value[value]
     if (!d) return { value, label }
     if (!d.dirty) return { value, label: `${label} ${d.rows}` }
-    return { value, label: `${label} ${d.saved === d.rows ? d.rows : `${d.saved} → ${d.rows}`} •` }
+    const sp = narrow.value ? '' : ' '
+    return { value, label: `${label} ${d.saved === d.rows ? d.rows : `${d.saved}${sp}→${sp}${d.rows}`}${sp}•` }
   }),
 )
 // The router doesn't scroll to a hash: a link to #censor lands on the Timeline panel once the VOD has loaded.
