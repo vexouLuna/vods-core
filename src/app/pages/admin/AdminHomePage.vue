@@ -165,8 +165,8 @@ onMounted(() => {
 .n { min-width: 1.5em; opacity: 0.6; }
 .main { flex: 1 1 16rem; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .tag { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-.tag select { max-width: 100%; }
 .acts { display: flex; gap: 2px; margin-left: auto; }
 .add { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.add select, .tag select { width: auto; max-width: 100%; }
 .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 </style>
