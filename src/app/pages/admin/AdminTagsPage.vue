@@ -17,6 +17,7 @@ import TagMark from '../../components/TagMark.vue'
 import { loadTagConfig, TAG_PATTERN_SIZE, TAG_SIZE, TAG_TEXT_MAX, TAG_TEXT_NUDGE, TAG_TEXT_ROTATE, TAG_TEXT_SIZE, TAG_ROTATE, type TagPattern } from '../../lib/vodTags'
 import { site, vodsConfig } from '../../site'
 import { moved } from '../../lib/reorder'
+import { fitMark } from '../../lib/tagShape'
 
 const toast = useToast()
 /** Where each auto tag comes from, for the admin who wonders why it's there. */
@@ -34,6 +35,11 @@ const PATTERNS: Option<TagPattern | ''>[] = [
   { value: 'checks', label: 'Checks' },
 ]
 const MAX_SVG = 64 * 1024
+/** The row's mini mark, at any size and turn the tag can have, inside the room `.mini` gives it (its 70×28 less 2px for the shadow). */
+function miniFit(d: TagDraft) {
+  const { scale, x, y } = fitMark(previewOf(d, vodsConfig.apiBase), { w: 66, h: 24 })
+  return { transform: `translate(${x + 2}px, ${y + 2}px) scale(${scale})` }
+}
 
 const data = ref<SiteTags | null>(null)
 const loadError = ref<string | null>(null)
@@ -186,7 +192,7 @@ onMounted(() => {
                 @click="toggle(d)"
               >
                 <span class="mini" aria-hidden="true">
-                  <TagMark v-if="d.drawn" class="mini-mark" :tag="previewOf(d, vodsConfig.apiBase)" />
+                  <span v-if="d.drawn" class="mini-mark" :style="miniFit(d)"><TagMark :tag="previewOf(d, vodsConfig.apiBase)" /></span>
                   <UiChip v-else :style="previewOf(d, vodsConfig.apiBase).color ? { color: d.color, borderColor: d.color } : undefined">{{ d.label || d.name || 'tag' }}</UiChip>
                 </span>
                 <span class="who">
@@ -337,8 +343,11 @@ onMounted(() => {
 }
 .toggle:hover { background: var(--vods-hover); }
 .toggle:focus-visible { outline: 2px solid var(--vods-ring, var(--vods-accent)); outline-offset: 1px; }
-.mini { position: relative; width: 70px; height: 26px; flex: none; display: flex; align-items: center; }
-.mini-mark { position: absolute; left: 0; top: 2px; }
+/* A chip takes the room its label needs; a drawn mark is fitted to 70px (miniFit), and its text, which can be nudged
+   off the tag, is clipped there, so neither reaches the name. */
+.mini { position: relative; min-width: 70px; height: 28px; flex: none; display: flex; align-items: center; }
+.mini:has(> .mini-mark) { width: 70px; overflow: clip; }
+.mini-mark { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 .who { min-width: 0; overflow-wrap: anywhere; }
 .dot { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--vods-warn); vertical-align: middle; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

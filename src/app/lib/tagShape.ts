@@ -94,3 +94,17 @@ export function shapeText(url: string, fetcher: typeof fetch = (...a) => fetch(.
   }
   return p
 }
+
+/** How to fit a TagMark into a `box`: its w×h turned by its rotate about its left middle (as TagMark draws it) takes
+ * this much room, so it's scaled down (never up) to fit and moved to sit at the box's left, centered across. */
+export function fitMark(t: { width?: number | null; height?: number | null; rotate?: number | null }, box: { w: number; h: number }) {
+  const w = t.width ?? 62
+  const h = t.height ?? 22
+  const a = ((t.rotate ?? -4) * Math.PI) / 180
+  const xs = [0, w].flatMap((x) => [-h / 2, h / 2].map((y) => x * Math.cos(a) - y * Math.sin(a)))
+  const ys = [0, w].flatMap((x) => [-h / 2, h / 2].map((y) => h / 2 + x * Math.sin(a) + y * Math.cos(a)))
+  const [left, top] = [Math.min(...xs), Math.min(...ys)]
+  const [bw, bh] = [Math.max(...xs) - left, Math.max(...ys) - top]
+  const scale = Math.min(1, box.w / bw, box.h / bh)
+  return { scale, x: (0 - left) * scale, y: (box.h - bh * scale) / 2 - top * scale }
+}

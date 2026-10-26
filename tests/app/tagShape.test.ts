@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import { shapeText, svgDataUrl, tintSvg } from '../../src/app/lib/tagShape'
+import { fitMark, shapeText, svgDataUrl, tintSvg } from '../../src/app/lib/tagShape'
 
 const parse = (svg: string) => new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement
 const RED = 'rgb(255, 0, 0)'
@@ -66,5 +66,41 @@ describe('shapeText', () => {
     expect(await shapeText('/b.svg', bad)).toBeNull()
     await Promise.resolve()
     expect(await shapeText('/b.svg', ok)).toBe('<svg/>')
+  })
+})
+
+describe('fitMark', () => {
+  const BOX = { w: 70, h: 28 }
+  /** The fitted mark's turned corners, in the box's px. */
+  const corners = (t: { width: number; height: number; rotate: number }) => {
+    const { scale, x, y } = fitMark(t, BOX)
+    const a = (t.rotate * Math.PI) / 180
+    return [0, t.width].flatMap((cx) =>
+      [-t.height / 2, t.height / 2].map((cy) => [
+        x + scale * (cx * Math.cos(a) - cy * Math.sin(a)),
+        y + scale * (t.height / 2 + cx * Math.sin(a) + cy * Math.cos(a)),
+      ]),
+    )
+  }
+
+  it.each([
+    { width: 62, height: 22, rotate: -4 },
+    { width: 200, height: 200, rotate: 45 },
+    { width: 200, height: 8, rotate: 90 },
+    { width: 200, height: 40, rotate: -180 },
+    { width: 8, height: 200, rotate: 135 },
+    { width: 120, height: 60, rotate: -30 },
+  ])('keeps a $width×$height mark turned $rotate° inside the box', (t) => {
+    for (const [cx, cy] of corners(t)) {
+      expect(cx).toBeGreaterThanOrEqual(-1e-9)
+      expect(cx).toBeLessThanOrEqual(BOX.w + 1e-9)
+      expect(cy).toBeGreaterThanOrEqual(-1e-9)
+      expect(cy).toBeLessThanOrEqual(BOX.h + 1e-9)
+    }
+  })
+
+  it("doesn't enlarge a small mark, and uses the defaults when unset", () => {
+    expect(fitMark({ width: 20, height: 10, rotate: 0 }, BOX)).toEqual({ scale: 1, x: 0, y: 9 })
+    expect(fitMark({}, { w: 200, h: 200 }).scale).toBe(1)
   })
 })
