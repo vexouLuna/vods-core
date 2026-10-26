@@ -75,6 +75,11 @@ export interface VodsSite {
    * name.
    */
   tags: Record<string, TagStyle>
+  /**
+   * How the home's Most played lays its posters out: `hand`, a fanned hand of cards (the default), or `wall`, a straight
+   * row of framed posters with a plaque under each, like a cinema's wall.
+   */
+  mostPlayed: 'hand' | 'wall'
 }
 
 export const site: VodsSite = {
@@ -83,6 +88,7 @@ export const site: VodsSite = {
   twitchUrl: '',
   perPage: 24,
   tags: DEFAULT_TAGS,
+  mostPlayed: 'hand',
 }
 
 /** The channel config (`createVods`'s), for code outside components. A placeholder until createVodsApp() sets it. */
@@ -91,5 +97,5 @@ export let vodsConfig: VodsConfig = defineVodsConfig({ channel: '-', twitchId: '
 /** Sets the site and its channel config. createVodsApp() calls it; tests can too. */
 export function configureSite(config: VodsConfig, s: Partial<VodsSite> & Pick<VodsSite, 'id' | 'name' | 'twitchUrl'>): void {
   vodsConfig = config
-  Object.assign(site, { perPage: 24, tags: DEFAULT_TAGS }, s)
+  Object.assign(site, { perPage: 24, tags: DEFAULT_TAGS, mostPlayed: 'hand' }, s)
 }
