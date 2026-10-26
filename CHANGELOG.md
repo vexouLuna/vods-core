@@ -1,5 +1,44 @@
 # @vex/vods-core
 
+## 0.38.0
+
+### Minor Changes
+
+- 501a05a: The dashboard's settings, storage and VOD writes (details, games, chapters, YouTube and Drive lists, censor ranges,
+  deleting uploads, re-archiving, the censor review) and its emotes read go to twitch-archive's `/api/v2` instead of
+  `/admin` (vexouLuna/twitch-archive#216, which a worker must have before a site takes this). `RuntimeSetting`,
+  `StorageView` and `AdminEmotes` are in v2's snake_case, and `settings()` answers `{ items }`. A write that answers a
+  VOD still reads it from `GET /admin/vods/:id`, so the editors keep one shape.
+- 42bad23: Manage → VOD has a preview (needs twitch-archive with migration 0023): the VOD's file on the server (the source, or
+  the censored one) or its YouTube uploads, with play/pause, ±1 s and ±1 frame steps and a timeline of the censor
+  ranges (click to seek, drag a selected range's ends). Only one browser tab on the whole server streams a server file:
+  another tab sees who has it (Twitch login or "the password login", browser, since when), can use YouTube instead, or
+  take it over behind a warning; the tab that lost it stops and can take it back. Drafts are never lost.
+  
+  - Censor ranges can cover only a box drawn, moved and resized over the preview, and cover it (or the whole frame)
+    with blur, pixelate, black or any colour (`CensorRange.video` `"pixelate"`/`"color"`, `color`, `region`). The
+    preview shows them roughly as they'll look; "Duplicate" makes a second box at the same time.
+  - The chapters, games and censor times can be set from the preview's playhead and jump it there.
+  - The dev mock serves the preview's files from `VODS_MOCK_MEDIA` (a local MP4) and runs the same lease.
+- c6df452: `site.mostPlayed: 'wall'` lays the home's Most played out as a straight row of framed posters, each with a plaque
+  under it (name and count), for a site that wants a cinema's wall instead of the fanned hand (`'hand'`, the default).
+- fb44e14: The tag model of twitch-archive's ADR 0005 (needs twitch-archive with migration 0022):
+  
+  - A tag with a page is a home category: Manage → Tags has one "Home category" switch (sets the page and its title), and the homepage drops a tag card whose tag isn't one, whatever was saved.
+  - /vods lists the `vods` tag when the archive has it (every VOD, merges and splits too), else the archive's default list. `vods` and `compilation` are never chips. `playthroughs` replaces `compilation` in the built-in tags and the default homepage.
+  - New homepage card "Latest VOD" (`{kind: "one", tag}`): a home category's newest VOD in the big panel. The others read "Latest live" and "Latest 2".
+  - Merge panel: suggestions within 24 h either side, add or remove VODs by id, one gap per join (filled from the start times), a custom id (default `<first id>-m`), one Merge button. Split takes custom ids. Both use `/api/v2` (the old `/admin` routes are gone from the archive).
+  - Synthetic VOD page: no "Played to the end" or "Stands in for its sources" checkboxes; "Hide all sources" / "Show all sources"; the site's tags as one-click suggestions; the playthrough builder adds `playthroughs`.
+  - A hidden VOD that two or more synthetic VODs play opens a page listing them (`Vod.hidden`); one that one plays still redirects.
+  - The tag colour hint suggests `var(--vods-tag-new)`, which every site defines (#93).
+
+### Patch Changes
+
+- fd2d4cf: Manage: editing a playthrough no longer sends its saved segment positions, so its windows pack back to back
+  instead of leaving "Technical difficulties" gaps after an edit. Merges and splits keep theirs.
+- c5a341d: VOD cards line the date, tag chips and game names up on one baseline, so the mono date no longer sits lower than
+  the game names.
+
 ## 0.37.0
 
 ### Minor Changes
