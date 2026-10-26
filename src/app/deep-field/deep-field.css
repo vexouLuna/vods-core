@@ -17,6 +17,7 @@
   --vods-info: var(--vx-info);
   --vods-ok: var(--vx-ok);
   --vods-warn: var(--vx-warn);
+  --vods-caution: var(--vx-caution);
   --vods-bad: var(--vx-bad);
   --vods-ring: var(--vx-ring);
   --vods-hover: var(--vx-hover);
