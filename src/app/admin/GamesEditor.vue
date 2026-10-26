@@ -15,7 +15,7 @@ import TimeStrip from './TimeStrip.vue'
 import { useDraftEditor } from './useDraftEditor'
 
 const props = defineProps<{ vod: AdminVod; duration: number }>()
-const emit = defineEmits<{ saved: [vod: AdminVod] }>()
+const emit = defineEmits<{ saved: [vod: AdminVod]; dirty: [dirty: boolean] }>()
 const toast = useToast()
 
 const loaded = ref<GameRow[] | null>(null)
@@ -43,6 +43,10 @@ const { rows, error, saving, dirty, errors, reset, save, remove } = useDraftEdit
     emit('saved', vod)
   },
 })
+
+// The Timeline workbench marks the tab of an editor with unsaved changes.
+watch(dirty, (d) => emit('dirty', d))
+
 const sorted = computed(() => rows.value.every((r, i) => i === 0 || rows.value[i - 1]!.start <= r.start))
 
 const label = (r: GameDraft) => r.name ?? '?'

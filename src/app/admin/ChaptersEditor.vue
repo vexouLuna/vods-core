@@ -4,7 +4,7 @@
 // The logic is useChaptersDraft's; this draws it, with the game colours of the Deep Field palette.
 import { gamePalette, useToast } from '@vex/ui/utils'
 import { toClock } from '../../index'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import type { AdminVod } from './api'
 import EditorRows from './EditorRows.vue'
 import GameSearch from './GameSearch.vue'
@@ -13,11 +13,14 @@ import TimeStrip from './TimeStrip.vue'
 import { useChaptersDraft } from '../composables/useChaptersDraft'
 
 const props = defineProps<{ vod: AdminVod; duration: number }>()
-const emit = defineEmits<{ saved: [vod: AdminVod] }>()
+const emit = defineEmits<{ saved: [vod: AdminVod]; dirty: [dirty: boolean] }>()
 const toast = useToast()
 
 const { rows, error, saving, dirty, errors, reset, save, remove, locked, gaps, sorted, label, total, game, setGame, add, split, sortRows } =
   useChaptersDraft(props, { saved: (vod) => emit('saved', vod), notify: (message, options) => toast.show(message, options) })
+
+// The Timeline workbench marks the tab of an editor with unsaved changes.
+watch(dirty, (d) => emit('dirty', d))
 const palette = computed(() => gamePalette(rows.value.map(label)))
 const segments = computed(() =>
   rows.value.map((r) => ({ ...r, label: label(r), color: palette.value.get(label(r)), bad: errors.value.has(r.key) })),

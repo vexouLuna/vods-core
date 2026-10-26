@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // /manage/vods/:id: fix one VOD by hand (visibility, details, chapters, games, YouTube and Drive lists, censor ranges,
-// emotes) and run its jobs. The preview plays its server file or its uploads for the editors under it to set times
-// from and draw censor boxes on.
+// emotes) and run its jobs. The Timeline workbench keeps the preview (its server file or its uploads) in view beside
+// the chapters, games and censor editors, which set times from it and draw censor boxes on it.
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import type { Option } from '@vex/ui'
+import { useRoute, useRouter } from 'vue-router'
 import { isSpliced, type AdminVod } from '../../admin/api'
 import ManageShell from '../../admin/ManageShell.vue'
 import CensorEditor from '../../admin/CensorEditor.vue'
@@ -29,8 +30,9 @@ import { site } from '../../site'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
+const route = useRoute()
 const toast = useToast()
-providePreview()
+const preview = providePreview()
 
 const vod = ref<AdminVod | null>(null)
 const loadError = ref<string | null>(null)
@@ -82,6 +84,22 @@ async function setHidden(hidden: boolean) {
     hiding.value = false
   }
 }
+
+// The Timeline workbench's tabs. A link to #censor (the censor review) opens that tab.
+type TimelineTab = 'chapters' | 'games' | 'censor'
+const tab = ref<TimelineTab>(route.hash === '#censor' ? 'censor' : 'chapters')
+const dirty = ref<Record<TimelineTab, boolean>>({ chapters: false, games: false, censor: false })
+const tabs = computed<Option<TimelineTab>[]>(() =>
+  (
+    [
+      ['chapters', 'Chapters'],
+      ['games', 'Games'],
+      ['censor', 'Censor'],
+    ] as const
+  ).map(([value, label]) => (dirty.value[value] ? { value, label: `${label} •` } : { value, label })),
+)
+// The censor box being edited is only drawn while its editor is showing.
+watch(tab, (t) => t !== 'censor' && (preview.selected.value = null))
 
 function saved(v: AdminVod) {
   vod.value = v
@@ -180,29 +198,32 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
 
         <!-- A VOD merged into another, or a synthetic one, has no chapters, uploads or emotes of its own to edit. -->
         <template v-if="!vod.merged_into && !vod.synthetic">
-          <section id="preview" class="panel vods-panel vx-glass-rim">
-            <h2 class="vods-eyebrow">Preview</h2>
-            <MediaPreview :key="vod.id" :vod="vod" :duration="duration" />
-          </section>
-
-          <section class="panel vods-panel vx-glass-rim">
-            <h2 class="vods-eyebrow">Chapters</h2>
-            <ChaptersEditor :vod="vod" :duration="duration" @saved="saved" />
-          </section>
-
-          <section class="panel vods-panel vx-glass-rim">
-            <h2 class="vods-eyebrow">Games</h2>
-            <GamesEditor :vod="vod" :duration="duration" @saved="saved" />
+          <!-- The Timeline workbench: the preview stays in view beside the editors that set times from it and draw on it.
+               All three stay mounted under the tabs, so switching keeps a draft; its tab shows a dot. -->
+          <section id="timeline" class="panel vods-panel vx-glass-rim">
+            <h2 class="vods-eyebrow">Timeline</h2>
+            <div class="workbench">
+              <div class="preview">
+                <MediaPreview :key="vod.id" :vod="vod" :duration="duration" />
+              </div>
+              <div class="editors">
+                <UiTabs v-model="tab" :options="tabs" label="Timeline editor" class="tabs" />
+                <div v-show="tab === 'chapters'" role="tabpanel" aria-label="Chapters">
+                  <ChaptersEditor :vod="vod" :duration="duration" @saved="saved" @dirty="dirty.chapters = $event" />
+                </div>
+                <div v-show="tab === 'games'" role="tabpanel" aria-label="Games">
+                  <GamesEditor :vod="vod" :duration="duration" @saved="saved" @dirty="dirty.games = $event" />
+                </div>
+                <div v-show="tab === 'censor'" role="tabpanel" aria-label="Censor">
+                  <CensorEditor :vod="vod" :duration="duration" @saved="saved" @dirty="dirty.censor = $event" />
+                </div>
+              </div>
+            </div>
           </section>
 
           <section class="panel vods-panel vx-glass-rim">
             <h2 class="vods-eyebrow">YouTube parts</h2>
             <YoutubeEditor :vod="vod" @saved="saved" />
-          </section>
-
-          <section id="censor" class="panel vods-panel vx-glass-rim">
-            <h2 class="vods-eyebrow">Censor</h2>
-            <CensorEditor :vod="vod" :duration="duration" @saved="saved" />
           </section>
 
           <section class="panel vods-panel vx-glass-rim">
@@ -233,4 +254,17 @@ h2 { margin: 0 0 12px; }
 .title { margin: 0 0 8px; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
 .visibility { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 13px; }
 .visibility label { cursor: pointer; }
+/* Phones: the preview sticks to the top edge, its picture shorter, over the editor scrolling under it. Wide screens: a
+   sticky left column beside the editor. align-items: start keeps the column short enough to stick. */
+.workbench { display: grid; gap: 14px; align-items: start; }
+.preview { position: sticky; top: 0; z-index: 2; padding-block: 6px; background: var(--vods-bg); }
+.preview :deep(.stage) { max-height: 20vh; }
+/* The editors switch to their narrow rows by the width of their own column (@container vods), not the page. */
+.editors { min-width: 0; container: vods / inline-size; }
+.tabs { max-width: 100%; margin-bottom: 12px; }
+@media (min-width: 960px) {
+  .workbench { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; }
+  .preview { top: 16px; padding-block: 0; background: none; }
+  .preview :deep(.stage) { max-height: 70vh; }
+}
 </style>
