@@ -347,7 +347,7 @@ onMounted(() => {
    off the tag, is clipped there, so neither reaches the name. */
 .mini { position: relative; min-width: 70px; height: 28px; flex: none; display: flex; align-items: center; }
 .mini:has(> .mini-mark) { width: 70px; overflow: clip; }
-.mini-mark { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.mini-mark { position: absolute; top: 0; left: 0; display: flex; transform-origin: 0 0; }
 .who { min-width: 0; overflow-wrap: anywhere; }
 .dot { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--vods-warn); vertical-align: middle; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
