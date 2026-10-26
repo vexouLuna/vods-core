@@ -3,7 +3,7 @@
 // failed, or after a session ended; and the admin password, for the archive's local network.
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ProblemError } from '@vex/platform-web'
+import { ProblemError, safeNext } from '@vex/platform-web'
 import TwitchMark from '../../components/TwitchMark.vue'
 import VodsShell from '../../components/VodsShell.vue'
 import { ensure, login, session, SIGNIN_ERRORS, twitchLoginUrl } from '../../admin/session'
@@ -16,11 +16,8 @@ const field = ref<{ focus: () => void } | null>(null)
 const busy = ref(false)
 const error = ref<string | null>(null)
 
-const next = computed(() => {
-  const n = route.query.next
-  // Only paths inside Manage: never an absolute URL from the query.
-  return typeof n === 'string' && n.startsWith('/manage') && !n.startsWith('//') ? n : '/manage'
-})
+// Only paths inside Manage (not this page): never an absolute URL from the query.
+const next = computed(() => safeNext(route.query.next, { home: '/manage', within: '/manage', not: ['/manage/login'] }))
 
 /** A failed Twitch sign-in, as the worker's callback reports it. */
 const signinError = computed(() => {

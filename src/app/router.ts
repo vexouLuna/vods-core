@@ -1,6 +1,7 @@
 // The wiring every vods site shares around its router: the route table (vodsRoutes) and what the account and the
 // Manage pages need from it (installVodsSession). createVodsApp() uses both; a site with its own UI passes its own
 // pages and account. No components here: the pages come from the site.
+import { signInTarget } from '@vex/platform-web'
 import { watch, type Ref } from 'vue'
 import type { Router, RouteRecordRaw, RouteRecordSingleView } from 'vue-router'
 
@@ -182,8 +183,9 @@ export function installVodsSession(router: Router, account: VodsAccount, options
       await check(user.id)
       if (session.authenticated) return true
     }
-    if (session.twitchLogin && !session.notice) {
-      navigate(twitchLoginUrl(to.fullPath))
+    const target = signInTarget(session, to.fullPath, twitchLoginUrl)
+    if (target && 'href' in target) {
+      navigate(target.href)
       return false
     }
     return toLogin(to.fullPath)
