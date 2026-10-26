@@ -916,7 +916,7 @@ export class AdminClient {
     return this.request('GET', '/admin/site/options', undefined, signal)
   }
   /** The options sent change (all or none); the others keep their value. */
-  saveSiteOptions(changes: { homeCards?: HomeCard[] | LegacyHomeCard[]; playDefault?: PlayDefault }): Promise<SiteOptionsView> {
+  saveSiteOptions(changes: { cards?: HomeCard[]; homeCards?: LegacyHomeCard[]; playDefault?: PlayDefault }): Promise<SiteOptionsView> {
     return this.request('PUT', '/admin/site/options', changes)
   }
   // ---- site tags ----

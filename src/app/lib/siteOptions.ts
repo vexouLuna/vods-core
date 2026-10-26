@@ -26,23 +26,27 @@ export interface SiteOptions {
   playDefault: PlayDefault
 }
 
-/** GET /admin/site/options: the options as the archive stores them (cards in either shape: homeCardsOf), and who last
- * changed them (docs/admin-api.md, "Site options"). */
+/** GET /admin/site/options: the options as the archive stores them, and who last changed them (docs/admin-api.md,
+ * "Site options"). An archive with per-card settings sends them as `cards` (homeCards in the old shape alongside). */
 export interface SiteOptionsView {
   homeCards: unknown
+  cards?: unknown
   playDefault: PlayDefault
   updatedAt: string | null
   updatedBy: string | null
 }
 
 export const DEFAULT_SITE_OPTIONS: SiteOptions = {
-  homeCards: [{ id: 'live', type: 'live' }, { id: 'playthroughs', type: 'vods', tag: 'playthroughs', count: 2 }, { id: 'games', type: 'games' }],
+  homeCards: [{ id: 'c0', type: 'live' }, { id: 'c1', type: 'vods', tag: 'playthroughs', count: 2 }, { id: 'c2', type: 'games' }],
   playDefault: 'segments',
 }
 
 export const siteOptions = shallowRef<SiteOptions>(DEFAULT_SITE_OPTIONS)
 
-/** A short random key for a new card. */
+/** The most cards the archive keeps; `live` and `games` at most once each. */
+export const MAX_HOME_CARDS = 12
+
+/** A short random key for a new card (the archive takes 1-32 of [A-Za-z0-9_-]). */
 export const newCardId = (): string => Math.random().toString(36).slice(2, 10)
 
 /** A card type's name on /manage/home. */
@@ -91,14 +95,17 @@ export function homeCardsOf(raw: unknown): HomeCard[] {
     const card = cardOf(c)
     if (!card) continue
     const given = typeof c?.id === 'string' && c.id.trim() ? c.id : null
-    const id = given && !out.some((o) => o.id === given) ? given : `card-${i}`
+    const id = given && !out.some((o) => o.id === given) ? given : `c${i}`
     out.push({ id, ...card })
   }
   return out
 }
 
-/** Whether the archive stores the old shape: no card it sent has a `type` (an empty list counts as old). */
-export const legacyCards = (raw: unknown): boolean => !Array.isArray(raw) || !raw.some((c) => c && typeof c === 'object' && 'type' in c)
+/** The stored cards: `cards` from an archive with per-card settings, else the old `homeCards`. */
+export const storedCards = (v: { homeCards?: unknown; cards?: unknown } | null): unknown => (v && 'cards' in v ? v.cards : v?.homeCards)
+
+/** Whether the archive predates per-card settings (it sends no `cards`), so it takes only the old shape. */
+export const legacyCards = (v: object): boolean => !('cards' in v)
 
 /** The cards in the old shape, for an archive that only takes it: one of each, as it allows. */
 export function toLegacyCards(cards: HomeCard[]): LegacyHomeCard[] {
@@ -115,8 +122,8 @@ export async function loadSiteOptions(fetcher: typeof fetch = (...a) => fetch(..
   try {
     const res = await fetcher(`${apiBase.replace(/\/+$/, '')}/v1/site/options`, { headers: { accept: 'application/json' } })
     if (!res.ok) return
-    const body = (await res.json()) as Partial<Record<keyof SiteOptions, unknown>>
-    siteOptions.value = { homeCards: homeCardsOf(body?.homeCards), playDefault: body?.playDefault === 'compiled' ? 'compiled' : 'segments' }
+    const body = (await res.json()) as Partial<Record<keyof SiteOptions | 'cards', unknown>> | null
+    siteOptions.value = { homeCards: homeCardsOf(storedCards(body)), playDefault: body?.playDefault === 'compiled' ? 'compiled' : 'segments' }
   } catch {
     // keep the defaults
   }

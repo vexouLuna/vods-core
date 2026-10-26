@@ -7,6 +7,7 @@ import {
   loadSiteOptions,
   shownHomeCards,
   siteOptions,
+  storedCards,
   toLegacyCards,
   type HomeCard,
 } from '../../src/app/lib/siteOptions'
@@ -16,10 +17,10 @@ describe('homeCardsOf', () => {
     expect(
       homeCardsOf([{ kind: 'games' }, { kind: 'tag', tag: 'compilation' }, { kind: 'tag', tag: 'Bad Tag' }, { kind: 'x' }, null, { kind: 'latest' }, { kind: 'one', tag: 'compilation' }]),
     ).toEqual([
-      { id: 'card-0', type: 'games' },
-      { id: 'card-1', type: 'vods', tag: 'compilation', count: 2 },
-      { id: 'card-5', type: 'live' },
-      { id: 'card-6', type: 'vods', tag: 'compilation', count: 1 },
+      { id: 'c0', type: 'games' },
+      { id: 'c1', type: 'vods', tag: 'compilation', count: 2 },
+      { id: 'c5', type: 'live' },
+      { id: 'c6', type: 'vods', tag: 'compilation', count: 1 },
     ])
   })
   it('reads the new shape, keeping duplicates and giving a repeated or missing id a new one', () => {
@@ -33,8 +34,8 @@ describe('homeCardsOf', () => {
       ]),
     ).toEqual([
       { id: 'a', type: 'vods', tag: 'vods', count: 1 },
-      { id: 'card-1', type: 'vods', tag: 'vods', count: 1 },
-      { id: 'card-2', type: 'live' },
+      { id: 'c1', type: 'vods', tag: 'vods', count: 1 },
+      { id: 'c2', type: 'live' },
       { id: 'c', type: 'games' },
     ])
   })
@@ -45,10 +46,14 @@ describe('homeCardsOf', () => {
 })
 
 describe('legacy cards', () => {
-  it('tells the old shape from the new', () => {
-    expect(legacyCards([{ kind: 'games' }])).toBe(true)
-    expect(legacyCards([])).toBe(true)
-    expect(legacyCards([{ id: 'x', type: 'games' }])).toBe(false)
+  it('tells an archive with per-card settings (it sends `cards`) from an old one, and reads the right key', () => {
+    const old = { homeCards: [{ kind: 'games' }] }
+    const now = { homeCards: [{ kind: 'games' }], cards: [{ id: 'x', type: 'games' }] }
+    expect(legacyCards(old)).toBe(true)
+    expect(legacyCards(now)).toBe(false)
+    expect(storedCards(old)).toEqual([{ kind: 'games' }])
+    expect(storedCards(now)).toEqual([{ id: 'x', type: 'games' }])
+    expect(storedCards(null)).toBeUndefined()
   })
   it('writes the old shape once each', () => {
     const cards: HomeCard[] = [
@@ -98,10 +103,11 @@ describe('loadSiteOptions', () => {
     }) as typeof fetch
     await loadSiteOptions(ok, 'https://api.test/')
     expect(urls).toEqual(['https://api.test/v1/site/options'])
-    expect(siteOptions.value).toEqual({ homeCards: [{ id: 'card-0', type: 'games' }], playDefault: 'compiled' })
+    expect(siteOptions.value).toEqual({ homeCards: [{ id: 'c0', type: 'games' }], playDefault: 'compiled' })
     await loadSiteOptions((async () => new Response(JSON.stringify({ playDefault: 'youtube' }))) as typeof fetch, 'https://api.test')
     expect(siteOptions.value.playDefault).toBe('segments')
-    await loadSiteOptions((async () => new Response(JSON.stringify({ homeCards: [{ id: 'g', type: 'games' }] }))) as typeof fetch, 'https://api.test')
+    const both = { homeCards: [{ kind: 'latest' }], cards: [{ id: 'g', type: 'games' }] }
+    await loadSiteOptions((async () => new Response(JSON.stringify(both))) as typeof fetch, 'https://api.test')
     await loadSiteOptions((async () => new Response('', { status: 404 })) as typeof fetch, 'https://api.test')
     await loadSiteOptions((async () => Promise.reject(new Error('down'))) as typeof fetch, 'https://api.test')
     expect(siteOptions.value.homeCards).toEqual([{ id: 'g', type: 'games' }])
