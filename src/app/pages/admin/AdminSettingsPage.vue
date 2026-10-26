@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // /manage/settings: the worker settings the dashboard can override (GET /admin/settings), grouped as the worker groups
-// them. Each shows its env default and when a change is seen; one Save sends every change, all or none.
+// them. Each shows its env default and when a change is seen; one Save sends every change, all or none. Above them, the
+// "Watch page" group edits the site's own playDefault (GET/PUT /admin/site/options), with its own Save.
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { computed, onMounted, ref } from 'vue'
@@ -9,6 +10,7 @@ import type { RuntimeSetting } from '../../admin/api'
 import ManageShell from '../../admin/ManageShell.vue'
 import { admin } from '../../admin/session'
 import { settingChanges, settingLabel, showValue, toDraft, type SettingDraft } from '../../admin/settings'
+import { siteOptions, type PlayDefault } from '../../lib/siteOptions'
 import { site } from '../../site'
 
 const toast = useToast()
@@ -87,9 +89,38 @@ function toggleStep(s: RuntimeSetting, kind: string, step: string) {
   d[kind] = have.includes(step) ? have.filter((x) => x !== step) : [...have, step]
 }
 
+// ── Watch page: which version of a compiled synthetic VOD plays first (the site's options, not the worker's) ──
+const play = ref<PlayDefault | null>(null)
+const playSaved = ref<PlayDefault | null>(null)
+const playError = ref<string | null>(null)
+const playSaving = ref(false)
+async function loadPlay() {
+  playError.value = null
+  try {
+    playSaved.value = play.value = (await admin.siteOptions()).playDefault
+  } catch (e) {
+    playError.value = errorText(e)
+  }
+}
+async function savePlay() {
+  if (!play.value) return
+  playSaving.value = true
+  playError.value = null
+  try {
+    playSaved.value = play.value = (await admin.saveSiteOptions({ playDefault: play.value })).playDefault
+    siteOptions.value = { ...siteOptions.value, playDefault: playSaved.value }
+    toast.show('Watch page saved', { duration: 3000 })
+  } catch (e) {
+    playError.value = errorText(e)
+  } finally {
+    playSaving.value = false
+  }
+}
+
 onMounted(() => {
   document.title = `Settings · Manage · ${site.name}`
   void load()
+  void loadPlay()
 })
 </script>
 
@@ -99,6 +130,27 @@ onMounted(() => {
       The worker's settings you can change while it runs. Each starts from the worker's environment (its default here);
       a change here overrides it until you reset it.
     </p>
+
+    <form class="group vods-panel vx-glass-rim" @submit.prevent="savePlay">
+      <h2 class="vods-eyebrow">Watch page</h2>
+      <div class="setting" :class="{ 'is-changed': play !== playSaved }">
+        <div class="about">
+          <label class="name" for="set-play-default">A synthetic VOD with a compiled upload plays</label>
+          <p class="help vods-muted">What its watch page starts with; the page's switcher plays the other.</p>
+        </div>
+        <div class="control">
+          <select id="set-play-default" v-model="play" class="vods-input" :disabled="!playSaved">
+            <option value="segments">its segments (each source's own uploads)</option>
+            <option value="compiled">its compiled upload</option>
+          </select>
+          <p v-if="playError" class="err">{{ playError }}</p>
+          <span class="play-acts">
+            <UiButton size="sm" variant="ghost" :disabled="play === playSaved" @click="play = playSaved">Undo</UiButton>
+            <UiButton size="sm" type="submit" variant="primary" :loading="playSaving" :disabled="!play || play === playSaved">Save</UiButton>
+          </span>
+        </div>
+      </div>
+    </form>
 
     <UiLoadState
       :error="loadError"
@@ -201,6 +253,7 @@ h2 { margin: 0 0 4px; }
 .step:hover { color: var(--vods-ink); }
 .step[aria-pressed='true'] { border-color: var(--vods-warn, var(--vods-accent)); color: var(--vods-ink); background: var(--vods-hover); }
 .err { margin: 0; color: var(--vods-bad); font-size: 12px; }
+.play-acts { display: flex; gap: 6px; }
 @container vods (max-width: 760px) {
   .setting { grid-template-columns: minmax(0, 1fr); }
   .kind { grid-template-columns: minmax(0, 1fr); gap: 2px; }

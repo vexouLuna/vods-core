@@ -1276,8 +1276,9 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         // ---- site options ----
         if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { homeCards: shownCards(), playDefault, ...optionsChanged })
         if (path === '/admin/site/options' && method === 'PUT') {
-          if (!Array.isArray(b.homeCards)) return fail(res, 400, 'homeCards must be a list of at most 12 cards')
-          homeCards = b.homeCards as Json[]
+          // Only the options sent change; the cards are stored in the shape sent (the old {kind, tag} or the new {id, type, …}).
+          if ('homeCards' in b && !Array.isArray(b.homeCards)) return fail(res, 400, 'homeCards must be a list of at most 12 cards')
+          if (Array.isArray(b.homeCards)) homeCards = b.homeCards as Json[]
           if (b.playDefault === 'segments' || b.playDefault === 'compiled') playDefault = b.playDefault
           optionsChanged = { updatedAt: iso(), updatedBy: s.user ? `twitch:${s.user.id}` : 'password' }
           return send(res, 200, { homeCards, playDefault, ...optionsChanged })

@@ -1,7 +1,7 @@
 import { ProblemError, parseRetryAfter } from '@vex/platform-web'
 import type { RawDrive, RawEmoteSets, RawUpload, RawVod } from '../../index'
 import type { RawTag } from '../lib/vodTags'
-import type { SiteOptions } from '../lib/siteOptions'
+import type { HomeCard, LegacyHomeCard, PlayDefault, SiteOptionsView } from '../lib/siteOptions'
 
 // Client for twitch-archive's worker admin API, as described in docs/admin-api.md. The browser holds no key: a
 // password login gives it an HttpOnly session cookie, and every change carries the session's CSRF token.
@@ -329,11 +329,7 @@ export interface SiteTags {
   updatedAt: string | null
   updatedBy: string | null
 }
-/** GET /admin/site/options: the site's own options (docs/admin-api.md, "Site options"). */
-export interface SiteOptionsView extends SiteOptions {
-  updatedAt: string | null
-  updatedBy: string | null
-}
+
 /** A tag as PUT /admin/site/tags takes it: everything but the shape, which is uploaded on its own. */
 export type TagInput = Omit<RawTag, 'shape'>
 
@@ -920,7 +916,7 @@ export class AdminClient {
     return this.request('GET', '/admin/site/options', undefined, signal)
   }
   /** The options sent change (all or none); the others keep their value. */
-  saveSiteOptions(changes: Partial<SiteOptions>): Promise<SiteOptionsView> {
+  saveSiteOptions(changes: { homeCards?: HomeCard[] | LegacyHomeCard[]; playDefault?: PlayDefault }): Promise<SiteOptionsView> {
     return this.request('PUT', '/admin/site/options', changes)
   }
   // ---- site tags ----
