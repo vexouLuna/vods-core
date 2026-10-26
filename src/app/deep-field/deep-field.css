@@ -34,7 +34,7 @@
 /* The pages' container queries (@container vods) run against Deep Field's shell. */
 .vx-site { container-name: vx-site vods; }
 
-/* Copies of vex-ui's rules (src/styles/base.css: vx-display… vx-ring; components.css: vx-input, vx-btn), as vods-*.
+/* Copies of vex-ui's rules (src/styles/base.css: vx-display… vx-ring; components.css: vx-input, vx-btn, vx-facts), as vods-*.
    CSS can't reuse a rule under another name, so tests/app/deepField.test.ts checks each one against the installed
    @vex/ui's style.css: a vex-ui bump that changes one fails it until it's re-copied here. */
 .vods-display {
@@ -118,3 +118,6 @@
 .vods-btn:hover { background: var(--vx-hover); border-color: color-mix(in srgb, var(--vx-accent) 55%, transparent); color: var(--vx-ink); }
 .vods-btn.is-primary { background: var(--vx-accent); border-color: var(--vx-accent); color: var(--vx-bg); font-weight: 600; box-shadow: none; }
 .vods-btn.is-sm { height: var(--vx-ctl-sm); padding: 0 9px; font-size: 12px; gap: 5px; }
+.vods-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 16px; margin: 0; }
+.vods-facts dt { font-family: var(--vx-font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vx-muted); margin-bottom: 2px; }
+.vods-facts dd { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-wrap: anywhere; }

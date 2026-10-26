@@ -60,26 +60,34 @@ async function addPicked() {
   <UiDialog v-model:open="open" title="Find VODs on Twitch" width="620px">
     Twitch keeps past broadcasts for a while. The ones ticked are queued to archive, paused before they download: resume
     them on Jobs.
-    <UiCallout v-if="error" tone="error" title="Couldn't ask Twitch" class="body">
-      {{ errorText(error) }}
-      <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
-    </UiCallout>
-    <div v-else-if="loading" class="body sk" aria-busy="true"><UiSkeleton v-for="i in 4" :key="i" h="44px" /></div>
-    <p v-else-if="!videos.length" class="body vods-muted">Twitch has no past broadcasts for the channel.</p>
-    <template v-else>
-      <p class="body vods-muted small">{{ videos.length }} on Twitch, {{ missing }} not in the archive.</p>
-      <ul class="list">
-        <li v-for="v in videos" :key="v.id" :class="{ taken: taken(v) }">
-          <UiCheckbox v-model="picked[v.id]" :disabled="taken(v)">
-            <span class="text">
-              <span class="title">{{ v.title || 'Untitled' }}</span>
-              <span class="meta vods-mono vods-muted">{{ v.id }} · {{ v.createdAt.slice(0, 10) }} · {{ v.duration }}</span>
-            </span>
-          </UiCheckbox>
-          <UiChip :tone="status(v).tone" :title="status(v).title">{{ status(v).text }}</UiChip>
-        </li>
-      </ul>
-    </template>
+    <div class="body">
+      <UiLoadState
+        :error="error"
+        :loading="loading"
+        :empty="!videos.length"
+        error-title="Couldn't ask Twitch"
+        :error-text="errorText"
+        :rows="4"
+        row-height="44px"
+        @retry="load"
+      >
+        <template #empty>
+          <p class="vods-muted">Twitch has no past broadcasts for the channel.</p>
+        </template>
+        <p class="vods-muted small">{{ videos.length }} on Twitch, {{ missing }} not in the archive.</p>
+        <ul class="list">
+          <li v-for="v in videos" :key="v.id" :class="{ taken: taken(v) }">
+            <UiCheckbox v-model="picked[v.id]" :disabled="taken(v)">
+              <span class="text">
+                <span class="title">{{ v.title || 'Untitled' }}</span>
+                <span class="meta vods-mono vods-muted">{{ v.id }} · {{ v.createdAt.slice(0, 10) }} · {{ v.duration }}</span>
+              </span>
+            </UiCheckbox>
+            <UiChip :tone="status(v).tone" :title="status(v).title">{{ status(v).text }}</UiChip>
+          </li>
+        </ul>
+      </UiLoadState>
+    </div>
     <template #actions="{ close }">
       <UiButton @click="close">Cancel</UiButton>
       <UiButton variant="primary" :disabled="!chosen.length" :loading="adding" @click="addPicked">
@@ -91,7 +99,6 @@ async function addPicked() {
 
 <style scoped>
 .body { margin-top: 12px; }
-.sk { display: flex; flex-direction: column; gap: 6px; }
 .small { font-size: 12px; }
 .list { list-style: none; margin: 8px 0 0; padding: 0; max-height: min(55vh, 480px); overflow-y: auto; border-top: 1px solid var(--vods-line); }
 .list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 8px 0; border-bottom: 1px solid var(--vods-line); }

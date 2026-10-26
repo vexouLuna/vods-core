@@ -39,27 +39,34 @@ onMounted(() => (document.title = `YouTube uploads · Manage · ${site.name}`))
       <UiButton :loading="checking || !!data?.running" title="Look up every upload on YouTube now (1 API unit per 50 videos)" @click="check">Check now</UiButton>
     </template>
 
-    <UiCallout v-if="error" tone="error" title="Couldn't load the YouTube check">
-      {{ error }}
-      <template #actions><UiButton size="sm" :loading="loading" @click="refresh">Try again</UiButton></template>
-    </UiCallout>
-    <UiSkeleton v-else-if="!data" h="120px" />
-    <p v-else-if="!data.last" class="vods-muted small">Not checked yet.</p>
-    <template v-else>
-      <p class="vods-muted small">
-        Checked {{ timeAgo(data.last.checkedAt) }}: {{ data.last.videos }} uploads of {{ data.last.vods }} VODs.
-      </p>
-      <section>
-        <h2 class="vods-eyebrow">Last {{ RECENT_PROBLEM_DAYS }} days ({{ split.recent.length }})</h2>
-        <YoutubeProblems v-if="split.recent.length" :problems="split.recent" />
-        <p v-else class="vods-muted small">No problems with VODs from the last {{ RECENT_PROBLEM_DAYS }} days.</p>
-      </section>
-      <section>
-        <h2 class="vods-eyebrow">Older ({{ split.older.length }})</h2>
-        <YoutubeProblems v-if="split.older.length" :problems="split.older" />
-        <p v-else class="vods-muted small">No problems with older VODs.</p>
-      </section>
-    </template>
+    <UiLoadState
+      :error="error"
+      :loading="!data"
+      :empty="!data?.last"
+      error-title="Couldn't load the YouTube check"
+      :rows="1"
+      row-height="120px"
+      @retry="refresh"
+    >
+      <template #empty>
+        <p class="vods-muted small">Not checked yet.</p>
+      </template>
+      <template v-if="data?.last">
+        <p class="vods-muted small">
+          Checked {{ timeAgo(data.last.checkedAt) }}: {{ data.last.videos }} uploads of {{ data.last.vods }} VODs.
+        </p>
+        <section>
+          <h2 class="vods-eyebrow">Last {{ RECENT_PROBLEM_DAYS }} days ({{ split.recent.length }})</h2>
+          <YoutubeProblems v-if="split.recent.length" :problems="split.recent" />
+          <p v-else class="vods-muted small">No problems with VODs from the last {{ RECENT_PROBLEM_DAYS }} days.</p>
+        </section>
+        <section>
+          <h2 class="vods-eyebrow">Older ({{ split.older.length }})</h2>
+          <YoutubeProblems v-if="split.older.length" :problems="split.older" />
+          <p v-else class="vods-muted small">No problems with older VODs.</p>
+        </section>
+      </template>
+    </UiLoadState>
   </ManageShell>
 </template>
 

@@ -29,7 +29,7 @@ const patch = computed(() => detailsPatch(draft.value, props.vod))
 const dirty = computed(() => Object.keys(patch.value).length > 0)
 const merged = computed(() => !!props.vod.merged_into)
 
-// The date and the time are two inputs over the draft's one `datetime-local` value.
+// The date (typed as YYYY-MM-DD) and the time are two inputs over the draft's one `datetime-local` value.
 const date = computed({
   get: () => draft.value.createdAt.slice(0, 10),
   set: (v: string) => (draft.value.createdAt = `${v}T${time.value}`),
@@ -103,7 +103,7 @@ async function save() {
       <UiField label="Streamed on" :help="`Your time (${zone}).`" :error="errors.get('createdAt')">
         <template #default="{ id }">
           <div class="inline">
-            <UiInput :id="id" v-model="date" type="date" :disabled="merged" :invalid="errors.has('createdAt')" />
+            <UiDateInput :id="id" v-model="date" :disabled="merged" :invalid="errors.has('createdAt')" />
             <UiInput v-model="time" mono class="clock" aria-label="Time streamed (HH:MM:SS)" placeholder="20:00:00" :disabled="merged" :invalid="errors.has('createdAt')" />
           </div>
         </template>
@@ -116,7 +116,7 @@ async function save() {
       :error="errors.get('cutReason')"
     >
       <template #default="{ id }">
-        <textarea :id="id" v-model="draft.cutReason" class="vods-input reason" rows="2" :maxlength="CUT_REASON_MAX" :disabled="merged" />
+        <UiTextarea :id="id" v-model="draft.cutReason" :rows="2" :maxlength="CUT_REASON_MAX" :disabled="merged" />
       </template>
     </UiField>
 
@@ -141,7 +141,6 @@ async function save() {
 .inline { display: flex; flex-wrap: wrap; gap: 8px; }
 .inline > :first-child { flex: 1 1 180px; min-width: 0; }
 .clock { flex: 0 0 110px; }
-.reason { width: 100%; box-sizing: border-box; height: auto; resize: vertical; padding: 6px 8px; font: inherit; }
 .grid { display: flex; flex-wrap: wrap; gap: 12px 24px; }
 .grid > * { flex: 1 1 240px; }
 .foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }

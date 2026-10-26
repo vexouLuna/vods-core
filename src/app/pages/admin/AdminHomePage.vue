@@ -10,6 +10,7 @@ import { homeCardKey, homeCardLabel, siteOptions, type HomeCard, type PlayDefaul
 import { tagConfig } from '../../lib/vodTags'
 import { timeAgo } from '../../lib/time'
 import { site } from '../../site'
+import { moved } from '../../lib/reorder'
 
 const toast = useToast()
 
@@ -49,11 +50,7 @@ const addable = computed(() => {
 })
 const dirty = computed(() => JSON.stringify(cards.value) !== JSON.stringify(saved.value?.homeCards) || play.value !== saved.value?.playDefault)
 
-function move(i: number, by: -1 | 1) {
-  const next = [...cards.value]
-  ;[next[i], next[i + by]] = [next[i + by]!, next[i]!]
-  cards.value = next
-}
+const move = (i: number, by: -1 | 1) => (cards.value = moved(cards.value, i, by))
 function add() {
   const card = addable.value.find((c) => homeCardKey(c) === adding.value)
   if (card) cards.value = [...cards.value, card]
@@ -88,42 +85,46 @@ onMounted(() => {
       category (a tag with a page, Tags) can have a "Latest VOD" card (its newest, never the stream) and a "Latest 2"
       card (its two newest).
     </p>
-    <UiCallout v-if="loadError" tone="error" title="Couldn't load the homepage cards">
-      {{ loadError }}
-      <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
-    </UiCallout>
-    <div v-else-if="!saved" class="sk" aria-busy="true"><UiSkeleton h="160px" /></div>
-    <form v-else class="vods-panel vx-glass-rim panel" @submit.prevent="save">
-      <ol v-if="cards.length" class="cards">
-        <li v-for="(c, i) in cards" :key="homeCardKey(c)" class="card">
-          <span class="name">{{ homeCardLabel(c, tagConfig) }}</span>
-          <UiButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move ${homeCardLabel(c, tagConfig)} up`" @click="move(i, -1)">↑</UiButton>
-          <UiButton size="sm" variant="ghost" :disabled="i === cards.length - 1" :aria-label="`Move ${homeCardLabel(c, tagConfig)} down`" @click="move(i, 1)">↓</UiButton>
-          <UiButton size="sm" variant="ghost" @click="cards = cards.filter((_, j) => j !== i)">Remove</UiButton>
-        </li>
-      </ol>
-      <p v-else class="vods-muted">No cards: the homepage is empty.</p>
-      <div v-if="addable.length" class="add">
-        <label for="home-add" class="vods-muted">Add a card</label>
-        <select id="home-add" v-model="adding" class="vods-input" @change="add">
-          <option value="" disabled>Choose…</option>
-          <option v-for="c in addable" :key="homeCardKey(c)" :value="homeCardKey(c)">{{ homeCardLabel(c, tagConfig) }}</option>
-        </select>
-      </div>
-      <div class="add">
-        <label for="home-play" class="vods-muted">A synthetic VOD with a compiled upload plays</label>
-        <select id="home-play" v-model="play" class="vods-input">
-          <option value="segments">its segments (each source's own uploads)</option>
-          <option value="compiled">its compiled upload</option>
-        </select>
-      </div>
-      <UiCallout v-if="saveError" tone="error" title="Couldn't save">{{ saveError }}</UiCallout>
-      <div class="actions">
-        <UiButton type="submit" :disabled="!dirty" :loading="saving">Save</UiButton>
-        <UiButton variant="ghost" :disabled="!dirty" @click="saved && take({ ...saved, updatedAt: changedAt.at, updatedBy: changedAt.by })">Undo</UiButton>
-        <span v-if="changedAt.at" class="vods-muted">Saved {{ timeAgo(changedAt.at) }}{{ changedAt.by ? ` by ${changedAt.by}` : '' }}</span>
-      </div>
-    </form>
+    <UiLoadState
+      :error="loadError"
+      :loading="!saved"
+      error-title="Couldn't load the homepage cards"
+      :rows="1"
+      row-height="160px"
+      @retry="load"
+    >
+      <form class="vods-panel vx-glass-rim panel" @submit.prevent="save">
+        <ol v-if="cards.length" class="cards">
+          <li v-for="(c, i) in cards" :key="homeCardKey(c)" class="card">
+            <span class="name">{{ homeCardLabel(c, tagConfig) }}</span>
+            <UiButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move ${homeCardLabel(c, tagConfig)} up`" @click="move(i, -1)">↑</UiButton>
+            <UiButton size="sm" variant="ghost" :disabled="i === cards.length - 1" :aria-label="`Move ${homeCardLabel(c, tagConfig)} down`" @click="move(i, 1)">↓</UiButton>
+            <UiButton size="sm" variant="ghost" @click="cards = cards.filter((_, j) => j !== i)">Remove</UiButton>
+          </li>
+        </ol>
+        <p v-else class="vods-muted">No cards: the homepage is empty.</p>
+        <div v-if="addable.length" class="add">
+          <label for="home-add" class="vods-muted">Add a card</label>
+          <select id="home-add" v-model="adding" class="vods-input" @change="add">
+            <option value="" disabled>Choose…</option>
+            <option v-for="c in addable" :key="homeCardKey(c)" :value="homeCardKey(c)">{{ homeCardLabel(c, tagConfig) }}</option>
+          </select>
+        </div>
+        <div class="add">
+          <label for="home-play" class="vods-muted">A synthetic VOD with a compiled upload plays</label>
+          <select id="home-play" v-model="play" class="vods-input">
+            <option value="segments">its segments (each source's own uploads)</option>
+            <option value="compiled">its compiled upload</option>
+          </select>
+        </div>
+        <UiCallout v-if="saveError" tone="error" title="Couldn't save">{{ saveError }}</UiCallout>
+        <div class="actions">
+          <UiButton type="submit" :disabled="!dirty" :loading="saving">Save</UiButton>
+          <UiButton variant="ghost" :disabled="!dirty" @click="saved && take({ ...saved, updatedAt: changedAt.at, updatedBy: changedAt.by })">Undo</UiButton>
+          <span v-if="changedAt.at" class="vods-muted">Saved {{ timeAgo(changedAt.at) }}{{ changedAt.by ? ` by ${changedAt.by}` : '' }}</span>
+        </div>
+      </form>
+    </UiLoadState>
   </ManageShell>
 </template>
 

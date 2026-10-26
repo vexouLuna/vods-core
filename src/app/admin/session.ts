@@ -1,34 +1,39 @@
-// The admin session: one client and one reactive session for the whole app. The router guard calls `ensure()` for
-// the Manage pages, and createVodsApp() for anyone signed in to the account; any 401 from the API drops the session.
-import { reactive, readonly } from 'vue'
+// The admin session: one client and one session for the whole app, on vex-platform-web's useAdminSession. The router
+// guard calls `ensure()` for the Manage pages, and createVodsApp() for anyone signed in to the account; any 401 from
+// the API drops the session.
+import { computed, reactive, readonly } from 'vue'
 import { ProblemError } from '@vex/platform-web'
-import { AdminClient, type AdminUser, type Session } from './api'
+import { useAdminSession } from '@vex/platform-web/vue'
+import { AdminClient, type Session } from './api'
 
 /** The worker's admin API, as the browser reaches it. configureAdmin() sets it before the app mounts. */
 export let adminBase = '/backend-admin'
 export const admin = new AdminClient({ base: adminBase })
 
-const state = reactive({
-  checked: false,
-  authenticated: false,
-  passwordLogin: true,
-  twitchLogin: false,
-  user: null as AdminUser | null,
-  expiresAt: null as string | null,
-  /** Why the admin was sent to the login page (expired session). */
-  notice: null as string | null,
+const core = useAdminSession<Session>({
+  auth: admin,
+  load: () => admin.session(),
+  logout: () => admin.logout(),
+  // Keeps which logins the worker offers; drops who was signed in.
+  signedOut: (s) => ({ ...s, authenticated: false, csrf: null, user: null, expiresAt: null }),
+  onLoadError: (e) => {
+    if (!(e instanceof ProblemError)) console.warn('admin session check failed', e)
+  },
 })
-export const session = readonly(state)
 
-function apply(s: Session) {
-  state.checked = true
-  state.authenticated = s.authenticated
-  state.passwordLogin = s.passwordLogin
-  state.twitchLogin = s.twitchLogin ?? false
-  state.user = s.user ?? null
-  state.expiresAt = s.expiresAt
-  admin.csrf = s.csrf
-}
+const data = core.data
+export const session = readonly(
+  reactive({
+    checked: core.checked,
+    authenticated: core.authenticated,
+    passwordLogin: computed(() => data.value?.passwordLogin ?? true),
+    twitchLogin: computed(() => data.value?.twitchLogin ?? false),
+    user: computed(() => data.value?.user ?? null),
+    expiresAt: computed(() => data.value?.expiresAt ?? null),
+    /** Why the admin was sent to the login page (expired session). */
+    notice: core.notice,
+  }),
+)
 
 /**
  * Where "Sign in with Twitch" starts: the worker sends the browser through vex-auth (signing in to the site's
@@ -49,19 +54,8 @@ export const SIGNIN_ERRORS: Record<string, string> = {
     "The sign-in service turned down the archive itself: its client ID or secret (ARCHIVE_ADMIN_AUTH_CLIENT_*) doesn't match vex-auth's. The password still works from the local network.",
 }
 
-let onExpired: (() => void) | null = null
 /** Called (by createVodsApp()) with a way to go to the login page when the session expires mid-use. */
-export function setExpiredHandler(fn: () => void) {
-  onExpired = fn
-}
-
-admin.onUnauthorized = () => {
-  if (!state.authenticated) return
-  state.authenticated = false
-  admin.csrf = null
-  state.notice = 'Your session ended. Sign in again.'
-  onExpired?.()
-}
+export const setExpiredHandler = core.setExpiredHandler
 
 /** Points the admin client at the worker's admin API (`base`, e.g. `/backend-admin`). createVodsApp() calls it. */
 export function configureAdmin(base: string): void {
@@ -69,26 +63,11 @@ export function configureAdmin(base: string): void {
   admin.base = adminBase
 }
 
-let pending: Promise<void> | null = null
 /** Loads the session once (the guard awaits it on every admin navigation). */
-export function ensure(): Promise<void> {
-  if (state.checked) return Promise.resolve()
-  pending ??= admin
-    .session()
-    .then(apply)
-    .catch((e: unknown) => {
-      // Unreachable admin API: treat as logged out; the login page shows the error when it tries.
-      state.checked = true
-      state.authenticated = false
-      if (!(e instanceof ProblemError)) console.warn('admin session check failed', e)
-    })
-    .finally(() => (pending = null))
-  return pending
-}
+export const ensure = core.ensure
 
 export async function login(password: string): Promise<void> {
-  apply(await admin.login(password))
-  state.notice = null
+  core.signIn(await admin.login(password))
 }
 
 /**
@@ -98,18 +77,8 @@ export async function login(password: string): Promise<void> {
 export async function signInWithCode(code: string): Promise<boolean> {
   const s = await admin.codeSession(code)
   if (!s.admin) return false
-  apply(s)
-  state.notice = null
+  core.signIn(s)
   return true
 }
 
-export async function logout(): Promise<void> {
-  try {
-    await admin.logout()
-  } finally {
-    state.authenticated = false
-    state.user = null
-    state.expiresAt = null
-    admin.csrf = null
-  }
-}
+export const logout = core.logout

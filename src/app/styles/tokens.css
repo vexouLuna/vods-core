@@ -51,3 +51,7 @@
 :where(.vods-btn) { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; cursor: pointer; }
 :where(.vods-btn.is-sm) { padding: 3px 9px; font-size: 12px; }
 :where(.vods-btn.is-primary) { background: var(--vods-accent); border-color: var(--vods-accent); color: var(--vods-bg); }
+/* Label / value pairs: <dl class="vods-facts"><div><dt>…</dt><dd>…</dd></div>…</dl>. */
+:where(.vods-facts) { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 16px; margin: 0; }
+:where(.vods-facts dt) { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; margin-bottom: 2px; }
+:where(.vods-facts dd) { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-wrap: anywhere; }

@@ -106,133 +106,131 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
     <p class="back"><RouterLink to="/manage/vods">← VODs</RouterLink></p>
 
     <UiCallout v-if="notFound" tone="warn" title="No such VOD">The archive has no VOD {{ id }}.</UiCallout>
-    <UiCallout v-else-if="loadError" tone="error" title="Couldn't load this VOD">
-      {{ loadError }}
-      <template #actions><UiButton size="sm" @click="load">Try again</UiButton></template>
-    </UiCallout>
-    <div v-else-if="!vod" class="sk" aria-busy="true"><UiSkeleton h="90px" /><UiSkeleton h="200px" /></div>
-
-    <template v-else>
-      <UiCallout v-if="vod.hidden" tone="warn" title="Hidden">
-        This VOD is gone from the public site: the list, its watch page, the games pages and its chat. It's still here.
-      </UiCallout>
-
-      <UiCallout v-if="vod.synthetic" tone="info" title="A synthetic VOD">
-        It's made of windows of other VODs{{ vod.synthetic.supersedes ? ', and stands in for them' : '' }}. Its segments,
-        title and tags are edited on its own page; here it can be hidden and its jobs run.
-        <template #actions><UiButton size="sm" :to="`/manage/synthetic/${encodeURIComponent(id)}`">Edit its segments</UiButton></template>
-      </UiCallout>
-
-      <section class="panel vods-panel vx-glass-rim">
-        <h2 class="title">{{ vod.title ?? 'Untitled' }}</h2>
-        <div class="visibility">
-          <UiSwitch id="vod-public" :model-value="!vod.hidden" :disabled="hiding" @update:model-value="toggleHidden" />
-          <label for="vod-public">
-            <strong>{{ vod.hidden ? 'Hidden' : 'Public' }}</strong>
-            <span class="vods-muted"> · {{ vod.hidden ? 'only Manage shows it' : 'on the site for everyone' }}</span>
-          </label>
-        </div>
-        <dl class="facts">
-          <div><dt>Id</dt><dd class="vods-mono">{{ vod.id }}</dd></div>
-          <div><dt>Streamed</dt><dd :title="stamp(vod.createdAt)">{{ new Date(vod.createdAt).toLocaleString() }}</dd></div>
-          <div><dt>Duration</dt><dd class="vods-mono">{{ toClock(duration) }}</dd></div>
-          <div v-if="vod.merged_into"><dt>Merged into</dt><dd class="vods-mono"><RouterLink :to="`/manage/vods/${vod.merged_into.id}`">{{ vod.merged_into.id }}</RouterLink> at {{ toClock(vod.merged_into.offset) }}</dd></div>
-          <div v-if="vod.stream_id"><dt>Stream</dt><dd class="vods-mono">{{ vod.stream_id }}</dd></div>
-          <div><dt>Parts</dt><dd>{{ vod.youtube?.length ?? 0 }} YouTube · {{ vod.drive?.length ?? 0 }} Drive</dd></div>
-          <div><dt>Chapters</dt><dd>{{ vod.chapters?.length ?? 0 }} <UiChip v-if="vod.chaptersLocked" tone="warn">locked</UiChip></dd></div>
-          <div>
-            <dt>Bot chat</dt>
-            <dd v-if="vod.botChat" :title="`read ${stamp(vod.botChat.fetched_at)}`">
-              {{ vod.botChat.rows ?? '?' }} messages · read {{ timeAgo(vod.botChat.fetched_at) }}
-              <UiChip :tone="vod.botChat.keyed ? 'ok' : 'default'" :title="vod.botChat.keyed ? 'Read with a key: removals and their reasons are in' : 'Public read: no removals'">{{ vod.botChat.keyed ? 'keyed' : 'public' }}</UiChip>
-              <UiChip v-if="botGaps.length" tone="warn" :title="botGaps.join('\n')">{{ botGaps.length }} {{ botGaps.length === 1 ? 'gap' : 'gaps' }}</UiChip>
-            </dd>
-            <dd v-else class="vods-muted">not read</dd>
-          </div>
-        </dl>
-      </section>
-
-      <!-- A synthetic VOD's details and segments are edited on its own page (the worker refuses them here). -->
-      <section v-if="!vod.synthetic" class="panel vods-panel vx-glass-rim">
-        <h2 class="vods-eyebrow">Details</h2>
-        <DetailsEditor :vod="vod" @saved="saved" />
-      </section>
-
-      <section class="panel vods-panel vx-glass-rim">
-        <h2 class="vods-eyebrow">Actions</h2>
-        <VodActions :vod="vod" @job="jobStarted" @changed="load" @deleted="deleted" />
-      </section>
-
-      <section v-if="!vod.synthetic" class="panel vods-panel vx-glass-rim">
-        <h2 class="vods-eyebrow">Merge and split</h2>
-        <SplicePanel :vod="vod" />
-      </section>
-
-      <section class="panel vods-panel vx-glass-rim">
-        <h2 class="vods-eyebrow">Jobs <span v-if="activeJobs" class="vods-muted">· {{ activeJobs }} active</span></h2>
-        <JobsTable :jobs="jobs" empty="No jobs for this VOD." label="This VOD's jobs" />
-      </section>
-
-      <!-- A VOD merged into another, or a synthetic one, has no chapters, uploads or emotes of its own to edit. -->
-      <template v-if="!vod.merged_into && !vod.synthetic">
-        <section id="preview" class="panel vods-panel vx-glass-rim">
-          <h2 class="vods-eyebrow">Preview</h2>
-          <MediaPreview :key="vod.id" :vod="vod" :duration="duration" />
-        </section>
-
-        <section class="panel vods-panel vx-glass-rim">
-          <h2 class="vods-eyebrow">Chapters</h2>
-          <ChaptersEditor :vod="vod" :duration="duration" @saved="saved" />
-        </section>
-
-        <section class="panel vods-panel vx-glass-rim">
-          <h2 class="vods-eyebrow">Games</h2>
-          <GamesEditor :vod="vod" :duration="duration" @saved="saved" />
-        </section>
-
-        <section class="panel vods-panel vx-glass-rim">
-          <h2 class="vods-eyebrow">YouTube parts</h2>
-          <YoutubeEditor :vod="vod" @saved="saved" />
-        </section>
-
-        <section id="censor" class="panel vods-panel vx-glass-rim">
-          <h2 class="vods-eyebrow">Censor</h2>
-          <CensorEditor :vod="vod" :duration="duration" @saved="saved" />
-        </section>
-
-        <section class="panel vods-panel vx-glass-rim">
-          <h2 class="vods-eyebrow">Drive files</h2>
-          <DriveEditor :vod="vod" @saved="saved" />
-        </section>
-
-        <section class="panel vods-panel vx-glass-rim">
-          <h2 class="vods-eyebrow">Emotes</h2>
-          <EmotesPanel :vod-id="vod.id" :spliced="isSpliced(vod)" @job="jobStarted" />
-        </section>
+    <UiLoadState
+      v-else
+      :error="loadError"
+      :loading="!vod"
+      error-title="Couldn't load this VOD"
+      @retry="load"
+    >
+      <template #loading>
+        <UiSkeleton h="90px" />
+        <UiSkeleton h="200px" />
       </template>
+      <template v-if="vod">
+        <UiCallout v-if="vod.hidden" tone="warn" title="Hidden">
+          This VOD is gone from the public site: the list, its watch page, the games pages and its chat. It's still here.
+        </UiCallout>
 
-      <UiDialog v-model:open="hideOpen" title="Hide this VOD?" width="460px">
-        It leaves the public site at once: the VOD list, the games pages and the chat. Links to its watch page stop
-        working (they show "not found") until it's made public again. Nothing is deleted.
-        <template #actions="{ close }">
-          <UiButton @click="close">Cancel</UiButton>
-          <UiButton variant="danger" :loading="hiding" @click="setHidden(true)">Hide it</UiButton>
+        <UiCallout v-if="vod.synthetic" tone="info" title="A synthetic VOD">
+          It's made of windows of other VODs{{ vod.synthetic.supersedes ? ', and stands in for them' : '' }}. Its segments,
+          title and tags are edited on its own page; here it can be hidden and its jobs run.
+          <template #actions><UiButton size="sm" :to="`/manage/synthetic/${encodeURIComponent(id)}`">Edit its segments</UiButton></template>
+        </UiCallout>
+
+        <section class="panel vods-panel vx-glass-rim">
+          <h2 class="title">{{ vod.title ?? 'Untitled' }}</h2>
+          <div class="visibility">
+            <UiSwitch id="vod-public" :model-value="!vod.hidden" :disabled="hiding" @update:model-value="toggleHidden" />
+            <label for="vod-public">
+              <strong>{{ vod.hidden ? 'Hidden' : 'Public' }}</strong>
+              <span class="vods-muted"> · {{ vod.hidden ? 'only Manage shows it' : 'on the site for everyone' }}</span>
+            </label>
+          </div>
+          <dl class="vods-facts">
+            <div><dt>Id</dt><dd class="vods-mono">{{ vod.id }}</dd></div>
+            <div><dt>Streamed</dt><dd :title="stamp(vod.createdAt)">{{ new Date(vod.createdAt).toLocaleString() }}</dd></div>
+            <div><dt>Duration</dt><dd class="vods-mono">{{ toClock(duration) }}</dd></div>
+            <div v-if="vod.merged_into"><dt>Merged into</dt><dd class="vods-mono"><RouterLink :to="`/manage/vods/${vod.merged_into.id}`">{{ vod.merged_into.id }}</RouterLink> at {{ toClock(vod.merged_into.offset) }}</dd></div>
+            <div v-if="vod.stream_id"><dt>Stream</dt><dd class="vods-mono">{{ vod.stream_id }}</dd></div>
+            <div><dt>Parts</dt><dd>{{ vod.youtube?.length ?? 0 }} YouTube · {{ vod.drive?.length ?? 0 }} Drive</dd></div>
+            <div><dt>Chapters</dt><dd>{{ vod.chapters?.length ?? 0 }} <UiChip v-if="vod.chaptersLocked" tone="warn">locked</UiChip></dd></div>
+            <div>
+              <dt>Bot chat</dt>
+              <dd v-if="vod.botChat" :title="`read ${stamp(vod.botChat.fetched_at)}`">
+                {{ vod.botChat.rows ?? '?' }} messages · read {{ timeAgo(vod.botChat.fetched_at) }}
+                <UiChip :tone="vod.botChat.keyed ? 'ok' : 'default'" :title="vod.botChat.keyed ? 'Read with a key: removals and their reasons are in' : 'Public read: no removals'">{{ vod.botChat.keyed ? 'keyed' : 'public' }}</UiChip>
+                <UiChip v-if="botGaps.length" tone="warn" :title="botGaps.join('\n')">{{ botGaps.length }} {{ botGaps.length === 1 ? 'gap' : 'gaps' }}</UiChip>
+              </dd>
+              <dd v-else class="vods-muted">not read</dd>
+            </div>
+          </dl>
+        </section>
+
+        <!-- A synthetic VOD's details and segments are edited on its own page (the worker refuses them here). -->
+        <section v-if="!vod.synthetic" class="panel vods-panel vx-glass-rim">
+          <h2 class="vods-eyebrow">Details</h2>
+          <DetailsEditor :vod="vod" @saved="saved" />
+        </section>
+
+        <section class="panel vods-panel vx-glass-rim">
+          <h2 class="vods-eyebrow">Actions</h2>
+          <VodActions :vod="vod" @job="jobStarted" @changed="load" @deleted="deleted" />
+        </section>
+
+        <section v-if="!vod.synthetic" class="panel vods-panel vx-glass-rim">
+          <h2 class="vods-eyebrow">Merge and split</h2>
+          <SplicePanel :vod="vod" />
+        </section>
+
+        <section class="panel vods-panel vx-glass-rim">
+          <h2 class="vods-eyebrow">Jobs <span v-if="activeJobs" class="vods-muted">· {{ activeJobs }} active</span></h2>
+          <JobsTable :jobs="jobs" empty="No jobs for this VOD." label="This VOD's jobs" />
+        </section>
+
+        <!-- A VOD merged into another, or a synthetic one, has no chapters, uploads or emotes of its own to edit. -->
+        <template v-if="!vod.merged_into && !vod.synthetic">
+          <section id="preview" class="panel vods-panel vx-glass-rim">
+            <h2 class="vods-eyebrow">Preview</h2>
+            <MediaPreview :key="vod.id" :vod="vod" :duration="duration" />
+          </section>
+
+          <section class="panel vods-panel vx-glass-rim">
+            <h2 class="vods-eyebrow">Chapters</h2>
+            <ChaptersEditor :vod="vod" :duration="duration" @saved="saved" />
+          </section>
+
+          <section class="panel vods-panel vx-glass-rim">
+            <h2 class="vods-eyebrow">Games</h2>
+            <GamesEditor :vod="vod" :duration="duration" @saved="saved" />
+          </section>
+
+          <section class="panel vods-panel vx-glass-rim">
+            <h2 class="vods-eyebrow">YouTube parts</h2>
+            <YoutubeEditor :vod="vod" @saved="saved" />
+          </section>
+
+          <section id="censor" class="panel vods-panel vx-glass-rim">
+            <h2 class="vods-eyebrow">Censor</h2>
+            <CensorEditor :vod="vod" :duration="duration" @saved="saved" />
+          </section>
+
+          <section class="panel vods-panel vx-glass-rim">
+            <h2 class="vods-eyebrow">Drive files</h2>
+            <DriveEditor :vod="vod" @saved="saved" />
+          </section>
+
+          <section class="panel vods-panel vx-glass-rim">
+            <h2 class="vods-eyebrow">Emotes</h2>
+            <EmotesPanel :vod-id="vod.id" :spliced="isSpliced(vod)" @job="jobStarted" />
+          </section>
         </template>
-      </UiDialog>
-    </template>
+
+        <UiConfirm v-model:open="hideOpen" title="Hide this VOD?" width="460px" tone="danger" confirm-label="Hide it" :loading="hiding" @confirm="setHidden(true)">
+          It leaves the public site at once: the VOD list, the games pages and the chat. Links to its watch page stop
+          working (they show "not found") until it's made public again. Nothing is deleted.
+        </UiConfirm>
+      </template>
+    </UiLoadState>
   </ManageShell>
 </template>
 
 <style scoped>
 a { color: inherit; }
 .back { margin: -8px 0 16px; font-size: 13px; }
-.sk { display: flex; flex-direction: column; gap: 12px; }
 .panel { padding: 14px 16px; margin-bottom: 16px; }
 h2 { margin: 0 0 12px; }
 .title { margin: 0 0 8px; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
 .visibility { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 13px; }
 .visibility label { cursor: pointer; }
-.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 16px; margin: 0; }
-dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.6; margin-bottom: 2px; }
-dd { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 </style>

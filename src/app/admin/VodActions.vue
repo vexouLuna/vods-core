@@ -80,7 +80,6 @@ const TWITCH_OFF = 'Merged or split: Twitch’s VOD of this id no longer matches
 
 // Delete
 const delOpen = ref(false)
-const delConfirm = ref('')
 function remove() {
   delOpen.value = false
   run('delete', () => admin.deleteVod(props.vod.id), () => emit('deleted'))
@@ -116,7 +115,7 @@ function remove() {
     <div class="group">
       <div class="vods-eyebrow">Danger</div>
       <div class="btns">
-        <UiButton variant="danger" :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'delete'" @click="delConfirm = ''; delOpen = true">Delete from the archive…</UiButton>
+        <UiButton variant="danger" :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'delete'" @click="delOpen = true">Delete from the archive…</UiButton>
       </div>
     </div>
 
@@ -173,17 +172,18 @@ function remove() {
       </template>
     </UiDialog>
 
-    <UiDialog v-model:open="delOpen" title="Delete this VOD from the archive?">
+    <UiConfirm
+      v-model:open="delOpen"
+      title="Delete this VOD from the archive?"
+      tone="danger"
+      confirm-label="Delete"
+      cancel-label="Keep it"
+      :confirm-text="vod.id"
+      @confirm="remove"
+    >
       Removes the VOD with its chat, emotes and game uploads from the archive and the site. The YouTube videos stay.
-      This can't be undone. Type the VOD id to confirm.
-      <div class="form">
-        <UiInput v-model="delConfirm" mono :placeholder="vod.id" />
-      </div>
-      <template #actions="{ close }">
-        <UiButton @click="close">Keep it</UiButton>
-        <UiButton variant="danger-solid" :disabled="delConfirm.trim() !== vod.id" @click="remove">Delete</UiButton>
-      </template>
-    </UiDialog>
+      This can't be undone.
+    </UiConfirm>
   </div>
 </template>
 

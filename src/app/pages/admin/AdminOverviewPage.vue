@@ -182,77 +182,80 @@ async function connectYoutube() {
       <UiButton variant="primary" to="/manage/jobs?new=1">Start a job</UiButton>
     </template>
 
-    <UiCallout v-if="error" tone="error" title="Couldn't load the archive's status">
-      {{ error }}
-      <template #actions><UiButton size="sm" @click="refresh">Try again</UiButton></template>
-    </UiCallout>
-
-    <div v-if="!health && !error" class="tiles" aria-busy="true">
-      <UiSkeleton v-for="i in 4" :key="i" h="84px" />
-    </div>
-
-    <template v-if="health">
-      <div class="tiles">
-        <div v-for="t in tiles" :key="t.name" class="tile vods-panel vx-glass-rim">
-          <div class="vods-eyebrow">{{ t.name }}</div>
-          <div class="tile-main"><UiStatusDot :status="t.status" />{{ t.text }}</div>
-          <a v-if="t.link" class="tile-link small" :href="t.link.href" target="_blank" rel="noopener">{{ t.link.text }}</a>
-          <div v-if="t.sub" class="vods-muted small">{{ t.sub }}</div>
-          <div v-if="t.age" class="small" :class="t.age.soon ? 'tile-soon' : 'vods-muted'">{{ t.age.text }}</div>
-          <UiButton v-if="t.action === 'connect'" @click="connectYoutube">Connect YouTube</UiButton>
-          <UiButton v-else-if="t.action === 'switch'" size="sm" title="Connect a different Google account or channel" @click="connectYoutube">Switch account</UiButton>
+    <UiLoadState
+      :error="error"
+      :stale="!!health"
+      :loading="!health"
+      error-title="Couldn't load the archive's status"
+      stale-title="Couldn't refresh the archive's status"
+      @retry="refresh"
+    >
+      <template #loading>
+        <div class="tiles"><UiSkeleton v-for="i in 4" :key="i" h="84px" /></div>
+      </template>
+      <template v-if="health">
+        <div class="tiles">
+          <UiStatTile v-for="t in tiles" :key="t.name" :label="t.name" :status="t.status" :headline="t.text" :sub="t.sub">
+            <a v-if="t.link" class="tile-link small" :href="t.link.href" target="_blank" rel="noopener">{{ t.link.text }}</a>
+            <div v-if="t.age" class="small" :class="t.age.soon ? 'tile-soon' : 'vods-muted'">{{ t.age.text }}</div>
+            <UiButton v-if="t.action === 'connect'" @click="connectYoutube">Connect YouTube</UiButton>
+            <UiButton v-else-if="t.action === 'switch'" size="sm" title="Connect a different Google account or channel" @click="connectYoutube">Switch account</UiButton>
+          </UiStatTile>
+          <UiStatTile
+            v-for="t in uploadTiles"
+            :key="t.name"
+            :title="t.title"
+            :label="t.name"
+            :status="t.status"
+            :headline="t.text"
+            :sub="t.sub"
+            :to="t.to?.startsWith('#') ? undefined : t.to"
+            :href="t.to?.startsWith('#') ? t.to : undefined"
+            :link-label="t.toText"
+          />
+          <!-- A worker from before the ad-free account leaves twitchViewer out. -->
+          <TwitchViewerTile v-if="health.twitchViewer !== undefined" :status="health.twitchViewer" @changed="refresh" />
         </div>
-        <div v-for="t in uploadTiles" :key="t.name" class="tile vods-panel vx-glass-rim" :title="t.title">
-          <div class="vods-eyebrow">{{ t.name }}</div>
-          <div class="tile-main"><UiStatusDot :status="t.status" />{{ t.text }}</div>
-          <div class="vods-muted small">{{ t.sub }}</div>
-          <a v-if="t.to?.startsWith('#')" class="tile-link small" :href="t.to">{{ t.toText }}</a>
-          <RouterLink v-else-if="t.to" class="tile-link small" :to="t.to">{{ t.toText }}</RouterLink>
-        </div>
-        <!-- A worker from before the ad-free account leaves twitchViewer out. -->
-        <TwitchViewerTile v-if="health.twitchViewer !== undefined" :status="health.twitchViewer" @changed="refresh" />
-      </div>
 
-      <section>
-        <h2 class="vods-eyebrow">Jobs</h2>
-        <div class="counts">
-          <RouterLink v-for="s in COUNT_STATES" :key="s.state" :to="`/manage/jobs?state=${s.state}`" class="count">
-            <UiChip :tone="jobCounts?.counts[s.state] ? s.tone : 'default'" :k="s.state">{{ jobCounts?.counts[s.state] ?? '…' }}</UiChip>
-          </RouterLink>
-        </div>
-      </section>
+        <section>
+          <h2 class="vods-eyebrow">Jobs</h2>
+          <div class="counts">
+            <RouterLink v-for="s in COUNT_STATES" :key="s.state" :to="`/manage/jobs?state=${s.state}`" class="count">
+              <UiChip :tone="jobCounts?.counts[s.state] ? s.tone : 'default'" :k="s.state">{{ jobCounts?.counts[s.state] ?? '…' }}</UiChip>
+            </RouterLink>
+          </div>
+        </section>
 
-      <section>
-        <h2 class="vods-eyebrow">Recent failures</h2>
-        <JobsTable :jobs="failures?.items ?? []" empty="No failed jobs. 🎉" label="Recent failures" />
-      </section>
+        <section>
+          <h2 class="vods-eyebrow">Recent failures</h2>
+          <JobsTable :jobs="failures?.items ?? []" empty="No failed jobs. 🎉" label="Recent failures" />
+        </section>
 
-      <section v-if="ytCheck" id="youtube-uploads">
-        <div class="section-head">
-          <h2 class="vods-eyebrow">YouTube uploads</h2>
-          <UiButton size="sm" :loading="checking || ytCheck.running" title="Look up every upload on YouTube now (1 API unit per 50 videos)" @click="checkYoutube">Check now</UiButton>
-        </div>
-        <p v-if="!ytCheck.last" class="vods-muted small">Not checked yet.</p>
-        <p v-else-if="!problems.recent.length && !problems.older.length" class="vods-muted small">
-          Every upload of {{ ytCheck.last.vods }} VODs is on YouTube and whole (checked {{ timeAgo(ytCheck.last.checkedAt) }}).
-        </p>
-        <template v-else>
-          <p v-if="!problems.recent.length" class="vods-muted small">No problems with VODs from the last {{ RECENT_PROBLEM_DAYS }} days.</p>
-          <YoutubeProblems v-else :problems="problems.recent" />
-          <p v-if="problems.older.length" class="vods-muted small older">
-            {{ problems.older.length }} older VOD{{ problems.older.length === 1 ? '' : 's' }} with problems.
-            <RouterLink class="tile-link" to="/manage/youtube">See them all</RouterLink>
+        <section v-if="ytCheck" id="youtube-uploads">
+          <div class="section-head">
+            <h2 class="vods-eyebrow">YouTube uploads</h2>
+            <UiButton size="sm" :loading="checking || ytCheck.running" title="Look up every upload on YouTube now (1 API unit per 50 videos)" @click="checkYoutube">Check now</UiButton>
+          </div>
+          <p v-if="!ytCheck.last" class="vods-muted small">Not checked yet.</p>
+          <p v-else-if="!problems.recent.length && !problems.older.length" class="vods-muted small">
+            Every upload of {{ ytCheck.last.vods }} VODs is on YouTube and whole (checked {{ timeAgo(ytCheck.last.checkedAt) }}).
           </p>
-        </template>
-      </section>
-    </template>
+          <template v-else>
+            <p v-if="!problems.recent.length" class="vods-muted small">No problems with VODs from the last {{ RECENT_PROBLEM_DAYS }} days.</p>
+            <YoutubeProblems v-else :problems="problems.recent" />
+            <p v-if="problems.older.length" class="vods-muted small older">
+              {{ problems.older.length }} older VOD{{ problems.older.length === 1 ? '' : 's' }} with problems.
+              <RouterLink class="tile-link" to="/manage/youtube">See them all</RouterLink>
+            </p>
+          </template>
+        </section>
+      </template>
+    </UiLoadState>
   </ManageShell>
 </template>
 
 <style scoped>
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
-.tile { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; align-items: flex-start; }
-.tile-main { display: flex; align-items: center; gap: 8px; font-size: 16px; }
 .tile-link { color: var(--vods-accent); text-decoration: underline; text-underline-offset: 2px; }
 .tile-link:hover { color: var(--vods-ink); }
 .tile-soon { color: var(--vods-warn); }

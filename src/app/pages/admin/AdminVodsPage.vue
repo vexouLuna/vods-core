@@ -213,12 +213,15 @@ onMounted(() => {
       <UiButton v-if="idLike" :to="`/manage/vods/${idLike}`" variant="primary">Open VOD {{ idLike }}</UiButton>
     </div>
 
-    <UiCallout v-if="error" tone="error" title="Couldn't load the VODs">
-      {{ errorText(error) }}
-      <template #actions><UiButton size="sm" @click="refresh">Try again</UiButton></template>
-    </UiCallout>
-    <div v-else-if="loading && !vods.length" class="sk" aria-busy="true"><UiSkeleton v-for="i in 6" :key="i" h="36px" /></div>
-    <template v-else>
+    <UiLoadState
+      :error="error"
+      :loading="loading && !vods.length"
+      error-title="Couldn't load the VODs"
+      :error-text="errorText"
+      :rows="6"
+      row-height="36px"
+      @retry="refresh"
+    >
       <div class="batch vods-panel vx-glass-rim" role="group" aria-label="Ticked VODs">
         <UiCheckbox :model-value="allTicked" :disabled="!vods.length" @update:model-value="tickAll">
           <strong>{{ chosen.length }}</strong>&nbsp;ticked
@@ -266,7 +269,7 @@ onMounted(() => {
         <UiButton v-if="next" :loading="loading" @click="more">More</UiButton>
         <span class="vods-muted vods-mono small">{{ vods.length }} shown</span>
       </div>
-    </template>
+    </UiLoadState>
 
     <TwitchImportDialog v-model:open="findOpen" @added="refresh" />
 
@@ -291,7 +294,6 @@ a { color: inherit; }
 .search { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .search { align-items: center; }
 .search > :first-child { flex: 1 1 260px; max-width: 480px; }
-.sk { display: flex; flex-direction: column; gap: 6px; }
 .title { margin-right: 6px; }
 .status { display: flex; flex-wrap: wrap; gap: 4px; }
 .job { text-decoration: none; }
