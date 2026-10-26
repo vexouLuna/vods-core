@@ -64,7 +64,7 @@ for (let i = 0; i < 70; i++) add(i % 3 ? 'archive' : 'chapters', String(23000000
 add('dmca', '2301234567', 'cancelled', 1, 60 * 30)
 add('reupload', '2309876543', 'failed', 1, 60 * 5, { lastError: 'YouTube quota exceeded (403 quotaExceeded); retry after midnight Pacific.' })
 add('download', '2311111111', 'paused', 2, 90, { pauseBefore: ['upload'] })
-// Paused by the censor check (POST /admin/jobs/{id}/censor-review answers it).
+// Paused by the censor check (POST /api/v2/jobs/{id}/censor-review answers it).
 add('download', '2309876543', 'paused', 3, 70, {
   payload: { censor_review: { games: [{ gameId: '1469308723', name: "Baldur's Gate 3", igdbId: 119171, matched: ['Partial Nudity', 'Sexual Content'] }] } },
 })
@@ -661,7 +661,7 @@ const settingsJson = () =>
     const o = overrides.get(e.key)
     return {
       key: e.key, value: o ? o.value : e.default, default: e.default, overridden: !!o, type: e.type, group: e.group, applies: e.applies,
-      help: e.help, min: e.min ?? null, max: e.max ?? null, updatedAt: o?.updatedAt ?? null, updatedBy: o?.updatedBy ?? null,
+      help: e.help, min: e.min ?? null, max: e.max ?? null, updated_at: o?.updatedAt ?? null, updated_by: o?.updatedBy ?? null,
       ...(e.type === 'steps' ? { choices: Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, v.steps])) } : {}),
     }
   })
@@ -788,7 +788,7 @@ const isActive = (j: { state: State }) => j.state === 'queued' || j.state === 'r
 const activeJobsFor = (name: string) => jobs.filter((j) => j.vodId === name && isActive(j))
 function storageJson() {
   const used = folders.reduce((t, f) => t + f.bytes, 0) + 120 * GB
-  const job = (j: Job) => ({ id: j.id, kind: j.kind, state: j.state, step: j.step, updatedAt: j.updatedAt })
+  const job = (j: Job) => ({ id: j.id, kind: j.kind, state: j.state, step: j.step, updated_at: j.updatedAt })
   return {
     disk: { total: 500 * GB, used, free: 500 * GB - used },
     folders: folders.map((f) => {
@@ -798,13 +798,13 @@ function storageJson() {
       const active = activeJobsFor(f.name)
       const last = jobs.filter((j) => j.vodId === f.name).sort((a, c) => c.id - a.id)[0] ?? null
       return {
-        area: f.area, name: f.name, path: `${f.area}/${f.name}`, bytes: f.bytes, files: f.files, modifiedAt: iso(f.ageH * 3600_000),
+        area: f.area, name: f.name, path: `${f.area}/${f.name}`, bytes: f.bytes, files: f.files, modified_at: iso(f.ageH * 3600_000),
         vod: vod ? { ...vod, hidden: hidden.has(f.name) } : null,
         jobs: { active: active.map(job), last: last ? job(last) : null },
         stale: !active.length && (!vod || !!(last && ['failed', 'cancelled'].includes(last.state))),
       }
     }),
-    cacheSeconds: 30,
+    cache_seconds: 30,
   }
 }
 
@@ -891,7 +891,10 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
       server.middlewares.use(authBase, (req, res) => void fakeAuth(req, res, new URL(req.url ?? '/', 'http://x')))
       server.middlewares.use(base, async (req, res) => {
         const url = new URL(req.url ?? '/', 'http://x')
-        const path = url.pathname
+        // The dashboard's /api/v2 VOD writes are answered by the /admin handlers below (v1's names inside); `v2` makes
+        // those answer in v2's shape.
+        const v2 = /^\/api\/v2\/vods\/([^/]+)\/(games|chapters|youtube|drive|censor|youtube\/delete|rearchive|emotes)$/.exec(url.pathname)
+        let path = v2 ? `/admin/vods/${v2[1]}/${v2[2]}` : url.pathname
         const method = req.method ?? 'GET'
         const s = sessionOf(req)
 
@@ -1043,9 +1046,14 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           const kept = items.filter((v) => (uploaded == null || v.uploaded === uploaded) && (busy == null || v.active_jobs.length > 0 === busy))
           return send(res, 200, { items: kept, next_cursor: more ? String(page[page.length - 1]!.id) : null })
         }
-        // v2 PATCH: hidden and tags (the batch actions on /manage/vods).
+        // v2 PATCH: hidden and tags (the batch actions on /manage/vods); the details editor's fields go to /admin's PATCH.
         const v2vod = /^\/api\/v2\/vods\/([^/]+)$/.exec(path)
-        if (v2vod && method === 'PATCH') {
+        if (v2vod && method === 'PATCH' && Object.keys(b).some((k) => k !== 'hidden' && k !== 'tags')) {
+          for (const [k, v1] of [['thumbnail_url', 'thumbnailUrl'], ['created_at', 'createdAt'], ['cut_reason', 'cutReason']] as const)
+            if (k in b) [b[v1], b[k]] = [b[k], undefined]
+          for (const k of Object.keys(b)) if (b[k] === undefined) delete b[k]
+          path = `/admin/vods/${v2vod[1]}`
+        } else if (v2vod && method === 'PATCH') {
           const id = decodeURIComponent(v2vod[1]!)
           const vod = await vodOf(publicApi, id)
           if (!vod) return problem(res, 404, 'vod_not_found', `no VOD ${id}`)
@@ -1184,21 +1192,21 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- runtime settings ----
-        if (path === '/admin/settings' && method === 'GET') return send(res, 200, { data: settingsJson() })
-        if (path === '/admin/settings' && method === 'PATCH') {
+        if (path === '/api/v2/settings' && method === 'GET') return send(res, 200, { items: settingsJson(), next_cursor: null })
+        if (path === '/api/v2/settings' && method === 'PATCH') {
           if (!Object.keys(b).length) return fail(res, 400, 'Send at least one setting')
           for (const [k, v] of Object.entries(b)) {
             const problem = checkSetting(k, v)
             if (problem) return fail(res, 400, problem)
           }
           for (const [k, v] of Object.entries(b)) overrides.set(k, { value: v, updatedAt: iso(), updatedBy: s.user ? `twitch:${s.user.id}` : 'password' })
-          return send(res, 200, { data: settingsJson() })
+          return send(res, 200, { items: settingsJson(), next_cursor: null })
         }
-        const setm = /^\/admin\/settings\/([\w-]+)$/.exec(path)
+        const setm = /^\/api\/v2\/settings\/([\w-]+)$/.exec(path)
         if (setm && method === 'DELETE') {
           if (!SETTINGS.some((x) => x.key === setm[1])) return fail(res, 404, `No setting ${setm[1]}`)
           overrides.delete(setm[1]!)
-          return send(res, 200, { data: settingsJson() })
+          return send(res, 200, { items: settingsJson(), next_cursor: null })
         }
 
         // ---- site options ----
@@ -1256,7 +1264,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- censor review (a job the censor check paused) ----
-        const crm = /^\/admin\/jobs\/(\d+)\/censor-review$/.exec(path)
+        const crm = /^\/api\/v2\/jobs\/(\d+)\/censor-review$/.exec(path)
         if (crm && method === 'POST') {
           const job = jobs.find((j) => j.id === Number(crm[1]))
           if (!job) return fail(res, 404, 'No such job')
@@ -1277,8 +1285,8 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- storage ----
-        if (path === '/admin/storage' && method === 'GET') return send(res, 200, storageJson())
-        const stm = /^\/admin\/storage\/([^/]+)\/([^/]+)$/.exec(path)
+        if (path === '/api/v2/storage' && method === 'GET') return send(res, 200, storageJson())
+        const stm = /^\/api\/v2\/storage\/([^/]+)\/([^/]+)$/.exec(path)
         if (stm && method === 'DELETE') {
           const area = decodeURIComponent(stm[1]!)
           const name = decodeURIComponent(stm[2]!)
@@ -1492,7 +1500,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
                 const page = (await publicJson(publicApi, `/games?vod_id=${encodeURIComponent(id)}&$limit=100&$sort[start_time]=1`)) as { data: Json[] }
                 gameRows.set(id, page.data)
               }
-              return send(res, 200, gameRows.get(id))
+              return send(res, 200, v2 ? { items: gameRows.get(id), next_cursor: null } : gameRows.get(id))
             }
             if (part === 'games' && method === 'PUT') {
               if (vod.merged_into) return fail(res, 409, `vod ${id} is merged into ${vod.merged_into.id}`)
@@ -1565,6 +1573,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               const types = [...new Set(((vod.youtube as Json[]) ?? []).map((y) => y.type ?? 'vod'))]
               const describeJobs = gone.size ? types.map((type) => add('describe', id, 'queued', 0, 0, { payload: { vodId: id, type } }).id) : []
               const msg = `Deleted ${gone.size} of ${asked.length} from YouTube`
+              if (v2) return send(res, 200, { deleted: [...gone], failed, describe_jobs: describeJobs, vod: adminVod(vod) })
               return send(res, 200, { error: false, msg, deleted: [...gone], failed, describeJobs, vod: adminVod(vod) })
             }
             if (part === 'rearchive' && method === 'POST') {
@@ -1573,7 +1582,8 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               if (!['vod', 'live'].includes(type)) return fail(res, 400, 'type must be vod or live')
               if (b.part != null && !(Number.isInteger(b.part) && b.part >= 1)) return fail(res, 400, 'part must be a whole number >= 1')
               const job = add(b.part != null ? 'reupload' : 'download', id, 'queued', 0, 0, { payload: { vodId: id, type, ...(b.part != null ? { part: b.part } : {}), replace: true } })
-              return ok(res, b.part != null ? `Re-archiving ${id} part ${b.part}; the old upload goes once the new one is up` : `Re-archiving ${id}; the old uploads go once the new ones are up`, job)
+              const message = b.part != null ? `Re-archiving ${id} part ${b.part}; the old upload goes once the new one is up` : `Re-archiving ${id}; the old uploads go once the new ones are up`
+              return v2 ? send(res, 202, { job_id: job.id, message }) : ok(res, message, job)
             }
             if (part === 'drive' && method === 'PUT') {
               vod.drive = ((b.drive as Json[]) ?? []).map((d) => ({ id: d.id, type: d.type }))
@@ -1584,7 +1594,10 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
                 const page = (await publicJson(publicApi, `/emotes?vod_id=${encodeURIComponent(id)}&$limit=1`)) as { data: Json[] }
                 emoteRows.set(id, page.data[0] ?? null)
               }
-              return send(res, 200, emoteRows.get(id))
+              const row = emoteRows.get(id)
+              if (!v2 || !row) return send(res, 200, row)
+              const { vodId, createdAt, updatedAt, ...sets } = row
+              return send(res, 200, { ...sets, vod_id: vodId, created_at: createdAt, updated_at: updatedAt })
             }
           } catch (e) {
             const err = e as Error & { status?: number; extra?: Json }

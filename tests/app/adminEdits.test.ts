@@ -183,7 +183,7 @@ describe('games draft', () => {
 describe('settings drafts', () => {
   const setting = (over: Partial<RuntimeSetting>): RuntimeSetting => ({
     key: 'k', value: '', default: '', overridden: false, type: 'text', group: 'Runner', applies: 'now', help: '',
-    min: null, max: null, updatedAt: null, updatedBy: null, ...over,
+    min: null, max: null, updated_at: null, updated_by: null, ...over,
   })
 
   it('checks numbers against the range, and whole numbers for ints', () => {

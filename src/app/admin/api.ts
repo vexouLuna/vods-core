@@ -235,7 +235,7 @@ export interface CensorRange {
   note?: string
 }
 
-/** POST /admin/vods/:id/youtube/delete. */
+/** POST /api/v2/vods/:id/youtube/delete, with `msg` and the VOD as GET /admin/vods/:id has it. */
 export interface DeleteUploadsResult extends ActionResult {
   /** Gone from YouTube and the VOD's list (one already gone from YouTube counts). */
   deleted: string[]
@@ -246,7 +246,7 @@ export interface DeleteUploadsResult extends ActionResult {
   vod: AdminVod
 }
 
-/** The fields PATCH /admin/vods/:id changes. A merged VOD takes only `hidden`. */
+/** The fields the details editor changes (PATCH /api/v2/vods/:id, snake_case there). A merged VOD takes only `hidden`. */
 export interface VodPatch {
   title?: string
   hidden?: boolean
@@ -292,7 +292,7 @@ export type TagInput = Omit<RawTag, 'shape'>
 export type SettingType = 'bool' | 'int' | 'float' | 'text' | 'list' | 'steps'
 export type SettingValue = boolean | number | string | string[] | Record<string, string[]>
 
-/** One worker setting the dashboard can change (GET /admin/settings). */
+/** One worker setting the dashboard can change (GET /api/v2/settings). */
 export interface RuntimeSetting {
   key: string
   value: SettingValue
@@ -306,13 +306,15 @@ export interface RuntimeSetting {
   help: string
   min: number | null
   max: number | null
-  updatedAt: string | null
-  updatedBy: string | null
+  updated_at: string | null
+  updated_by: string | null
   /** For `steps`: each job kind's steps. */
-  choices?: Record<string, string[]>
+  choices?: Record<string, string[]> | null
+  /** A bool setting this one does nothing without. */
+  requires?: string | null
 }
 
-/** A folder the worker keeps on disk (GET /admin/storage). */
+/** A folder the worker keeps on disk (GET /api/v2/storage). */
 export interface StorageFolder {
   area: 'vods' | 'live'
   name: string
@@ -320,7 +322,7 @@ export interface StorageFolder {
   path: string
   bytes: number
   files: number
-  modifiedAt: string | null
+  modified_at: string | null
   vod: { id: string; title: string | null; hidden: boolean } | null
   jobs: { active: StorageJob[]; last: StorageJob | null }
   /** No job for it is queued, running or paused, and it has no VOD or its last job failed or was cancelled. */
@@ -331,12 +333,12 @@ export interface StorageJob {
   kind: string
   state: JobState
   step: string | null
-  updatedAt: string
+  updated_at: string | null
 }
 export interface StorageView {
   disk: { total: number; used: number; free: number } | null
   folders: StorageFolder[]
-  cacheSeconds: number
+  cache_seconds: number
 }
 
 /** A merge (`otherId` appended to `vodId` at `offset`) or split (`vodId` from `offset` on became `otherId`). */
@@ -383,7 +385,12 @@ export interface MergeInput {
 
 /** The fields PATCH /api/v2/vods/:id changes here. `tags` replaces the VOD's list; only site tags are taken. */
 export interface VodPatchV2 {
+  title?: string
   hidden?: boolean
+  thumbnail_url?: string | null
+  duration?: string
+  created_at?: string
+  cut_reason?: string | null
   tags?: string[]
 }
 
@@ -538,9 +545,11 @@ export interface TwitchImportResult extends ActionResult {
   skipped: { vodId: string; reason: string }[]
 }
 
+/** GET /api/v2/vods/{id}/emotes: the saved row, its own keys snake_case. */
 export interface AdminEmotes extends RawEmoteSets {
-  createdAt?: string
-  updatedAt?: string
+  vod_id?: string
+  created_at?: string
+  updated_at?: string
 }
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>
@@ -649,45 +658,61 @@ export class AdminClient {
   vod(id: string, signal?: AbortSignal): Promise<AdminVod> {
     return this.request('GET', `/admin/vods/${enc(id)}`, undefined, signal)
   }
-  updateVod(id: string, patch: VodPatch): Promise<AdminVod> {
-    return this.request('PATCH', `/admin/vods/${enc(id)}`, patch)
+  // The writes go to /api/v2. Those answering a VOD read it back from GET /admin/vods/:id, which has what the v2 VOD
+  // lacks (the public shape's games, superseded_by, appears_in), so the editors keep one shape.
+  async updateVod(id: string, patch: VodPatch): Promise<AdminVod> {
+    const { thumbnailUrl, createdAt, cutReason, ...rest } = patch
+    await this.patchVod(id, { ...rest, thumbnail_url: thumbnailUrl, created_at: createdAt, cut_reason: cutReason })
+    return this.vod(id)
   }
-  games(id: string, signal?: AbortSignal): Promise<GameRow[]> {
-    return this.request('GET', `/admin/vods/${enc(id)}/games`, undefined, signal)
+  async games(id: string, signal?: AbortSignal): Promise<GameRow[]> {
+    return (await this.request<{ items: GameRow[] }>('GET', `/api/v2/vods/${enc(id)}/games`, undefined, signal)).items
   }
   /** Replaces the VOD's games rows: sorted by start, no overlaps, inside the duration. */
-  saveGames(id: string, games: GameRow[]): Promise<AdminVod> {
-    return this.request('PUT', `/admin/vods/${enc(id)}/games`, { games })
+  async saveGames(id: string, games: GameRow[]): Promise<AdminVod> {
+    await this.request('PUT', `/api/v2/vods/${enc(id)}/games`, { games })
+    return this.vod(id)
   }
-  saveChapters(id: string, chapters: ChapterEdit[], locked: boolean): Promise<AdminVod> {
-    return this.request('PUT', `/admin/vods/${enc(id)}/chapters`, { chapters, locked })
+  async saveChapters(id: string, chapters: ChapterEdit[], locked: boolean): Promise<AdminVod> {
+    await this.request('PUT', `/api/v2/vods/${enc(id)}/chapters`, { chapters, locked })
+    return this.vod(id)
   }
-  saveYoutube(id: string, youtube: YoutubeEdit[]): Promise<AdminVod> {
-    return this.request('PUT', `/admin/vods/${enc(id)}/youtube`, { youtube })
+  async saveYoutube(id: string, youtube: YoutubeEdit[]): Promise<AdminVod> {
+    await this.request('PUT', `/api/v2/vods/${enc(id)}/youtube`, { youtube })
+    return this.vod(id)
   }
-  saveDrive(id: string, drive: RawDrive[]): Promise<AdminVod> {
-    return this.request('PUT', `/admin/vods/${enc(id)}/drive`, { drive })
+  async saveDrive(id: string, drive: RawDrive[]): Promise<AdminVod> {
+    await this.request('PUT', `/api/v2/vods/${enc(id)}/drive`, { drive })
+    return this.vod(id)
   }
   /** Replaces the censor ranges. The uploads already on YouTube keep what they had: re-archive for that. */
-  saveCensor(id: string, censor: CensorRange[]): Promise<AdminVod> {
-    return this.request('PUT', `/admin/vods/${enc(id)}/censor`, { censor })
+  async saveCensor(id: string, censor: CensorRange[]): Promise<AdminVod> {
+    await this.request('PUT', `/api/v2/vods/${enc(id)}/censor`, { censor })
+    return this.vod(id)
   }
   /** Answers a job the censor check paused: "upload" resumes it (with the censor ranges set by now), "cut" first
    * leaves the flagged games' chapters out of the uploads (marks them restricted, locks the chapters). */
   censorReview(jobId: number, decision: 'upload' | 'cut'): Promise<{ message: string }> {
-    return this.request('POST', `/admin/jobs/${jobId}/censor-review`, { decision })
+    return this.request('POST', `/api/v2/jobs/${jobId}/censor-review`, { decision })
   }
   /** Deletes uploads (ids from the VOD's list) from YouTube, 50 quota units each, and takes them off the VOD. */
-  deleteUploads(id: string, videos: string[]): Promise<DeleteUploadsResult> {
-    return this.request('POST', `/admin/vods/${enc(id)}/youtube/delete`, { videos })
+  async deleteUploads(id: string, videos: string[]): Promise<DeleteUploadsResult> {
+    const r = await this.request<Pick<DeleteUploadsResult, 'deleted' | 'failed'> & { describe_jobs: number[] }>(
+      'POST',
+      `/api/v2/vods/${enc(id)}/youtube/delete`,
+      { videos },
+    )
+    const msg = `Deleted ${r.deleted.length} upload(s) from YouTube` + (r.failed.length ? `, ${r.failed.length} failed` : '')
+    return { error: false, msg, deleted: r.deleted, failed: r.failed, describeJobs: r.describe_jobs, vod: await this.vod(id) }
   }
   /** Uploads the VOD (or one part) again with today's settings and censor ranges; each old upload is deleted from
    * YouTube once its replacement is up. The source is `path`, the local copy, or Twitch while it still has it. */
-  rearchive(id: string, opts: { type?: 'vod' | 'live'; part?: number; path?: string } = {}): Promise<ActionResult> {
-    return this.request('POST', `/admin/vods/${enc(id)}/rearchive`, opts)
+  async rearchive(id: string, opts: { type?: 'vod' | 'live'; part?: number; path?: string } = {}): Promise<ActionResult> {
+    const r = await this.request<{ job_id: number; message: string }>('POST', `/api/v2/vods/${enc(id)}/rearchive`, opts)
+    return { error: false, msg: r.message, jobId: r.job_id }
   }
   vodEmotes(id: string, signal?: AbortSignal): Promise<AdminEmotes | null> {
-    return this.request('GET', `/admin/vods/${enc(id)}/emotes`, undefined, signal)
+    return this.request('GET', `/api/v2/vods/${enc(id)}/emotes`, undefined, signal)
   }
   searchGames(query: string, signal?: AbortSignal): Promise<TwitchGame[]> {
     return this.request('GET', `/admin/twitch/games?query=${encodeURIComponent(query)}`, undefined, signal)
@@ -723,7 +748,7 @@ export class AdminClient {
   ): Promise<{ items: VodListRow[]; next_cursor: string | null }> {
     return this.request('GET', `/api/v2/vods${query(q)}`, undefined, signal)
   }
-  /** Hide or show a VOD, or replace its tags (audited as `vod.update`). */
+  /** Changes the fields sent (audited as `vod.update`): hide or show it, replace its tags, and so on. */
   patchVod(id: string, patch: VodPatchV2): Promise<VodListRow> {
     return this.request('PATCH', `/api/v2/vods/${enc(id)}`, patch)
   }
@@ -807,15 +832,15 @@ export class AdminClient {
   }
 
   // ---- settings and storage ----
-  settings(signal?: AbortSignal): Promise<{ data: RuntimeSetting[] }> {
-    return this.request('GET', '/admin/settings', undefined, signal)
+  settings(signal?: AbortSignal): Promise<{ items: RuntimeSetting[] }> {
+    return this.request('GET', '/api/v2/settings', undefined, signal)
   }
-  /** All of them or none (400 names the refused one). */
-  saveSettings(changes: Record<string, SettingValue>): Promise<{ data: RuntimeSetting[] }> {
-    return this.request('PATCH', '/admin/settings', changes)
+  /** All of them or none (the problem names the refused one). */
+  saveSettings(changes: Record<string, SettingValue>): Promise<{ items: RuntimeSetting[] }> {
+    return this.request('PATCH', '/api/v2/settings', changes)
   }
-  resetSetting(key: string): Promise<{ data: RuntimeSetting[] }> {
-    return this.request('DELETE', `/admin/settings/${enc(key)}`)
+  resetSetting(key: string): Promise<{ items: RuntimeSetting[] }> {
+    return this.request('DELETE', `/api/v2/settings/${enc(key)}`)
   }
   // ---- site options ----
   siteOptions(signal?: AbortSignal): Promise<SiteOptionsView> {
@@ -842,11 +867,11 @@ export class AdminClient {
     return this.request('DELETE', `/admin/site/tags/${enc(name)}/shape`)
   }
   storage(refresh = false, signal?: AbortSignal): Promise<StorageView> {
-    return this.request('GET', `/admin/storage${refresh ? '?refresh=true' : ''}`, undefined, signal)
+    return this.request('GET', `/api/v2/storage${refresh ? '?refresh=true' : ''}`, undefined, signal)
   }
   /** 409 while a job for the folder is queued, running or paused. */
   deleteFolder(area: string, name: string): Promise<{ path: string; bytes: number; files: number }> {
-    return this.request('DELETE', `/admin/storage/${enc(area)}/${enc(name)}`)
+    return this.request('DELETE', `/api/v2/storage/${enc(area)}/${enc(name)}`)
   }
 }
 

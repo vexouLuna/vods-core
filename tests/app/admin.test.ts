@@ -111,14 +111,44 @@ describe('AdminClient: VODs, games, settings and storage', () => {
     expect(sent).toEqual([
       ['/api/v2/vods?q=doom&hidden=false&limit=30', 'GET', null],
       ['/api/v2/vods?hidden=true', 'GET', null],
-      ['/admin/vods/12', 'PATCH', JSON.stringify({ hidden: true, thumbnailUrl: null })],
-      ['/admin/vods/12/games', 'GET', null],
-      ['/admin/vods/12/games', 'PUT', JSON.stringify({ games: [{ start_time: 0, end_time: 60, game_id: '1', game_name: 'Doom' }] })],
+      ['/api/v2/vods/12', 'PATCH', JSON.stringify({ hidden: true, thumbnail_url: null })],
+      ['/admin/vods/12', 'GET', null],
+      ['/api/v2/vods/12/games', 'GET', null],
+      ['/api/v2/vods/12/games', 'PUT', JSON.stringify({ games: [{ start_time: 0, end_time: 60, game_id: '1', game_name: 'Doom' }] })],
+      ['/admin/vods/12', 'GET', null],
+    ])
+  })
+
+  it('sends the VOD actions to /api/v2 and answers in the shapes the editors take', async () => {
+    const answers: Record<string, unknown> = {
+      '/api/v2/vods/12/youtube/delete': { deleted: ['a'], failed: [{ id: 'b', error: 'no' }], describe_jobs: [7], vod: {} },
+      '/api/v2/vods/12/rearchive': { job_id: 9, message: 'Re-archiving 12' },
+      '/api/v2/vods/12/emotes': { vod_id: '12', ffz_emotes: [], updated_at: '2026-10-01T00:00:00Z' },
+      '/api/v2/jobs/5/censor-review': { job_id: 5, message: 'Job 5 resumed' },
+    }
+    const fetch = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify(answers[String(url)] ?? { id: '12' }), { status: 200 }))
+    const c = new AdminClient({ base: '', fetch })
+    expect(await c.deleteUploads('12', ['a', 'b'])).toEqual({
+      error: false, msg: 'Deleted 1 upload(s) from YouTube, 1 failed', deleted: ['a'], failed: [{ id: 'b', error: 'no' }], describeJobs: [7], vod: { id: '12' },
+    })
+    expect(await c.rearchive('12', { part: 2 })).toEqual({ error: false, msg: 'Re-archiving 12', jobId: 9 })
+    expect((await c.vodEmotes('12'))?.updated_at).toBe('2026-10-01T00:00:00Z')
+    expect((await c.censorReview(5, 'cut')).message).toBe('Job 5 resumed')
+    await c.updateVod('12', { title: 't', createdAt: '2026-10-01T00:00:00Z', cutReason: null })
+    const sent = fetch.mock.calls.map(([url, init]) => [url, init!.method, init!.body ?? null])
+    expect(sent).toEqual([
+      ['/api/v2/vods/12/youtube/delete', 'POST', JSON.stringify({ videos: ['a', 'b'] })],
+      ['/admin/vods/12', 'GET', null],
+      ['/api/v2/vods/12/rearchive', 'POST', JSON.stringify({ part: 2 })],
+      ['/api/v2/vods/12/emotes', 'GET', null],
+      ['/api/v2/jobs/5/censor-review', 'POST', JSON.stringify({ decision: 'cut' })],
+      ['/api/v2/vods/12', 'PATCH', JSON.stringify({ title: 't', created_at: '2026-10-01T00:00:00Z', cut_reason: null })],
+      ['/admin/vods/12', 'GET', null],
     ])
   })
 
   it('reads, saves and resets settings, and reads and deletes storage', async () => {
-    const fetch = fakeFetch(200, { data: [] })
+    const fetch = fakeFetch(200, { items: [], next_cursor: null })
     const c = new AdminClient({ base: '', fetch })
     await c.settings()
     await c.saveSettings({ runner_concurrency: 2, vod_download: false })
@@ -128,12 +158,12 @@ describe('AdminClient: VODs, games, settings and storage', () => {
     await c.deleteFolder('vods', '123')
     const sent = fetch.mock.calls.map(([url, init]) => [url, init!.method, init!.body ?? null])
     expect(sent).toEqual([
-      ['/admin/settings', 'GET', null],
-      ['/admin/settings', 'PATCH', JSON.stringify({ runner_concurrency: 2, vod_download: false })],
-      ['/admin/settings/runner_concurrency', 'DELETE', null],
-      ['/admin/storage', 'GET', null],
-      ['/admin/storage?refresh=true', 'GET', null],
-      ['/admin/storage/vods/123', 'DELETE', null],
+      ['/api/v2/settings', 'GET', null],
+      ['/api/v2/settings', 'PATCH', JSON.stringify({ runner_concurrency: 2, vod_download: false })],
+      ['/api/v2/settings/runner_concurrency', 'DELETE', null],
+      ['/api/v2/storage', 'GET', null],
+      ['/api/v2/storage?refresh=true', 'GET', null],
+      ['/api/v2/storage/vods/123', 'DELETE', null],
     ])
   })
 
