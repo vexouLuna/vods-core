@@ -48,16 +48,18 @@ describe('censor drafts', () => {
 
 describe('AdminClient censor and re-archive', () => {
   it('saves ranges, deletes uploads and re-archives', async () => {
-    const fetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ error: false, msg: 'ok' }), { status: 200 }))
+    const answer = { deleted: ['abc'], failed: [], describe_jobs: [], job_id: 1, message: 'ok' }
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify(answer), { status: 200 }))
     const c = new AdminClient({ base: '/b/', fetch })
     await c.saveCensor('7', [{ start: 0, end: 5, video: 'black', mute: true }])
     await c.deleteUploads('7', ['abc'])
     await c.rearchive('7', { type: 'live', part: 2 })
-    const calls = fetch.mock.calls.map(([url, init]) => [url, init!.method, JSON.parse(String(init!.body))])
+    // Each write that answers a VOD reads it back from GET /admin/vods/7.
+    const calls = fetch.mock.calls.filter(([, init]) => init!.method !== 'GET').map(([url, init]) => [url, init!.method, JSON.parse(String(init!.body))])
     expect(calls).toEqual([
-      ['/b/admin/vods/7/censor', 'PUT', { censor: [{ start: 0, end: 5, video: 'black', mute: true }] }],
-      ['/b/admin/vods/7/youtube/delete', 'POST', { videos: ['abc'] }],
-      ['/b/admin/vods/7/rearchive', 'POST', { type: 'live', part: 2 }],
+      ['/b/api/v2/vods/7/censor', 'PUT', { censor: [{ start: 0, end: 5, video: 'black', mute: true }] }],
+      ['/b/api/v2/vods/7/youtube/delete', 'POST', { videos: ['abc'] }],
+      ['/b/api/v2/vods/7/rearchive', 'POST', { type: 'live', part: 2 }],
     ])
   })
 })

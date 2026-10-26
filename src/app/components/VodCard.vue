@@ -131,7 +131,8 @@ const { src: thumb, srcset: thumbSet, onLoad: thumbLoaded, onError: thumbFailed 
 .text { min-width: 0; display: flex; flex-direction: column; gap: 3px; color: inherit; text-decoration: none; }
 .title { color: var(--vods-ink); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .text:hover .title, .text:focus-visible .title, .card:has(.thumb-link:hover) .title { color: var(--vods-accent); }
-.meta { display: flex; gap: 6px; align-items: center; min-width: 0; font-size: 12px; color: var(--vods-muted); }
+/* Baseline, not center: the mono date and the sans names (and a chip's text) sit on one line at any display scaling. */
+.meta { display: flex; gap: 6px; align-items: baseline; min-width: 0; font-size: 12px; color: var(--vods-muted); }
 .date, .tag { white-space: nowrap; flex: none; }
 .games { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .games::before { content: '·'; margin-right: 6px; }
