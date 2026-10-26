@@ -136,13 +136,13 @@ onMounted(() => {
                 mono
                 :invalid="pending.errors.has(s.key)"
               />
-              <UiTextarea
+              <UiTagInput
                 v-else-if="s.type === 'list'"
                 :id="`set-${s.key}`"
-                v-model="(drafts[s.key] as string)"
+                v-model="(drafts[s.key] as string[])"
                 class="list"
-                :rows="3"
-                placeholder="One per line"
+                allow-new
+                placeholder="add one…"
               />
               <div v-else-if="s.type === 'steps'" :id="`set-${s.key}`" class="kinds" role="group" :aria-label="settingLabel(s.key)">
                 <div v-for="(all, kind) in s.choices ?? {}" :key="kind" class="kind">
@@ -189,7 +189,7 @@ h2 { margin: 0 0 4px; }
 .control { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
 .num { width: 160px; }
 .text { width: 100%; }
-.list { min-height: 70px; }
+.list { width: 100%; }
 .kinds { display: flex; flex-direction: column; gap: 6px; width: 100%; }
 .kind { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; align-items: baseline; }
 .kind-name { font-size: 12px; overflow-wrap: anywhere; }

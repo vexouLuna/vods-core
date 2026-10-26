@@ -226,8 +226,8 @@ describe('settings drafts', () => {
     expect(fromDraft(s, ' 4 ')).toEqual({ value: 4 })
   })
 
-  it('reads lists one per line, and keeps steps in the job order', () => {
-    expect(fromDraft(setting({ type: 'list' }), 'a\n\n b \na')).toEqual({ value: ['a', 'b'] })
+  it('trims lists and drops repeats, and keeps steps in the job order', () => {
+    expect(fromDraft(setting({ type: 'list' }), ['a', '', ' b ', 'a'])).toEqual({ value: ['a', 'b'] })
     const steps = setting({ type: 'steps', choices: { vod: ['download', 'upload', 'cleanup'] } })
     expect(fromDraft(steps, { vod: ['cleanup', 'download'], live: [] })).toEqual({ value: { vod: ['download', 'cleanup'] } })
   })
@@ -242,7 +242,7 @@ describe('settings drafts', () => {
     expect(settingChanges(items, drafts)).toEqual({ changes: {}, errors: new Map() })
     drafts.on = false
     drafts.n = '0'
-    drafts.l = 'x\ny'
+    drafts.l = ['x', 'y']
     const r = settingChanges(items, drafts)
     expect(r.changes).toEqual({ on: false, l: ['x', 'y'] })
     expect([...r.errors.keys()]).toEqual(['n'])

@@ -7,3 +7,5 @@ Manage: regular and synthetic VODs share one header panel (title, visibility swi
 panels. Tags are picked with the new `UiTagInput` role, which shows the VOD's states (hidden, synthetic, merged) and
 its automatic tags first, locked. The VOD list boxes those states apart from the tags. A site's `ui` now needs a
 `TagInput` control (Deep Field maps it to vex-ui's `VxTagInput`; keeki-vods needs a `KTagInput`).
+
+Manage → Settings: list settings are edited with the same tag input (type, then Enter or comma) instead of one per line.
