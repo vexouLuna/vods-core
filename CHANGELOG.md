@@ -1,5 +1,36 @@
 # @vex/vods-core
 
+## 0.40.0
+
+### Minor Changes
+
+- 3e5aa9e: Manage → Homepage: "Add a card" offers Latest live, Latest VOD, Latest 2 and Most played games, and each Latest card
+  picks its tag in its own dropdown ("All VODs" or a home category). Any card can be on the page twice, 12 cards at
+  most. Cards are `{id, type, tag?, count?}`, read from the archive's
+  `cards` and saved as `cards`; against an archive without `cards`, the homepage and `/manage/home` read its old
+  `{kind, tag}` `homeCards`, and `/manage/home` saves that shape (one of each). The "A synthetic VOD with a compiled
+  upload plays" setting moves to a "Watch page" group on Manage → Settings, with its own Save.
+- 9449b28: Manage → Tags: each tag is a row (its mark, name and label, badges for page, drawn and automatic, and ↑/↓) that opens
+  to its form; several can be open, and "Expand all" opens every one. A row with unsaved changes has a dot, new tags
+  start open, and Save opens the rows with errors. The page keeps its one Save.
+- df53762: Manage: regular and synthetic VODs share one header panel (title, visibility switch, tags, cut reason) on
+  `/manage/vods/:id` and `/manage/synthetic/:id`. The synthetic page gains its thumbnail, the Actions and the Jobs
+  panels (on a synthetic VOD, Actions only says its Twitch and YouTube jobs run on its sources); its thumbnail is read from the archive's `synthetic.thumbnailUrl` (`RawSynthetic.thumbnailUrl`), and empty
+  means its first source's. Tags are picked with the new `UiTagInput` role, which shows the VOD's states (hidden, synthetic, merged) and
+  its automatic tags first, locked. The VOD list boxes those states apart from the tags. A site's `ui` now needs a
+  `TagInput` control (Deep Field maps it to vex-ui's `VxTagInput`; keeki-vods needs a `KTagInput`).
+  
+  Manage → Settings: list settings are edited with the same tag input (type, then Enter or comma) instead of one per line.
+- 5d916f6: Manage → VOD: a Timeline workbench keeps the preview in view beside the Chapters, Games and Censor editors, which
+  now sit under tabs. On wide screens the preview is a sticky left column; on phones it sticks to the top edge at a
+  smaller height. Each tab shows its row count, and a draft reads "Chapters 7 → 6 •" (on phones "Chapters 7→6•"). A link to `#censor` opens the
+  Censor tab and scrolls to the panel. YouTube parts, Drive files and Emotes follow it, unchanged. The three editors
+  emit `draft` (row count, unsaved) as their drafts change.
+
+### Patch Changes
+
+- bb333d6: Manage → Merge and split: the "Merge N VODs" button lines up with the Id box again (its help text now sits under the row).
+
 ## 0.39.0
 
 ### Minor Changes
