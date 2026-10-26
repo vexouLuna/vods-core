@@ -253,10 +253,13 @@ onMounted(() => {
         <template #cell-id="{ row }"><RouterLink :to="row.to">{{ row.id }}</RouterLink></template>
         <template #cell-title="{ row }">
           <RouterLink :to="row.to" class="title">{{ row.title }}</RouterLink>
-          <UiChip v-if="row.synthetic" tone="accent" :title="row.synthetic === 'synthetic' ? 'Made of windows of other VODs' : 'Stands in for the VODs it was made of'">{{ row.synthetic }}</UiChip>
+          <!-- What the VOD is (states, not tags: they follow its switches and merges), boxed apart from its tags. -->
+          <span v-if="row.synthetic || row.hidden || row.merged" class="states" title="State, not a tag">
+            <UiChip v-if="row.hidden" tone="warn" title="Gone from the public site">hidden</UiChip>
+            <UiChip v-if="row.synthetic" tone="accent" :title="row.synthetic === 'synthetic' ? 'Made of windows of other VODs' : 'Stands in for the VODs it was made of'">{{ row.synthetic }}</UiChip>
+            <UiChip v-if="row.merged" :title="`Merged into ${row.merged}`">merged</UiChip>
+          </span>
           <UiChip v-for="t in row.tags" :key="t">{{ t }}</UiChip>
-          <UiChip v-if="row.hidden" tone="warn" title="Gone from the public site">hidden</UiChip>
-          <UiChip v-if="row.merged" :title="`Merged into ${row.merged}`">merged</UiChip>
         </template>
         <template #cell-status="{ row }">
           <span class="status">
@@ -290,6 +293,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.states { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 1px 3px; margin-right: 2px; border: 1px dashed var(--vods-muted); border-radius: 999px; vertical-align: middle; }
 a { color: inherit; }
 .search { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .search { align-items: center; }

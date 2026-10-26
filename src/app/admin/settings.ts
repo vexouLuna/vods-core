@@ -1,16 +1,16 @@
-// The Settings page's drafts: what each control edits (numbers and lists as the text typed), the checks the worker
+// The Settings page's drafts: what each control edits (numbers as the text typed, lists as the values picked), the checks the worker
 // makes, and the PATCH body with only what changed. Pure functions; the page holds the drafts.
 import type { RuntimeSetting, SettingValue } from './api'
 
-/** A control's value: text for numbers and lists (one name per line), the value itself otherwise. */
-export type SettingDraft = boolean | string | Record<string, string[]>
+/** A control's value: text for numbers, the values for lists (a tag input), the value itself otherwise. */
+export type SettingDraft = boolean | string | string[] | Record<string, string[]>
 
 export function toDraft(s: Pick<RuntimeSetting, 'type' | 'value'>): SettingDraft {
   switch (s.type) {
     case 'bool': return !!s.value
     case 'int':
     case 'float': return String(s.value ?? '')
-    case 'list': return (Array.isArray(s.value) ? s.value : []).join('\n')
+    case 'list': return Array.isArray(s.value) ? s.value.map(String) : []
     // A plain copy: the value may be a reactive proxy, which structuredClone refuses.
     case 'steps': return Object.fromEntries(Object.entries((s.value ?? {}) as Record<string, string[]>).map(([k, v]) => [k, [...v]]))
     default: return String(s.value ?? '')
@@ -31,7 +31,7 @@ export function fromDraft(s: RuntimeSetting, d: SettingDraft): { value: SettingV
       if (s.max != null && n > s.max) return { error: `At most ${s.max}.` }
       return { value: n }
     }
-    case 'list': return { value: [...new Set(String(d).split('\n').map((x) => x.trim()).filter(Boolean))] }
+    case 'list': return { value: [...new Set((d as string[]).map((x) => x.trim()).filter(Boolean))] }
     case 'steps': {
       const out: Record<string, string[]> = {}
       for (const [kind, steps] of Object.entries(d as Record<string, string[]>)) {

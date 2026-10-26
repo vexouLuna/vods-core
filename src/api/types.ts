@@ -121,6 +121,8 @@ export interface RawSynthetic {
   changedAt?: string | null
   firstLiveAt?: string | null
   lastLiveAt?: string | null
+  /** Set on Manage; missing or null: its first source's (the VOD's `thumbnail_url` is whichever shows). */
+  thumbnailUrl?: string | null
 }
 
 export interface RawSupersededBy {
