@@ -28,7 +28,7 @@ function take(data: RuntimeSetting[]) {
 async function load() {
   loadError.value = null
   try {
-    take((await admin.settings()).data)
+    take((await admin.settings()).items)
   } catch (e) {
     loadError.value = errorText(e)
   }
@@ -48,7 +48,7 @@ async function save() {
   saving.value = true
   saveError.value = null
   try {
-    take((await admin.saveSettings(pending.value.changes)).data)
+    take((await admin.saveSettings(pending.value.changes)).items)
     toast.show(count.value === 1 ? 'Setting saved' : 'Settings saved', { duration: 3000 })
   } catch (e) {
     saveError.value = errorText(e)
@@ -65,7 +65,7 @@ async function reset(s: RuntimeSetting) {
   resetting.value = s.key
   try {
     const keep = { ...drafts.value }
-    const data = (await admin.resetSetting(s.key)).data
+    const data = (await admin.resetSetting(s.key)).items
     items.value = data
     const fresh = data.find((x) => x.key === s.key)!
     drafts.value = { ...keep, [s.key]: toDraft(fresh) }
@@ -115,7 +115,7 @@ onMounted(() => {
             <UiChip :tone="s.applies === 'now' ? 'accent' : 'default'" :title="s.applies === 'now' ? 'Seen at the next check, pick or step' : 'Jobs read it when they start or resume'">
               {{ s.applies === 'now' ? 'applies now' : 'applies to the next job' }}
             </UiChip>
-            <UiChip v-if="s.overridden" tone="warn" :title="s.updatedAt ? `Changed ${timeAgo(s.updatedAt)}${s.updatedBy ? ` by ${s.updatedBy}` : ''}` : undefined">overridden</UiChip>
+            <UiChip v-if="s.overridden" tone="warn" :title="s.updated_at ? `Changed ${timeAgo(s.updated_at)}${s.updated_by ? ` by ${s.updated_by}` : ''}` : undefined">overridden</UiChip>
             <p class="help vods-muted">{{ s.help }}</p>
             <p class="default vods-muted">
               Default: <span class="vods-mono">{{ showValue(s, s.default) }}</span>
