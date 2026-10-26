@@ -450,7 +450,7 @@ export function vodSeconds(vod: Pick<AdminVod, 'duration' | 'duration_seconds'>)
 
 export function detailsDraft(vod: AdminVod): DetailsDraft {
   return {
-    thumbnailUrl: vod.thumbnail_url ?? '',
+    thumbnailUrl: (vod.synthetic ? vod.synthetic.thumbnailUrl : vod.thumbnail_url) ?? '',
     duration: vodSeconds(vod),
     createdAt: toLocalInput(vod.createdAt),
   }

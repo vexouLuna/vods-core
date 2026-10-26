@@ -433,9 +433,12 @@ const syntheticView = (sv: Synth) => ({ ...sv, auto: autos.get(sv.id) ?? null, h
 /** The synthetic VOD as /admin/vods/{id} and the v2 list show it. */
 const synthVod = (sv: Synth): Json => ({
   id: sv.id, title: sv.title, createdAt: sv.created_at, duration: hms(synthLen(sv)), duration_seconds: synthLen(sv),
-  thumbnail_url: sv.thumbnail_url ?? null, stream_id: null, tags: sv.tags, chapters: [], youtube: [], drive: [], games: [],
+  thumbnail_url: sv.thumbnail_url ?? vods.get(sv.segments[0]?.vod_id ?? '')?.thumbnail_url ?? null, stream_id: null, tags: sv.tags, chapters: [], youtube: [], drive: [], games: [],
   ...(sv.cut_reason ? { cut_reason: sv.cut_reason } : {}),
-  synthetic: { supersedes: sv.supersedes, segments: sv.segments.map((g) => ({ vodId: g.vod_id, start: g.start, end: g.end, at: g.at, label: g.label })) },
+  synthetic: {
+    supersedes: sv.supersedes, thumbnailUrl: sv.thumbnail_url ?? null,
+    segments: sv.segments.map((g) => ({ vodId: g.vod_id, start: g.start, end: g.end, at: g.at, label: g.label })),
+  },
 })
 /** Checks a POST or PUT body the way the worker does, filling start/end/at from the sources. */
 async function buildSynthetic(api: string, id: string, b: Json, was: Synth | null): Promise<Synth | { status: number; code: string; error: string }> {

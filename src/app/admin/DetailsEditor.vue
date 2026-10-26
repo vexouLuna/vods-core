@@ -47,9 +47,13 @@ const zone = (() => {
   return `UTC${sign}${Math.floor(a / 60)}${a % 60 ? `:${String(a % 60).padStart(2, '0')}` : ''}`
 })()
 
-/** What the page shows with no thumbnail of its own: the first YouTube part's (a synthetic VOD's first source's: not
- * known here, so none is previewed). */
-const fallback = computed(() => props.vod.youtube?.find((u) => u.thumbnail_url)?.thumbnail_url ?? null)
+/** What the page shows with no thumbnail of its own: the first YouTube part's, or a synthetic VOD's first source's (its
+ * `thumbnail_url` while no custom one is set). */
+const fallback = computed(() =>
+  props.vod.synthetic
+    ? props.vod.synthetic.thumbnailUrl ? null : props.vod.thumbnail_url ?? null
+    : props.vod.youtube?.find((u) => u.thumbnail_url)?.thumbnail_url ?? null,
+)
 const preview = computed(() => (errors.value.has('thumbnailUrl') ? null : draft.value.thumbnailUrl.trim() || fallback.value))
 const previewBroken = ref(false)
 watch(preview, () => (previewBroken.value = false))

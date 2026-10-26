@@ -145,6 +145,14 @@ describe('details draft', () => {
     expect([...detailsErrors(d, 4000, true).keys()]).toEqual([])
     expect(detailsPatch(d, v)).toEqual({ thumbnailUrl: 'https://x/s.jpg' })
   })
+
+  it("reads a synthetic VOD's own thumbnail, not the first source's it shows without one", () => {
+    expect(detailsDraft(vod({ thumbnail_url: 'https://x/src.jpg', synthetic: { supersedes: false, segments: [] } })).thumbnailUrl).toBe('')
+    const v = vod({ thumbnail_url: 'https://x/own.jpg', synthetic: { supersedes: false, segments: [], thumbnailUrl: 'https://x/own.jpg' } })
+    const d = detailsDraft(v)
+    expect(d.thumbnailUrl).toBe('https://x/own.jpg')
+    expect(detailsPatch({ ...d, thumbnailUrl: '' }, v)).toEqual({ thumbnailUrl: null })
+  })
 })
 
 describe('header draft', () => {
