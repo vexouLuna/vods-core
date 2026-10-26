@@ -103,4 +103,10 @@ describe('fitMark', () => {
     expect(fitMark({ width: 20, height: 10, rotate: 0 }, BOX)).toEqual({ scale: 1, x: 0, y: 9 })
     expect(fitMark({}, { w: 200, h: 200 }).scale).toBe(1)
   })
+
+  it('stops at `max`, and still fits a large turned mark under it', () => {
+    expect(fitMark({}, { w: 200, h: 200 }, 0.66).scale).toBe(0.66)
+    const big = fitMark({ width: 200, height: 200, rotate: 45 }, { w: 44, h: 18 }, 0.66)
+    expect(big.scale).toBeCloseTo(18 / (200 * Math.SQRT2))
+  })
 })
