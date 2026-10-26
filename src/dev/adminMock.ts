@@ -1286,7 +1286,6 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           const sent = 'cards' in b ? b.cards : 'homeCards' in b ? b.homeCards : undefined
           if (sent !== undefined && (!Array.isArray(sent) || sent.length > 12)) return fail(res, 400, 'cards must be a list of at most 12 cards')
           const next = Array.isArray(sent) ? ('cards' in b ? (sent as Json[]).map((c, i) => ({ ...c, id: c.id || `n${i}` })) : newCards(sent as Json[])) : cards
-          if (next.filter((c) => c.type === 'live').length > 1 || next.filter((c) => c.type === 'games').length > 1) return fail(res, 400, 'One live and one games card at most')
           cards = next
           if (b.playDefault === 'segments' || b.playDefault === 'compiled') playDefault = b.playDefault
           optionsChanged = { updatedAt: iso(), updatedBy: s.user ? `twitch:${s.user.id}` : 'password' }

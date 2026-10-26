@@ -43,7 +43,7 @@ export const DEFAULT_SITE_OPTIONS: SiteOptions = {
 
 export const siteOptions = shallowRef<SiteOptions>(DEFAULT_SITE_OPTIONS)
 
-/** The most cards the archive keeps; `live` and `games` at most once each. */
+/** The most cards the archive keeps (any of them may repeat). */
 export const MAX_HOME_CARDS = 12
 
 /** A short random key for a new card (the archive takes 1-32 of [A-Za-z0-9_-]). */

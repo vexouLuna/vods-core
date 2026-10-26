@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // /manage/home: the cards the homepage shows, in order (GET /admin/site/options), each with its own settings: a
-// "Latest VOD" or "Latest 2" card picks its tag (any home category, or every VOD). A tag card can be added twice; "Latest live" and
-// "Most played games" once each, up to MAX_HOME_CARDS.
+// "Latest VOD" or "Latest 2" card picks its tag (any home category, or every VOD). Any card can be added twice, up
+// to MAX_HOME_CARDS.
 // Which version of a compiled synthetic VOD plays first is on Settings ("Watch page").
 import { useToast } from '@vex/ui/utils'
 import { errorText } from '@vex/platform-web'
@@ -62,8 +62,6 @@ const TYPES = [
 ] as const
 type AddType = (typeof TYPES)[number]['value']
 const adding = ref<AddType>('one')
-/** `live` and `games` are allowed once each. */
-const taken = (t: AddType) => (t === 'live' || t === 'games') && cards.value.some((c) => c.type === t)
 const full = computed(() => cards.value.length >= MAX_HOME_CARDS)
 
 /** A tag card's choices: every VOD, then the home categories (tags with a page). */
@@ -75,7 +73,7 @@ const dirty = computed(() => JSON.stringify(cards.value) !== JSON.stringify(save
 const move = (i: number, by: -1 | 1) => (cards.value = moved(cards.value, i, by))
 const remove = (i: number) => (cards.value = cards.value.filter((_, j) => j !== i))
 function add() {
-  if (full.value || taken(adding.value)) return
+  if (full.value) return
   const id = newCardId()
   const t = adding.value
   const card: HomeCard =
@@ -146,9 +144,9 @@ onMounted(() => {
         <div class="add">
           <label for="home-add" class="vods-muted">Add a card</label>
           <select id="home-add" v-model="adding" class="vods-input">
-            <option v-for="t in TYPES" :key="t.value" :value="t.value" :disabled="taken(t.value)">{{ t.label }}{{ taken(t.value) ? ' (already on)' : '' }}</option>
+            <option v-for="t in TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
           </select>
-          <UiButton :disabled="full || taken(adding)" @click="add">Add</UiButton>
+          <UiButton :disabled="full" @click="add">Add</UiButton>
           <span v-if="full" class="vods-muted">{{ MAX_HOME_CARDS }} cards at most</span>
         </div>
         <UiCallout v-if="legacy" tone="info">This archive keeps one of each card: a card added twice is saved once.</UiCallout>
