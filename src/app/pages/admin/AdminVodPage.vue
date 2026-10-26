@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// /manage/vods/:id: fix one VOD by hand (visibility, details, chapters, games, YouTube and Drive lists, emotes) and
-// run its jobs.
+// /manage/vods/:id: fix one VOD by hand (visibility, details, chapters, games, YouTube and Drive lists, censor ranges,
+// emotes) and run its jobs. The preview plays its server file or its uploads for the editors under it to set times
+// from and draw censor boxes on.
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
@@ -15,6 +16,8 @@ import DriveEditor from '../../admin/DriveEditor.vue'
 import { vodSeconds } from '../../admin/edits'
 import EmotesPanel from '../../admin/EmotesPanel.vue'
 import GamesEditor from '../../admin/GamesEditor.vue'
+import MediaPreview from '../../admin/preview/MediaPreview.vue'
+import { providePreview } from '../../admin/preview/previewState'
 import SplicePanel from '../../admin/SplicePanel.vue'
 import { errorText, stamp } from '@vex/platform-web'
 import { JobsTable, usePoll } from '@vex/platform-web/vue'
@@ -27,6 +30,7 @@ import { site } from '../../site'
 const props = defineProps<{ id: string }>()
 const router = useRouter()
 const toast = useToast()
+providePreview()
 
 const vod = ref<AdminVod | null>(null)
 const loadError = ref<string | null>(null)
@@ -171,6 +175,11 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
 
       <!-- A VOD merged into another, or a synthetic one, has no chapters, uploads or emotes of its own to edit. -->
       <template v-if="!vod.merged_into && !vod.synthetic">
+        <section id="preview" class="panel vods-panel vx-glass-rim">
+          <h2 class="vods-eyebrow">Preview</h2>
+          <MediaPreview :key="vod.id" :vod="vod" :duration="duration" />
+        </section>
+
         <section class="panel vods-panel vx-glass-rim">
           <h2 class="vods-eyebrow">Chapters</h2>
           <ChaptersEditor :vod="vod" :duration="duration" @saved="saved" />

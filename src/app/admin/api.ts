@@ -222,13 +222,61 @@ export interface AdminVod extends RawVod {
   censor?: CensorRange[]
 }
 
+export type CensorCover = 'blur' | 'black' | 'pixelate' | 'color'
+
+/** A box over the picture: fractions of the frame (0-1) from its top-left corner. */
+export interface CensorRegion {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** A VOD's file still on the server, for the preview (GET /api/v2/vods/:id/media). */
+export type MediaName = 'source' | 'covered' | 'censored'
+
+export interface MediaFile {
+  name: MediaName
+  label: string
+  size: number
+  modified_at: string
+}
+
+/** Who holds the one lease to stream the server's files (one browser tab on the whole server). */
+export interface MediaHolder {
+  /** The Twitch login; null for the password login or the API key. */
+  login: string | null
+  kind: string
+  /** "Firefox on Windows". */
+  browser: string
+  vod_id: string | null
+  file: MediaName | null
+  acquired_at: string
+  heartbeat_at: string
+  /** Held by the tab that asked. */
+  yours: boolean
+}
+
+export interface MediaList {
+  items: MediaFile[]
+  lease: MediaHolder | null
+  /** The cleanup keeps the source MP4 (ARCHIVE_KEEP_MP4). */
+  keep_mp4: boolean
+  /** The cleanup waits this many days (0: right after the job). */
+  keep_files_days: number
+}
+
 /** A stretch of the VOD hidden in its YouTube uploads, for what Twitch allows and YouTube doesn't. */
 export interface CensorRange {
   /** VOD seconds. */
   start: number
   end: number
-  /** Blur or black out the picture; null leaves it. */
-  video: 'blur' | 'black' | null
+  /** How the picture is covered (the whole frame, or only `region`); null leaves it. */
+  video: CensorCover | null
+  /** The fill of a `color` cover, `#rrggbb`. */
+  color?: string
+  /** Only this box is covered, not the whole frame. */
+  region?: CensorRegion
   /** Silence the sound. A range covers the picture, mutes, or both. */
   mute: boolean
   /** Why (at most 200 characters). */
@@ -689,6 +737,31 @@ export class AdminClient {
   async saveCensor(id: string, censor: CensorRange[]): Promise<AdminVod> {
     await this.request('PUT', `/api/v2/vods/${enc(id)}/censor`, { censor })
     return this.vod(id)
+  }
+  /** The VOD's files still on the server, and who holds the lease to stream them (`yours` when it's `lease`). */
+  vodMedia(id: string, lease: string, signal?: AbortSignal): Promise<MediaList> {
+    return this.request('GET', `/api/v2/vods/${enc(id)}/media?lease=${encodeURIComponent(lease)}`, undefined, signal)
+  }
+  /** Takes the lease for this tab: 409 `media_in_use` (`extra.holder`) while another tab has it, unless `take_over`. */
+  claimMedia(body: { lease_id: string; vod_id: string; file: MediaName | null; take_over?: boolean }): Promise<MediaHolder> {
+    return this.request('POST', '/api/v2/media/lease', body)
+  }
+  /** The heartbeat: 410 `lease_lost` (`extra.holder`) once another tab took it. */
+  renewMedia(lease: string): Promise<void> {
+    return this.request('PUT', `/api/v2/media/lease/${encodeURIComponent(lease)}`)
+  }
+  /** Lets go of the lease. `keepalive` lets it finish while the page unloads. */
+  releaseMedia(lease: string, keepalive = false): Promise<void> {
+    if (!keepalive) return this.request('DELETE', `/api/v2/media/lease/${encodeURIComponent(lease)}`)
+    const headers: Record<string, string> = this.csrf ? { 'x-csrf-token': this.csrf } : {}
+    return this.fetcher(`${this.base}/api/v2/media/lease/${encodeURIComponent(lease)}`, { method: 'DELETE', headers, credentials: 'same-origin', keepalive }).then(
+      () => undefined,
+      () => undefined,
+    )
+  }
+  /** The file's URL for a <video>, streamed while `lease` holds the lease. */
+  mediaUrl(id: string, name: MediaName, lease: string): string {
+    return `${this.base}/api/v2/vods/${enc(id)}/media/${name}?lease=${encodeURIComponent(lease)}`
   }
   /** Answers a job the censor check paused: "upload" resumes it (with the censor ranges set by now), "cut" first
    * leaves the flagged games' chapters out of the uploads (marks them restricted, locks the chapters). */

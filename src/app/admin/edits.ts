@@ -1,7 +1,7 @@
 // Editing a VOD's chapters and uploads: draft rows for the forms, the same checks the worker makes (so mistakes show
 // next to the row before saving), and the request bodies. Pure functions; the pages hold the drafts.
 import { boxArt, toClock, toSeconds, type RawChapter, type RawDrive, type RawUpload } from '../../index'
-import type { AdminVod, CensorRange, ChapterEdit, GameRow, VodPatch, YoutubeEdit } from './api'
+import type { AdminVod, CensorCover, CensorRange, CensorRegion, ChapterEdit, GameRow, VodPatch, YoutubeEdit } from './api'
 
 let nextKey = 1
 const key = () => nextKey++
@@ -230,7 +230,7 @@ export const driveEdits = (rows: readonly DriveDraft[]): RawDrive[] => rows.map(
 
 // ---- censor ranges ----
 
-export type CensorVideo = 'none' | 'blur' | 'black'
+export type CensorVideo = 'none' | CensorCover
 
 export interface CensorDraft {
   key: number
@@ -238,25 +238,58 @@ export interface CensorDraft {
   start: number | null
   end: number | null
   video: CensorVideo
+  /** The fill for `color`, `#rrggbb` (kept while another cover is picked, so switching back keeps it). */
+  color: string
+  /** Only this box is covered; null covers the whole frame. */
+  region: CensorRegion | null
   mute: boolean
   note: string
 }
 
 export const CENSOR_NOTE_MAX = 200
+/** A box's smallest width or height, as a fraction of the frame (the worker's REGION_MIN). */
+export const REGION_MIN = 0.01
+export const DEFAULT_COLOR = '#000000'
+const HEX_COLOR = /^#[0-9a-f]{6}$/i
 
-export const censorDrafts = (ranges: readonly CensorRange[] | null | undefined): CensorDraft[] =>
-  (ranges ?? []).map((r) => ({ key: key(), start: r.start, end: r.end, video: r.video ?? 'none', mute: r.mute, note: r.note ?? '' }))
+const round4 = (v: number) => Math.round(v * 10_000) / 10_000
 
-/** A new range: a minute after the last one (or from the start), blurred. */
-export function newCensor(rows: readonly CensorDraft[], duration: number): CensorDraft {
-  const after = rows.reduce((m, r) => Math.max(m, r.end ?? 0), 0)
-  const start = duration > 0 ? Math.min(after, Math.max(0, duration - 60)) : after
-  const end = duration > 0 ? Math.min(start + 60, duration) : start + 60
-  return { key: key(), start, end, video: 'blur', mute: false, note: '' }
+/** A box rounded as the worker stores it (4 places) and kept inside the frame, at least REGION_MIN wide and high. */
+export function fitRegion(r: CensorRegion): CensorRegion {
+  const w = Math.min(1, Math.max(REGION_MIN, round4(r.w)))
+  const h = Math.min(1, Math.max(REGION_MIN, round4(r.h)))
+  return { x: Math.min(round4(1 - w), Math.max(0, round4(r.x))), y: Math.min(round4(1 - h), Math.max(0, round4(r.y))), w, h }
 }
 
-/** The worker's checks: a start and an end inside the VOD, and something to do (cover the picture or mute). Ranges may
- * overlap: black wins over blur where they do. */
+export const censorDrafts = (ranges: readonly CensorRange[] | null | undefined): CensorDraft[] =>
+  (ranges ?? []).map((r) => ({
+    key: key(),
+    start: r.start,
+    end: r.end,
+    video: r.video ?? 'none',
+    color: r.color ?? DEFAULT_COLOR,
+    region: r.region ? { ...r.region } : null,
+    mute: r.mute,
+    note: r.note ?? '',
+  }))
+
+/** A new range: a minute after the last one (or from the start), blurred. `at` (the preview's playhead) starts it there. */
+export function newCensor(rows: readonly CensorDraft[], duration: number, at?: number): CensorDraft {
+  const after = at ?? rows.reduce((m, r) => Math.max(m, r.end ?? 0), 0)
+  const start = duration > 0 ? Math.min(after, Math.max(0, duration - 60)) : after
+  const end = duration > 0 ? Math.min(start + 60, duration) : start + 60
+  return { key: key(), start, end, video: 'blur', color: DEFAULT_COLOR, region: null, mute: false, note: '' }
+}
+
+/** The same range again, its box moved a little so both show (two boxes at once are two ranges). */
+export function duplicateCensor(r: CensorDraft): CensorDraft {
+  const region = r.region ? fitRegion({ ...r.region, x: r.region.x + 0.05, y: r.region.y + 0.05 }) : null
+  return { ...r, key: key(), region }
+}
+
+/** The worker's checks: a start and an end inside the VOD, and something to do (cover the picture or mute); a colour
+ * for a fill, and a box inside the frame on a range that covers. Ranges may overlap: the strongest whole-frame cover
+ * wins where they do (black, colour, pixelate, blur), and boxes stack. */
 export function censorErrors(rows: readonly CensorDraft[], duration: number): Map<number, string> {
   const errors = new Map<number, string>()
   for (const r of rows) {
@@ -264,10 +297,22 @@ export function censorErrors(rows: readonly CensorDraft[], duration: number): Ma
     else if (r.start < 0) errors.set(r.key, 'Start must be 0 or later.')
     else if (r.end <= r.start) errors.set(r.key, 'End must be after the start.')
     else if (duration > 0 && r.end > duration + 1) errors.set(r.key, `Ends after the VOD (${toClock(duration)}).`)
-    else if (r.video === 'none' && !r.mute) errors.set(r.key, 'Blur or black out the picture, mute the sound, or both.')
+    else if (r.video === 'none' && !r.mute) errors.set(r.key, 'Cover the picture, mute the sound, or both.')
+    else if (r.video === 'color' && !HEX_COLOR.test(r.color)) errors.set(r.key, 'Pick a colour (#rrggbb).')
+    else if (r.region && r.video === 'none') errors.set(r.key, 'A box needs a cover: blur, black, pixelate or a colour.')
+    else if (r.region && regionError(r.region)) errors.set(r.key, regionError(r.region)!)
     else if (r.note.trim().length > CENSOR_NOTE_MAX) errors.set(r.key, `The note is longer than ${CENSOR_NOTE_MAX} characters.`)
   }
   return errors
+}
+
+function regionError(r: CensorRegion): string | null {
+  const [x, y, w, h] = [r.x, r.y, r.w, r.h].map(round4) as [number, number, number, number]
+  if (![x, y, w, h].every(Number.isFinite)) return 'The box is missing its size.'
+  if (x < 0 || y < 0) return 'The box starts outside the frame.'
+  if (w < REGION_MIN || h < REGION_MIN) return 'The box is too small.'
+  if (x + w > 1 + 1e-9 || y + h > 1 + 1e-9) return 'The box reaches past the edge of the frame.'
+  return null
 }
 
 export function censorEdits(rows: readonly CensorDraft[]): CensorRange[] {
@@ -277,6 +322,8 @@ export function censorEdits(rows: readonly CensorDraft[]): CensorRange[] {
       start: r.start ?? 0,
       end: r.end ?? 0,
       video: r.video === 'none' ? null : r.video,
+      ...(r.video === 'color' ? { color: r.color.toLowerCase() } : {}),
+      ...(r.region && r.video !== 'none' ? { region: { x: round4(r.region.x), y: round4(r.region.y), w: round4(r.region.w), h: round4(r.region.h) } } : {}),
       mute: r.mute,
       ...(r.note.trim() ? { note: r.note.trim() } : {}),
     }))
