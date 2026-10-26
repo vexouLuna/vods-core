@@ -417,7 +417,10 @@ async function twitchVideos(api: string): Promise<TwitchVideo[]> {
 }
 
 // Synthetic VODs: windows of real ones, placed on their own timeline.
-type Synth = { id: string; title: string | null; supersedes: boolean; tags: string[]; created_at: string | null; made_at: string; changed_at: string; segments: Json[] }
+type Synth = {
+  id: string; title: string | null; supersedes: boolean; tags: string[]; created_at: string | null; made_at: string; changed_at: string; segments: Json[]
+  cut_reason?: string | null; thumbnail_url?: string | null
+}
 const synthetics = new Map<string, Synth>()
 const synthLen = (sv: Synth) => sv.segments.reduce((n, g) => Math.max(n, g.at + g.end - g.start), 0)
 // The game each follows (the mock keeps it, but doesn't recompute the segments from it).
@@ -430,8 +433,12 @@ const syntheticView = (sv: Synth) => ({ ...sv, auto: autos.get(sv.id) ?? null, h
 /** The synthetic VOD as /admin/vods/{id} and the v2 list show it. */
 const synthVod = (sv: Synth): Json => ({
   id: sv.id, title: sv.title, createdAt: sv.created_at, duration: hms(synthLen(sv)), duration_seconds: synthLen(sv),
-  thumbnail_url: null, stream_id: null, tags: sv.tags, chapters: [], youtube: [], drive: [], games: [],
-  synthetic: { supersedes: sv.supersedes, segments: sv.segments.map((g) => ({ vodId: g.vod_id, start: g.start, end: g.end, at: g.at, label: g.label })) },
+  thumbnail_url: sv.thumbnail_url ?? vods.get(sv.segments[0]?.vod_id ?? '')?.thumbnail_url ?? null, stream_id: null, tags: sv.tags, chapters: [], youtube: [], drive: [], games: [],
+  ...(sv.cut_reason ? { cut_reason: sv.cut_reason } : {}),
+  synthetic: {
+    supersedes: sv.supersedes, thumbnailUrl: sv.thumbnail_url ?? null,
+    segments: sv.segments.map((g) => ({ vodId: g.vod_id, start: g.start, end: g.end, at: g.at, label: g.label })),
+  },
 })
 /** Checks a POST or PUT body the way the worker does, filling start/end/at from the sources. */
 async function buildSynthetic(api: string, id: string, b: Json, was: Synth | null): Promise<Synth | { status: number; code: string; error: string }> {
@@ -735,9 +742,14 @@ let siteTags: SiteTag[] = [
 /** Cleaned SVGs by tag name, with the hash that versions their URL. */
 const tagShapes = new Map<string, { svg: string; v: string }>()
 let tagsChanged: { at: string; by: string } | null = null
-let homeCards: Json[] = [{ kind: 'latest' }, { kind: 'tag', tag: 'playthroughs' }, { kind: 'games' }]
-/** The archive's site_options.load: a tag card only while its tag is a home category. */
-const shownCards = () => homeCards.filter((c) => !c.tag || siteTags.some((t) => t.name === c.tag && t.page))
+/** The homepage cards in the archive's per-card shape; `homeCards` (the old `{kind, tag}`) is served alongside. */
+let cards: Json[] = [{ id: 'c0', type: 'live' }, { id: 'c1', type: 'vods', tag: 'playthroughs', count: 2 }, { id: 'c2', type: 'games' }]
+/** The archive's site_options.load: a tag card only while its tag is a home category (`vods` always). */
+const shownCards = () => cards.filter((c) => c.type !== 'vods' || c.tag === 'vods' || siteTags.some((t) => t.name === c.tag && t.page))
+const oldCards = (cs: Json[]) => cs.map((c) => (c.type === 'live' ? { kind: 'latest' } : c.type === 'games' ? { kind: 'games' } : { kind: c.count === 1 ? 'one' : 'tag', tag: c.tag }))
+const newCards = (cs: Json[]) =>
+  cs.map((c, i) => (c.kind === 'latest' ? { id: `c${i}`, type: 'live' } : c.kind === 'games' ? { id: `c${i}`, type: 'games' } : { id: `c${i}`, type: 'vods', tag: c.tag, count: c.kind === 'one' ? 1 : 2 }))
+const optionsJson = (cs: Json[]) => ({ homeCards: oldCards(cs), cards: cs, playDefault })
 let playDefault = 'segments'
 let optionsChanged: { updatedAt: string | null; updatedBy: string | null } = { updatedAt: null, updatedBy: null }
 const siteTagsOff = () => process.env.MOCK_SITE_TAGS === 'no'
@@ -885,7 +897,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
       server.middlewares.use('/backend', (req, res, next) => {
         const tagsPath = (req.url ?? '').split('?')[0]!
         if (tagsPath === '/v1/site/tags' && !siteTagsOff()) return send(res, 200, siteTagsJson(false))
-        if (tagsPath === '/v1/site/options') return send(res, 200, { homeCards: shownCards(), playDefault })
+        if (tagsPath === '/v1/site/options') return send(res, 200, optionsJson(shownCards()))
         // The public archive may predate ADR 0005 (no `vods` or `playthroughs` tags on its VODs): ask it what they
         // were then, the default list and `compilation`.
         if (tagsPath === '/vods') req.url = req.url!.replace(/([?&])\$tag=vods(&|$)/, '$1').replace(/([?&]\$tag=)playthroughs(&|$)/, '$1compilation$2')
@@ -1128,9 +1140,11 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           }
           if ('tags' in b) {
             if (!Array.isArray(b.tags)) return problem(res, 422, 'invalid_vod', 'tags must be a list')
-            vod.tags = [...new Set((b.tags as unknown[]).map((t) => String(t).trim()).filter(Boolean))]
+            // A synthetic VOD's row is its Synth (vodOf hands back a copy).
+            ;(synthetics.get(id) ?? vod).tags = [...new Set((b.tags as unknown[]).map((t) => String(t).trim()).filter(Boolean))]
           }
-          return send(res, 200, { id, title: vod.title ?? null, hidden: hidden.has(id), tags: vod.tags ?? [] })
+          const tags = synthetics.get(id)?.tags ?? vod.tags ?? []
+          return send(res, 200, { id, title: vod.title ?? null, hidden: hidden.has(id), tags })
         }
 
         // ---- synthetic VODs (/api/v2/synthetic) ----
@@ -1274,13 +1288,17 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- site options ----
-        if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { homeCards: shownCards(), playDefault, ...optionsChanged })
+        if (path === '/admin/site/options' && method === 'GET') return send(res, 200, { ...optionsJson(cards), ...optionsChanged })
         if (path === '/admin/site/options' && method === 'PUT') {
-          if (!Array.isArray(b.homeCards)) return fail(res, 400, 'homeCards must be a list of at most 12 cards')
-          homeCards = b.homeCards as Json[]
+          // Only the options sent change; cards come as `cards` or the old `homeCards`, never both.
+          if ('cards' in b && 'homeCards' in b) return fail(res, 400, 'Send cards or homeCards, not both')
+          const sent = 'cards' in b ? b.cards : 'homeCards' in b ? b.homeCards : undefined
+          if (sent !== undefined && (!Array.isArray(sent) || sent.length > 12)) return fail(res, 400, 'cards must be a list of at most 12 cards')
+          const next = Array.isArray(sent) ? ('cards' in b ? (sent as Json[]).map((c, i) => ({ ...c, id: c.id || `n${i}` })) : newCards(sent as Json[])) : cards
+          cards = next
           if (b.playDefault === 'segments' || b.playDefault === 'compiled') playDefault = b.playDefault
           optionsChanged = { updatedAt: iso(), updatedBy: s.user ? `twitch:${s.user.id}` : 'password' }
-          return send(res, 200, { homeCards, playDefault, ...optionsChanged })
+          return send(res, 200, { ...optionsJson(cards), ...optionsChanged })
         }
 
         // ---- site tags ----
@@ -1528,7 +1546,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               return send(res, 200, { error: false, msg: `Joined ${sp.otherId} back into ${id}`, splice: out, vod: adminVod(vods.get(id)!) })
             }
             if (!part && method === 'PATCH') {
-              const FIELDS = ['title', 'hidden', 'thumbnailUrl', 'duration', 'createdAt', 'cutReason']
+              const FIELDS = ['title', 'hidden', 'thumbnailUrl', 'duration', 'createdAt', 'cutReason', 'tags']
               const unknown = Object.keys(b).filter((k) => !FIELDS.includes(k))
               if (!Object.keys(b).length) return fail(res, 400, `Send at least one of ${FIELDS.join(', ')}`)
               if (unknown.length) return fail(res, 400, `unknown field(s) ${unknown.join(', ')}; these can be changed: ${FIELDS.join(', ')}`)
@@ -1549,15 +1567,21 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
                 if (last > d + 1) return fail(res, 400, `duration ${b.duration} is shorter than the chapters or games (they run to ${hms(last)})`)
                 setDur(vod, d)
               }
-              if ('title' in b) vod.title = b.title.trim()
+              if ('tags' in b && !Array.isArray(b.tags)) return fail(res, 400, 'tags must be a list')
+              // A synthetic VOD's row is the Synth: it takes the same fields but its length and date (from its segments).
+              const sv = synthetics.get(id)
+              if (sv && ('duration' in b || 'createdAt' in b)) return fail(res, 400, "a synthetic VOD's duration and date come from its segments")
+              const row: Json = sv ?? vod
+              if ('tags' in b) row.tags = [...new Set((b.tags as unknown[]).map((t) => String(t).trim()).filter(Boolean))]
+              if ('title' in b) row.title = b.title.trim()
               if ('hidden' in b) {
                 if (b.hidden) hidden.add(id)
                 else hidden.delete(id)
               }
-              if ('thumbnailUrl' in b) vod.thumbnail_url = b.thumbnailUrl || null
+              if ('thumbnailUrl' in b) row.thumbnail_url = b.thumbnailUrl || null
               if ('createdAt' in b) vod.createdAt = new Date(String(b.createdAt)).toISOString()
-              if ('cutReason' in b) vod.cut_reason = b.cutReason?.trim() || null
-              return send(res, 200, adminVod(vod))
+              if ('cutReason' in b) row.cut_reason = b.cutReason?.trim() || null
+              return send(res, 200, adminVod(sv ? synthVod(sv) : vod))
             }
             if (part === 'games' && method === 'GET') {
               if (!gameRows.has(id)) {

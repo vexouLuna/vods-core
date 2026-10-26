@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Jobs and fixes for one VOD, through the worker's existing routes. Each starts a job (shown in the VOD's job list);
-// delete removes the VOD from the archive after typing its id.
+// delete removes the VOD from the archive after typing its id. A synthetic VOD gets none: each refetches from Twitch or
+// works on the VOD's own uploads, which the archive refuses for it (its Compile and Delete are on its own page).
 import { useToast } from '@vex/ui/utils'
 import type { Option } from '@vex/ui'
 import { computed, ref } from 'vue'
@@ -88,6 +89,11 @@ function remove() {
 
 <template>
   <div class="actions">
+    <p v-if="vod.synthetic" class="vods-muted spliced">
+      A synthetic VOD has no Twitch VOD or uploads of its own: re-fetching, chat, re-uploading and re-archiving run on
+      its sources. Compile, on its synthetic VOD page, makes an upload of its own.
+    </p>
+    <template v-else>
     <p v-if="spliced" class="vods-muted spliced">
       This VOD was merged or split, so it no longer matches Twitch's VOD of the same id. Re-fetching from Twitch,
       downloading, re-uploading and deleting are off until that's undone (see Merge and split).
@@ -118,6 +124,7 @@ function remove() {
         <UiButton variant="danger" :disabled="spliced" :title="spliced ? TWITCH_OFF : undefined" :loading="busy === 'delete'" @click="delOpen = true">Delete from the archive…</UiButton>
       </div>
     </div>
+    </template>
 
     <UiDialog v-model:open="dlOpen" title="Download and upload again">
       Downloads the VOD again (while Twitch still has it), splits it and uploads the parts. Leave the range empty for every part.

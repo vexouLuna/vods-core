@@ -15,7 +15,7 @@ import LiveNow from '../components/LiveNow.vue'
 import MostPlayed from '../components/MostPlayed.vue'
 import VodsShell from '../components/VodsShell.vue'
 import { loadGamesPlayed } from '../lib/gamesPlayed'
-import { homeCardKey, shownHomeCards, siteOptions } from '../lib/siteOptions'
+import { shownHomeCards, siteOptions } from '../lib/siteOptions'
 import { tagConfig } from '../lib/vodTags'
 import { listPath, parseListQuery, toApiFilter, toListQuery } from '../lib/listQuery'
 
@@ -54,13 +54,13 @@ const resumeOf = (v: Vod) => resumeProgress(saved.value.get(v.id), v.duration)
 <template>
   <VodsShell>
     <section class="top">
-      <template v-for="c in cards" :key="homeCardKey(c)">
-        <template v-if="c.kind === 'latest'">
+      <template v-for="c in cards" :key="c.id">
+        <template v-if="c.type === 'live'">
           <LiveNow v-if="live" :live="live" />
           <LatestVod v-else-if="latest" :vod="latest" :progress="resumeOf(latest)" />
         </template>
-        <LatestOne v-else-if="c.kind === 'one'" :tag="c.tag" :resume="resumeOf" />
-        <LatestTagged v-else-if="c.kind === 'tag'" :tag="c.tag" :resume="resumeOf" />
+        <LatestOne v-else-if="c.type === 'vods' && c.count === 1" :tag="c.tag" :resume="resumeOf" />
+        <LatestTagged v-else-if="c.type === 'vods'" :tag="c.tag" :resume="resumeOf" />
         <MostPlayed v-else :games="games" :error="gamesError" @game="openGame" @retry="fetchGames(true)" />
       </template>
     </section>

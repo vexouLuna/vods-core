@@ -1,7 +1,7 @@
 import { ProblemError, parseRetryAfter } from '@vex/platform-web'
 import type { RawDrive, RawEmoteSets, RawUpload, RawVod } from '../../index'
 import type { RawTag } from '../lib/vodTags'
-import type { SiteOptions } from '../lib/siteOptions'
+import type { HomeCard, LegacyHomeCard, PlayDefault, SiteOptionsView } from '../lib/siteOptions'
 
 // Client for twitch-archive's worker admin API, as described in docs/admin-api.md. The browser holds no key: a
 // password login gives it an HttpOnly session cookie, and every change carries the session's CSRF token.
@@ -294,7 +294,7 @@ export interface DeleteUploadsResult extends ActionResult {
   vod: AdminVod
 }
 
-/** The fields the details editor changes (PATCH /api/v2/vods/:id, snake_case there). A merged VOD takes only `hidden`. */
+/** The fields the header panel and details editor change (PATCH /api/v2/vods/:id, snake_case there). A merged VOD takes only `hidden`. */
 export interface VodPatch {
   title?: string
   hidden?: boolean
@@ -306,6 +306,8 @@ export interface VodPatch {
   createdAt?: string
   /** Why the VOD was cut (500 characters at most), or null for none. */
   cutReason?: string | null
+  /** Replaces the VOD's tags (the automatic ones included: the archive keeps only known site tags). */
+  tags?: string[]
 }
 
 /** A games row (the public `/games` shape): which game was played when, for the games pages. */
@@ -329,11 +331,7 @@ export interface SiteTags {
   updatedAt: string | null
   updatedBy: string | null
 }
-/** GET /admin/site/options: the site's own options (docs/admin-api.md, "Site options"). */
-export interface SiteOptionsView extends SiteOptions {
-  updatedAt: string | null
-  updatedBy: string | null
-}
+
 /** A tag as PUT /admin/site/tags takes it: everything but the shape, which is uploaded on its own. */
 export type TagInput = Omit<RawTag, 'shape'>
 
@@ -920,7 +918,7 @@ export class AdminClient {
     return this.request('GET', '/admin/site/options', undefined, signal)
   }
   /** The options sent change (all or none); the others keep their value. */
-  saveSiteOptions(changes: Partial<SiteOptions>): Promise<SiteOptionsView> {
+  saveSiteOptions(changes: { cards?: HomeCard[]; homeCards?: LegacyHomeCard[]; playDefault?: PlayDefault }): Promise<SiteOptionsView> {
     return this.request('PUT', '/admin/site/options', changes)
   }
   // ---- site tags ----
