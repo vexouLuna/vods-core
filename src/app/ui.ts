@@ -39,6 +39,7 @@ import type {
   VxSwitch,
   VxTable,
   VxTabs,
+  VxTagInput,
   VxTextarea,
   VxTooltip,
 } from '@vex/ui'
@@ -88,6 +89,7 @@ export interface VodsUiComponents {
   Switch: typeof VxSwitch
   Table: typeof VxTable
   Tabs: typeof VxTabs
+  TagInput: typeof VxTagInput
   Textarea: typeof VxTextarea
   Tooltip: typeof VxTooltip
 }
@@ -109,7 +111,7 @@ const KEYS: (keyof VodsUiComponents)[] = [
   'AccountMenu', 'Button', 'Callout', 'ChapterBar', 'Checkbox', 'Chip', 'Confirm', 'DateInput', 'DateRange',
   'Dialog', 'EmptyState', 'Field', 'Input', 'Kbd', 'Link', 'LoadState', 'MenuItem', 'NavBar', 'PageHead',
   'Placeholder', 'Popover', 'Posters', 'Progress', 'SaveBar', 'Segmented', 'Select', 'Shell', 'Skeleton', 'Slider',
-  'Spinner', 'StatTile', 'StatusDot', 'Stepper', 'Switch', 'Table', 'Tabs', 'Textarea', 'Tooltip',
+  'Spinner', 'StatTile', 'StatusDot', 'Stepper', 'Switch', 'Table', 'Tabs', 'TagInput', 'Textarea', 'Tooltip',
 ]
 
 /** Registers the site's controls as Ui*; throws naming any that are missing (a plain-JS site skips the type check). */

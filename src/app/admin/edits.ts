@@ -1,7 +1,8 @@
 // Editing a VOD's chapters and uploads: draft rows for the forms, the same checks the worker makes (so mistakes show
 // next to the row before saving), and the request bodies. Pure functions; the pages hold the drafts.
-import { boxArt, toClock, toSeconds, type RawChapter, type RawDrive, type RawUpload } from '../../index'
+import { boxArt, normalizeVod, toClock, toSeconds, type RawChapter, type RawDrive, type RawUpload } from '../../index'
 import type { AdminVod, CensorCover, CensorRange, CensorRegion, ChapterEdit, GameRow, VodPatch, YoutubeEdit } from './api'
+import { isAutoTag, vodTags } from '../lib/vodTags'
 
 let nextKey = 1
 const key = () => nextKey++
@@ -341,22 +342,83 @@ export function censoredSeconds(ranges: readonly Pick<CensorRange, 'start' | 'en
   return total
 }
 
-// ---- details (title, thumbnail, duration, date) ----
+// ---- the header panel (title, tags, cut reason): the same on a regular and a synthetic VOD ----
 
-export interface DetailsDraft {
+export interface HeaderDraft {
   title: string
-  /** An http(s) URL, or '' for the default (the first YouTube part's). */
-  thumbnailUrl: string
-  /** Seconds. */
-  duration: number
-  /** The `datetime-local` value, in this browser's time zone. */
-  createdAt: string
+  /** The tags that can be taken off: the VOD's own, without the automatic ones (lockedTags). */
+  tags: string[]
   /** Why the VOD was cut, or '' for none. */
   cutReason: string
 }
 
 /** The worker's limit on `cutReason`. */
 export const CUT_REASON_MAX = 500
+
+/** A chip the tags input shows first and can't take off: a state of the VOD, or a tag the site or archive sets. */
+export interface LockedChip {
+  value: string
+  label?: string
+  tone?: 'default' | 'accent' | 'warn'
+  title: string
+}
+
+const AUTO_TITLES: Record<string, string> = {
+  vods: 'Set by the archive on every VOD /vods lists',
+  compilation: 'Set by the archive while it keeps itself up to date',
+  new: 'Its first footage went live in the last week',
+  updated: 'Got footage from the last week',
+}
+
+/** The VOD's states (hidden, synthetic, merged), then its automatic tags: shown first in the tags input, locked. */
+export function lockedTags(vod: AdminVod, now = Date.now()): LockedChip[] {
+  const out: LockedChip[] = []
+  if (vod.hidden) out.push({ value: 'hidden', tone: 'warn', title: 'Set while the VOD is hidden: use the switch above' })
+  if (vod.synthetic) {
+    const merge = vod.synthetic.supersedes
+    out.push({ value: merge ? 'merge or split' : 'synthetic', tone: 'accent', title: merge ? 'Stands in for the VODs it was made of' : 'Made of windows of other VODs' })
+  }
+  if (vod.merged_into) out.push({ value: 'merged', title: `Merged into ${vod.merged_into.id}` })
+  for (const t of vodTags(normalizeVod(vod), now)) if (isAutoTag(t)) out.push({ value: t, title: AUTO_TITLES[t] ?? 'Set automatically' })
+  return out
+}
+
+export function headerDraft(vod: AdminVod): HeaderDraft {
+  return {
+    title: vod.title ?? '',
+    tags: (vod.tags ?? []).filter((t) => !isAutoTag(t)),
+    cutReason: vod.cut_reason ?? '',
+  }
+}
+
+export function headerErrors(d: HeaderDraft): Map<keyof HeaderDraft, string> {
+  const errors = new Map<keyof HeaderDraft, string>()
+  if (!d.title.trim()) errors.set('title', "The title can't be empty.")
+  if (d.cutReason.trim().length > CUT_REASON_MAX) errors.set('cutReason', `At most ${CUT_REASON_MAX} characters.`)
+  return errors
+}
+
+/** Only what changed. `tags` replaces the VOD's list, so the stored automatic ones (`vods`, `compilation`) go along. */
+export function headerPatch(d: HeaderDraft, vod: AdminVod): VodPatch {
+  const was = headerDraft(vod)
+  const patch: VodPatch = {}
+  if (d.title.trim() !== was.title) patch.title = d.title.trim()
+  if ([...d.tags].sort().join() !== [...was.tags].sort().join())
+    patch.tags = [...(vod.tags ?? []).filter(isAutoTag), ...d.tags]
+  if (d.cutReason.trim() !== was.cutReason) patch.cutReason = d.cutReason.trim() || null
+  return patch
+}
+
+// ---- details (thumbnail, duration, date; a synthetic VOD has only the thumbnail: the rest come from its segments) ----
+
+export interface DetailsDraft {
+  /** An http(s) URL, or '' for the default (the first YouTube part's, or a synthetic VOD's first source's). */
+  thumbnailUrl: string
+  /** Seconds. */
+  duration: number
+  /** The `datetime-local` value, in this browser's time zone. */
+  createdAt: string
+}
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -388,42 +450,38 @@ export function vodSeconds(vod: Pick<AdminVod, 'duration' | 'duration_seconds'>)
 
 export function detailsDraft(vod: AdminVod): DetailsDraft {
   return {
-    title: vod.title ?? '',
     thumbnailUrl: vod.thumbnail_url ?? '',
     duration: vodSeconds(vod),
     createdAt: toLocalInput(vod.createdAt),
-    cutReason: vod.cut_reason ?? '',
   }
 }
 
 /**
  * Problems by field, matching the worker's checks. `contentEnd` is where the last chapter or games row ends: the
- * duration can't be shorter.
+ * duration can't be shorter. `synthetic`: only the thumbnail is checked.
  */
-export function detailsErrors(d: DetailsDraft, contentEnd = 0): Map<keyof DetailsDraft, string> {
+export function detailsErrors(d: DetailsDraft, contentEnd = 0, synthetic = false): Map<keyof DetailsDraft, string> {
   const errors = new Map<keyof DetailsDraft, string>()
-  if (!d.title.trim()) errors.set('title', 'The title can\'t be empty.')
   const url = d.thumbnailUrl.trim()
   if (url && !/^https?:\/\/\S+$/i.test(url)) errors.set('thumbnailUrl', 'An http(s) URL, or empty for the default.')
+  if (synthetic) return errors
   if (!Number.isFinite(d.duration) || d.duration <= 0) errors.set('duration', 'The duration must be a time.')
   else if (contentEnd > d.duration + 1) errors.set('duration', `Chapters or games run to ${toClock(contentEnd)}: shorten them first.`)
   if (!fromLocalInput(d.createdAt)) errors.set('createdAt', 'Pick a date and time.')
-  if (d.cutReason.trim().length > CUT_REASON_MAX) errors.set('cutReason', `At most ${CUT_REASON_MAX} characters.`)
   return errors
 }
 
-/** Only the fields that changed, as PATCH /admin/vods/:id takes them. */
+/** Only the fields that changed, as PATCH /api/v2/vods/:id takes them (a synthetic VOD: only the thumbnail). */
 export function detailsPatch(d: DetailsDraft, vod: AdminVod): VodPatch {
   const was = detailsDraft(vod)
   const patch: VodPatch = {}
-  if (d.title.trim() !== was.title) patch.title = d.title.trim()
   if (d.thumbnailUrl.trim() !== was.thumbnailUrl) patch.thumbnailUrl = d.thumbnailUrl.trim() || null
+  if (vod.synthetic) return patch
   if (Math.round(d.duration) !== Math.round(was.duration)) patch.duration = hhmmss(d.duration)
   if (d.createdAt !== was.createdAt) {
     const at = fromLocalInput(d.createdAt)
     if (at) patch.createdAt = at
   }
-  if (d.cutReason.trim() !== was.cutReason) patch.cutReason = d.cutReason.trim() || null
   return patch
 }
 

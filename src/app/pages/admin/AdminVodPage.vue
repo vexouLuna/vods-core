@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// /manage/vods/:id: fix one VOD by hand (visibility, details, chapters, games, YouTube and Drive lists, censor ranges,
+// /manage/vods/:id: fix one VOD by hand (the header panel shared with /manage/synthetic/:id, details, chapters, games, YouTube and Drive lists, censor ranges,
 // emotes) and run its jobs. The preview plays its server file or its uploads for the editors under it to set times
 // from and draw censor boxes on.
-import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
 import { computed, onMounted, ref, watch } from 'vue'
@@ -24,12 +23,12 @@ import { JobsTable, usePoll } from '@vex/platform-web/vue'
 import { admin } from '../../admin/session'
 import { platform, vodSubject } from '../../admin/platform'
 import VodActions from '../../admin/VodActions.vue'
+import VodHeaderPanel from '../../admin/VodHeaderPanel.vue'
 import YoutubeEditor from '../../admin/YoutubeEditor.vue'
 import { site } from '../../site'
 
 const props = defineProps<{ id: string }>()
 const router = useRouter()
-const toast = useToast()
 providePreview()
 
 const vod = ref<AdminVod | null>(null)
@@ -61,27 +60,6 @@ const botGaps = computed(() =>
   ),
 )
 const duration = computed(() => (vod.value ? vodSeconds(vod.value) : 0))
-
-// Visibility: hiding asks first, since the VOD's links stop working; showing it again doesn't.
-const hideOpen = ref(false)
-const hiding = ref(false)
-function toggleHidden(show: boolean) {
-  if (!show) hideOpen.value = true
-  else void setHidden(false)
-}
-async function setHidden(hidden: boolean) {
-  if (!vod.value) return
-  hiding.value = true
-  try {
-    vod.value = await admin.updateVod(vod.value.id, { hidden })
-    hideOpen.value = false
-    toast.show(hidden ? 'Hidden from the site' : 'Public again', { duration: 3000 })
-  } catch (e) {
-    toast.show(errorText(e), { kind: 'error', duration: 5000 })
-  } finally {
-    hiding.value = false
-  }
-}
 
 function saved(v: AdminVod) {
   vod.value = v
@@ -123,20 +101,12 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
         </UiCallout>
 
         <UiCallout v-if="vod.synthetic" tone="info" title="A synthetic VOD">
-          It's made of windows of other VODs{{ vod.synthetic.supersedes ? ', and stands in for them' : '' }}. Its segments,
-          title and tags are edited on its own page; here it can be hidden and its jobs run.
+          It's made of windows of other VODs{{ vod.synthetic.supersedes ? ', and stands in for them' : '' }}. Its segments
+          and thumbnail are edited on its own page.
           <template #actions><UiButton size="sm" :to="`/manage/synthetic/${encodeURIComponent(id)}`">Edit its segments</UiButton></template>
         </UiCallout>
 
-        <section class="panel vods-panel vx-glass-rim">
-          <h2 class="title">{{ vod.title ?? 'Untitled' }}</h2>
-          <div class="visibility">
-            <UiSwitch id="vod-public" :model-value="!vod.hidden" :disabled="hiding" @update:model-value="toggleHidden" />
-            <label for="vod-public">
-              <strong>{{ vod.hidden ? 'Hidden' : 'Public' }}</strong>
-              <span class="vods-muted"> · {{ vod.hidden ? 'only Manage shows it' : 'on the site for everyone' }}</span>
-            </label>
-          </div>
+        <VodHeaderPanel :vod="vod" @saved="saved">
           <dl class="vods-facts">
             <div><dt>Id</dt><dd class="vods-mono">{{ vod.id }}</dd></div>
             <div><dt>Streamed</dt><dd :title="stamp(vod.createdAt)">{{ new Date(vod.createdAt).toLocaleString() }}</dd></div>
@@ -155,7 +125,7 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
               <dd v-else class="vods-muted">not read</dd>
             </div>
           </dl>
-        </section>
+        </VodHeaderPanel>
 
         <!-- A synthetic VOD's details and segments are edited on its own page (the worker refuses them here). -->
         <section v-if="!vod.synthetic" class="panel vods-panel vx-glass-rim">
@@ -215,11 +185,6 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
             <EmotesPanel :vod-id="vod.id" :spliced="isSpliced(vod)" @job="jobStarted" />
           </section>
         </template>
-
-        <UiConfirm v-model:open="hideOpen" title="Hide this VOD?" width="460px" tone="danger" confirm-label="Hide it" :loading="hiding" @confirm="setHidden(true)">
-          It leaves the public site at once: the VOD list, the games pages and the chat. Links to its watch page stop
-          working (they show "not found") until it's made public again. Nothing is deleted.
-        </UiConfirm>
       </template>
     </UiLoadState>
   </ManageShell>
@@ -230,7 +195,4 @@ a { color: inherit; }
 .back { margin: -8px 0 16px; font-size: 13px; }
 .panel { padding: 14px 16px; margin-bottom: 16px; }
 h2 { margin: 0 0 12px; }
-.title { margin: 0 0 8px; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
-.visibility { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 13px; }
-.visibility label { cursor: pointer; }
 </style>

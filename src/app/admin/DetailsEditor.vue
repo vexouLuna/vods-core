@@ -1,11 +1,12 @@
 <script setup lang="ts">
-// A VOD's details: title, thumbnail (a URL, or the default), duration, when it was streamed and why it was cut. Only what changed is
-// sent. A VOD merged into another keeps its details as they were.
+// A VOD's details: thumbnail (a URL, or the default), duration and when it was streamed; a synthetic VOD has only the
+// thumbnail (its duration and date come from its segments). Only what changed is sent. A VOD merged into another keeps
+// its details as they were. Title, tags and cut reason are in the header panel (VodHeaderPanel).
 import { useToast } from '@vex/ui/utils'
 import { computed, ref, watch } from 'vue'
 import { errorText } from '@vex/platform-web'
 import type { AdminVod } from './api'
-import { CUT_REASON_MAX, detailsDraft, detailsErrors, detailsPatch, type DetailsDraft } from './edits'
+import { detailsDraft, detailsErrors, detailsPatch, type DetailsDraft } from './edits'
 import { admin } from './session'
 import TimeInput from './TimeInput.vue'
 
@@ -24,7 +25,8 @@ watch(() => JSON.stringify(detailsDraft(props.vod)), reset)
 
 /** Where the last chapter ends: the duration can't be shorter (the worker also checks the games rows). */
 const contentEnd = computed(() => Math.max(0, ...(props.vod.chapters ?? []).map((c) => c.start + (c.length ?? c.end))))
-const errors = computed(() => detailsErrors(draft.value, contentEnd.value))
+const synthetic = computed(() => !!props.vod.synthetic)
+const errors = computed(() => detailsErrors(draft.value, contentEnd.value, synthetic.value))
 const patch = computed(() => detailsPatch(draft.value, props.vod))
 const dirty = computed(() => Object.keys(patch.value).length > 0)
 const merged = computed(() => !!props.vod.merged_into)
@@ -45,7 +47,8 @@ const zone = (() => {
   return `UTC${sign}${Math.floor(a / 60)}${a % 60 ? `:${String(a % 60).padStart(2, '0')}` : ''}`
 })()
 
-/** What the page shows with no thumbnail of its own: the first YouTube part's. */
+/** What the page shows with no thumbnail of its own: the first YouTube part's (a synthetic VOD's first source's: not
+ * known here, so none is previewed). */
 const fallback = computed(() => props.vod.youtube?.find((u) => u.thumbnail_url)?.thumbnail_url ?? null)
 const preview = computed(() => (errors.value.has('thumbnailUrl') ? null : draft.value.thumbnailUrl.trim() || fallback.value))
 const previewBroken = ref(false)
@@ -70,10 +73,6 @@ async function save() {
 <template>
   <form class="details" @submit.prevent="save">
     <UiCallout v-if="merged" tone="info">Merged into another VOD: only its visibility can change.</UiCallout>
-    <UiField label="Title" :error="errors.get('title')">
-      <template #default="{ id }"><UiInput :id="id" v-model="draft.title" :disabled="merged" :invalid="errors.has('title')" /></template>
-    </UiField>
-
     <div class="thumb">
       <div class="preview">
         <img v-if="preview && !previewBroken" :src="preview" alt="Thumbnail preview" @error="previewBroken = true" />
@@ -82,7 +81,7 @@ async function save() {
       <UiField
         class="thumb-field"
         label="Thumbnail URL"
-        :help="draft.thumbnailUrl.trim() ? undefined : 'Empty: the first YouTube part’s thumbnail.'"
+        :help="draft.thumbnailUrl.trim() ? undefined : synthetic ? 'Empty: its first source’s thumbnail.' : 'Empty: the first YouTube part’s thumbnail.'"
         :error="errors.get('thumbnailUrl')"
       >
         <template #default="{ id }">
@@ -94,7 +93,7 @@ async function save() {
       </UiField>
     </div>
 
-    <div class="grid">
+    <div v-if="!synthetic" class="grid">
       <UiField label="Duration" :error="errors.get('duration')">
         <template #default="{ id }">
           <TimeInput :id="id" v-model="draft.duration" :invalid="errors.has('duration')" />
@@ -109,16 +108,6 @@ async function save() {
         </template>
       </UiField>
     </div>
-
-    <UiField
-      label="Why it was cut"
-      help="Shown on its page once every chapter is cut. Empty: “cut from the YouTube uploads” and each chapter’s cut note."
-      :error="errors.get('cutReason')"
-    >
-      <template #default="{ id }">
-        <UiTextarea :id="id" v-model="draft.cutReason" :rows="2" :maxlength="CUT_REASON_MAX" :disabled="merged" />
-      </template>
-    </UiField>
 
     <UiCallout v-if="error" tone="error" title="Couldn't save the details">{{ error }}</UiCallout>
     <div class="foot">
