@@ -1,12 +1,14 @@
 <script setup lang="ts">
 // The most played games under the latest VOD, as a hand of box-art cards: by how long they can be watched in total
 // (the default), or by how many VODs they're in (the toggle, remembered in this browser). A card sets the game filter on the list
-// below; the game picker still has every game.
+// below; the game picker still has every game. `site.mostPlayed: 'wall'` hangs them in a straight row instead, each
+// framed with a plaque under it (its name and count), like the posters on a cinema's wall.
 import { learnGameColors } from '@vex/ui/utils'
 import { boxArt, type GamePlayed } from '../../index'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { relativeDay } from '../lib/dates'
 import { hasPlayTime, playTime, rankGames, type MostPlayedBy } from '../lib/mostPlayed'
+import { site } from '../site'
 
 const props = withDefaults(defineProps<{ games: GamePlayed[] | null; error?: string | null; limit?: number }>(), { limit: 8 })
 const emit = defineEmits<{ game: [name: string]; retry: [] }>()
@@ -42,11 +44,12 @@ function describe(g: GamePlayed) {
   return `${g.name}: ${g.vods} VOD${g.vods === 1 ? '' : 's'}${time}, last played ${relativeDay(g.lastPlayed)}`
 }
 const art = (g: GamePlayed) => boxArt(g.image, 208) ?? undefined
+const wall = computed(() => site.mostPlayed === 'wall')
 watchEffect(() => learnGameColors(top.value.map((g) => ({ name: g.name, image: art(g) }))))
 </script>
 
 <template>
-  <aside class="strip vods-panel vx-glass-rim" aria-label="Most played games">
+  <aside class="strip vods-panel" :class="{ 'vx-glass-rim': !wall }" aria-label="Most played games">
     <div class="group">
       <div class="head">
         <div class="vods-eyebrow">Most played</div>
@@ -55,7 +58,21 @@ watchEffect(() => learnGameColors(top.value.map((g) => ({ name: g.name, image: a
       <div v-if="error" class="vods-muted small">
         Couldn't load the games. <UiButton size="sm" variant="ghost" @click="emit('retry')">Try again</UiButton>
       </div>
-      <div v-else-if="!games" class="hand" aria-busy="true"><UiSkeleton v-for="i in 6" :key="i" w="104px" h="139px" /></div>
+      <div v-else-if="!games" :class="wall ? 'wall' : 'hand'" aria-busy="true"><UiSkeleton v-for="i in 6" :key="i" w="104px" h="139px" /></div>
+      <ul v-else-if="wall" class="wall" :style="{ '--n': top.length }">
+        <li v-for="g in top" :key="g.name">
+          <button type="button" class="frame" :title="describe(g)" @click="emit('game', g.name)">
+            <span class="poster">
+              <img v-if="art(g)" :src="art(g)" alt="" loading="lazy" decoding="async" />
+              <UiPlaceholder v-else :label="g.name" ratio="3 / 4" flush />
+            </span>
+            <span class="plaque">
+              <span class="plaque-name">{{ g.name }}</span>
+              <span class="plaque-count vods-mono">{{ tag(g) }}</span>
+            </span>
+          </button>
+        </li>
+      </ul>
       <ul v-else class="hand" :style="{ '--n': top.length }">
         <li v-for="(g, i) in top" :key="g.name" :style="{ '--i': i }">
           <button type="button" class="card" :title="describe(g)" @click="emit('game', g.name)">
@@ -114,6 +131,34 @@ watchEffect(() => learnGameColors(top.value.map((g) => ({ name: g.name, image: a
   .hand > li { transform: none; }
   .hand > li + li { margin-left: 8px; }
   .hand > li:hover, .hand > li:focus-within { transform: none; }
+}
+
+/* A wall: the posters side by side, level, each over its plaque; the row scrolls sideways when it doesn't fit. */
+.wall {
+  --gap: 16px; --card: max(72px, min(132px, calc((100cqw - 32px - var(--gap) * (var(--n) - 1)) / var(--n))));
+  list-style: none; margin: 0; padding: 18px 16px 14px; display: flex; gap: var(--gap); justify-content: center; min-width: 0;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--vods-line) transparent;
+}
+.wall > li { flex: none; display: flex; width: var(--card); }
+.frame {
+  display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 0; border: 0; background: none; color: inherit;
+  font: inherit; text-align: center; cursor: pointer;
+}
+.frame .poster {
+  position: relative; display: block; aspect-ratio: 3 / 4; overflow: hidden; border: 1px solid var(--vods-line);
+  background: var(--vods-surface);
+}
+.frame .poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.frame:hover .poster, .frame:focus-visible .poster { border-color: var(--vods-accent); }
+.frame:focus-visible { outline: none; }
+.plaque { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.plaque-name {
+  font-size: 12px; font-weight: 600; line-height: 1.2;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.plaque-count { font-size: 11px; color: var(--vods-muted); }
+@container (max-width: 480px) {
+  .wall { justify-content: flex-start; padding: 12px 0 8px; --gap: 12px; --card: 104px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hand > li { transition: none; }
