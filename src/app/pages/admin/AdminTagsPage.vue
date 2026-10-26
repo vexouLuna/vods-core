@@ -15,6 +15,7 @@ import { blankDraft, draftsOf, homeCategory, previewOf, rawOf, tagChanges, type 
 import TagMark from '../../components/TagMark.vue'
 import { loadTagConfig, TAG_PATTERN_SIZE, TAG_SIZE, TAG_TEXT_MAX, TAG_TEXT_NUDGE, TAG_TEXT_ROTATE, TAG_TEXT_SIZE, TAG_ROTATE, type TagPattern } from '../../lib/vodTags'
 import { site, vodsConfig } from '../../site'
+import { moved } from '../../lib/reorder'
 
 const toast = useToast()
 /** Where each auto tag comes from, for the admin who wonders why it's there. */
@@ -85,14 +86,7 @@ const add = () => drafts.value.push(blankDraft())
 function remove(d: TagDraft) {
   if (!d.auto) drafts.value = drafts.value.filter((x) => x.key !== d.key)
 }
-function move(d: TagDraft, by: -1 | 1) {
-  const list = [...drafts.value]
-  const i = list.indexOf(d)
-  const j = i + by
-  if (j < 0 || j >= list.length) return
-  ;[list[i], list[j]] = [list[j]!, list[i]!]
-  drafts.value = list
-}
+const move = (d: TagDraft, by: -1 | 1) => (drafts.value = moved(drafts.value, drafts.value.indexOf(d), by))
 
 /** A shape changed: only that tag's shape, so unsaved edits elsewhere stay. */
 function takeShape(d: TagDraft, fresh: SiteTags) {

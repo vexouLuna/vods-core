@@ -18,6 +18,7 @@ import { platform, vodSubject } from '../../admin/platform'
 import TimeInput from '../../admin/TimeInput.vue'
 import { AUTO_TAGS, tagConfig, VODS_TAG } from '../../lib/vodTags'
 import { site } from '../../site'
+import { moved } from '../../lib/reorder'
 
 const props = defineProps<{ id?: string }>()
 const router = useRouter()
@@ -90,11 +91,7 @@ async function setSources(hide: boolean) {
 }
 
 // ── segments ──
-const move = (i: number, by: -1 | 1) => {
-  const list = [...segments.value]
-  ;[list[i], list[i + by]] = [list[i + by]!, list[i]!]
-  segments.value = list
-}
+const move = (i: number, by: -1 | 1) => (segments.value = moved(segments.value, i, by))
 const remove = (i: number) => (segments.value = segments.value.filter((_, j) => j !== i))
 const addRow = () => (segments.value = [...segments.value, row()])
 function addWindows(windows: PlaythroughWindow[], game: string | null, gameId: string | null) {

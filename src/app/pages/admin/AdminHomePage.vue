@@ -10,6 +10,7 @@ import { homeCardKey, homeCardLabel, siteOptions, type HomeCard, type PlayDefaul
 import { tagConfig } from '../../lib/vodTags'
 import { timeAgo } from '../../lib/time'
 import { site } from '../../site'
+import { moved } from '../../lib/reorder'
 
 const toast = useToast()
 
@@ -49,11 +50,7 @@ const addable = computed(() => {
 })
 const dirty = computed(() => JSON.stringify(cards.value) !== JSON.stringify(saved.value?.homeCards) || play.value !== saved.value?.playDefault)
 
-function move(i: number, by: -1 | 1) {
-  const next = [...cards.value]
-  ;[next[i], next[i + by]] = [next[i + by]!, next[i]!]
-  cards.value = next
-}
+const move = (i: number, by: -1 | 1) => (cards.value = moved(cards.value, i, by))
 function add() {
   const card = addable.value.find((c) => homeCardKey(c) === adding.value)
   if (card) cards.value = [...cards.value, card]
