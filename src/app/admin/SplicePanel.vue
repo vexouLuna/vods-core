@@ -118,12 +118,14 @@ const {
             </li>
           </template>
         </ol>
+        <!-- The help goes under the row, not in the field: there it would push the button below the input. -->
         <form class="inline" @submit.prevent="merge">
-          <UiField label="Id" help="In its link: /vods/<id>.">
-            <template #default="{ id }"><UiInput :id="id" v-model="mergeIdDraft" mono :placeholder="mergeId" class="vodid" /></template>
+          <UiField label="Id">
+            <template #default="{ id }"><UiInput :id="id" v-model="mergeIdDraft" mono :placeholder="mergeId" class="vodid" aria-describedby="splice-merge-id-help" /></template>
           </UiField>
           <UiButton type="submit" variant="primary" :disabled="!canMerge || gapsBad" :loading="busy === 'merge'">Merge {{ order.length }} VODs</UiButton>
         </form>
+        <p id="splice-merge-id-help" class="vods-muted small help">In its link: /vods/&lt;id&gt;.</p>
       </template>
     </div>
 
@@ -160,6 +162,7 @@ a { color: inherit; }
 .note { margin: 0; font-size: 13px; max-width: 72ch; }
 .small { font-size: 12px; }
 .sub { margin-top: 6px; }
+.help { margin: 0; }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 10px; border: 1px solid var(--vods-line); border-radius: 6px; }
 .gap { padding-left: 16px; }
