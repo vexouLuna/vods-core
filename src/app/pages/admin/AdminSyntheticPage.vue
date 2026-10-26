@@ -39,7 +39,11 @@ const keepUp = ref(false)
 function fill(v: SyntheticVod | null) {
   vod.value = v
   form.value = { id: v?.id ?? '', title: v?.title ?? '', tags: (v?.tags ?? []).join(', '), supersedes: v?.supersedes ?? false }
-  segments.value = (v?.segments ?? []).map((s) => row({ vod_id: s.vod_id, start: s.start, end: s.end, at: s.at, label: s.label ?? '' }))
+  // A playthrough's segments play back to back: its saved `at`s are dropped, or after any edit to a window they would
+  // leave gaps ("Technical difficulties"). A merge keeps them: its gap is where the stream was down.
+  segments.value = (v?.segments ?? []).map((s) =>
+    row({ vod_id: s.vod_id, start: s.start, end: s.end, at: v!.supersedes ? s.at : null, label: s.label ?? '' }),
+  )
   if (!segments.value.length) segments.value = [row()]
   follow.value = v?.auto ? { id: v.auto.game_id, name: null } : null
   keepUp.value = !!v?.auto
