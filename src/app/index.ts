@@ -76,7 +76,6 @@ export function createVodsApp(options: VodsAppOptions): VodsApp {
       home: () => import('./pages/HomePage.vue'),
       list: () => import('./pages/VodsPage.vue'),
       watch: () => import('./pages/WatchPage.vue'),
-      games: () => import('./pages/GamesPage.vue'),
       notFound: () => import('./pages/NotFoundPage.vue'),
       manage: {
         login: () => import('./pages/admin/AdminLoginPage.vue'),

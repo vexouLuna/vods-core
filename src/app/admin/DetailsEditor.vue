@@ -23,7 +23,7 @@ function reset() {
 }
 watch(() => JSON.stringify(detailsDraft(props.vod)), reset)
 
-/** Where the last chapter ends: the duration can't be shorter (the worker also checks the games rows). */
+/** Where the last chapter ends: the duration can't be shorter. */
 const contentEnd = computed(() => Math.max(0, ...(props.vod.chapters ?? []).map((c) => c.start + (c.length ?? c.end))))
 const synthetic = computed(() => !!props.vod.synthetic)
 const errors = computed(() => detailsErrors(draft.value, contentEnd.value, synthetic.value))

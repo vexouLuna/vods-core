@@ -8,7 +8,6 @@ const pages = {
   home: Page,
   list: Page,
   watch: Page,
-  games: Page,
   notFound: Page,
   manage: Object.fromEntries(
     ['login', 'overview', 'jobs', 'job', 'vods', 'vod', 'synthetic', 'storage', 'youtube', 'settings', 'tags', 'home', 'audit'].map((k) => [k, Page]),
@@ -164,7 +163,7 @@ describe('the quiet admin check', () => {
     const { router, session } = await setup({ user: '7', path: '/vods/1' })
     await vi.waitFor(() => expect(codesAsked()).toBe(1))
     await router.push('/vods/2')
-    await router.push('/games/3')
+    await router.push('/vods/3')
     await settle()
     expect(codesAsked()).toBe(1)
     expect(session.session.authenticated).toBe(false)

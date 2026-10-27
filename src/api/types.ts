@@ -53,22 +53,6 @@ export interface RawDrive {
   type: 'vod' | 'live'
 }
 
-export interface RawGameUpload {
-  id: string
-  vodId: string
-  /** On a synthetic VOD's games: the VOD the row belongs to (its times are already on the synthetic timeline). */
-  sourceVodId?: string | null
-  start_time: string
-  end_time: string
-  video_provider?: string | null
-  video_id: string
-  thumbnail_url?: string | null
-  game_id?: string | null
-  game_name?: string | null
-  title?: string | null
-  chapter_image?: string | null
-}
-
 export interface RawVod {
   id: string
   title: string | null
@@ -78,7 +62,6 @@ export interface RawVod {
   chapters: RawChapter[] | null
   youtube: RawUpload[] | null
   drive: RawDrive[] | null
-  games?: RawGameUpload[] | null
   thumbnail_url?: string | null
   stream_id?: string | null
   /** Set on a VOD merged into another one: its footage now starts `offset` seconds into VOD `id`. */

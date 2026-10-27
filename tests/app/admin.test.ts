@@ -98,23 +98,18 @@ describe('AdminClient', () => {
   })
 })
 
-describe('AdminClient: VODs, games, settings and storage', () => {
-  it('lists VODs with only the filters given, and patches, reads and replaces games', async () => {
+describe('AdminClient: VODs, settings and storage', () => {
+  it('lists VODs with only the filters given, and and patches', async () => {
     const fetch = fakeFetch(200, { items: [], next_cursor: null })
     const c = new AdminClient({ base: '', fetch })
     await c.vodList({ q: 'doom', hidden: false, limit: 30, cursor: undefined })
     await c.vodList({ hidden: true })
     await c.updateVod('12', { hidden: true, thumbnailUrl: null })
-    await c.games('12')
-    await c.saveGames('12', [{ start_time: 0, end_time: 60, game_id: '1', game_name: 'Doom' }])
     const sent = fetch.mock.calls.map(([url, init]) => [url, init!.method, init!.body ?? null])
     expect(sent).toEqual([
       ['/api/v2/vods?q=doom&hidden=false&limit=30', 'GET', null],
       ['/api/v2/vods?hidden=true', 'GET', null],
       ['/api/v2/vods/12', 'PATCH', JSON.stringify({ hidden: true, thumbnail_url: null })],
-      ['/admin/vods/12', 'GET', null],
-      ['/api/v2/vods/12/games', 'GET', null],
-      ['/api/v2/vods/12/games', 'PUT', JSON.stringify({ games: [{ start_time: 0, end_time: 60, game_id: '1', game_name: 'Doom' }] })],
       ['/admin/vods/12', 'GET', null],
     ])
   })

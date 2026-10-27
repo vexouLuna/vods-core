@@ -256,7 +256,6 @@ const emoteRows = new Map<string, Json | null>()
 /** vods.hidden: the mock's public API answers 404 for these. */
 const hidden = new Set<string>()
 /** Games rows edited in the mock, by VOD id (the rest come from the public API). */
-const gameRows = new Map<string, Json[]>()
 const audit: Json[] = []
 let auditId = 0
 // The linked ad-free Twitch account (never a token: the worker keeps that) and device flows by id → polls so far.
@@ -433,7 +432,7 @@ const syntheticView = (sv: Synth) => ({ ...sv, auto: autos.get(sv.id) ?? null, h
 /** The synthetic VOD as /admin/vods/{id} and the v2 list show it. */
 const synthVod = (sv: Synth): Json => ({
   id: sv.id, title: sv.title, createdAt: sv.created_at, duration: hms(synthLen(sv)), duration_seconds: synthLen(sv),
-  thumbnail_url: sv.thumbnail_url ?? vods.get(sv.segments[0]?.vod_id ?? '')?.thumbnail_url ?? null, stream_id: null, tags: sv.tags, chapters: [], youtube: [], drive: [], games: [],
+  thumbnail_url: sv.thumbnail_url ?? vods.get(sv.segments[0]?.vod_id ?? '')?.thumbnail_url ?? null, stream_id: null, tags: sv.tags, chapters: [], youtube: [], drive: [],
   ...(sv.cut_reason ? { cut_reason: sv.cut_reason } : {}),
   synthetic: {
     supersedes: sv.supersedes, thumbnailUrl: sv.thumbnail_url ?? null,
@@ -602,7 +601,7 @@ function mergeVods(a: Json, b: Json, gapIn: unknown) {
   a.youtube = [...((a.youtube as Json[]) ?? []), ...((b.youtube as Json[]) ?? [])].map((u) => ({ ...u, part: (count[u.type] = (count[u.type] ?? 0) + 1) }))
   a.drive = [...((a.drive as Json[]) ?? []), ...((b.drive as Json[]) ?? [])]
   setDur(a, offset + durOf(b))
-  Object.assign(b, { chapters: [], youtube: [], drive: [], games: [], merged_into: { id: a.id, offset } })
+  Object.assign(b, { chapters: [], youtube: [], drive: [], merged_into: { id: a.id, offset } })
   return recordSplice('merge', a, b, offset, gap, before, { playedType: played(a) })
 }
 
@@ -631,7 +630,7 @@ function splitVod(a: Json, at: number) {
       const length = Number(c.start) + chapterLen(c) - cut - start
       return { ...c, start, end: length, length }
     }),
-    youtube: parts.slice(idx).map((u, i) => ({ ...u, part: i + 1 })), drive: [], games: [],
+    youtube: parts.slice(idx).map((u, i) => ({ ...u, part: i + 1 })), drive: [],
   }
   setDur(b, durOf(a) - cut)
   a.chapters = ((a.chapters as Json[]) ?? []).filter((c) => Number(c.start) < cut).map((c) => {
@@ -1563,9 +1562,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               if ('duration' in b) {
                 const d = secondsOf(b.duration)
                 const lastChapter = Math.max(0, ...((vod.chapters as Json[]) ?? []).map((c) => Number(c.start) + chapterLen(c)))
-                const lastGame = Math.max(0, ...(gameRows.get(id) ?? []).map((g) => Number(g.end_time)))
-                const last = Math.max(lastChapter, lastGame)
-                if (last > d + 1) return fail(res, 400, `duration ${b.duration} is shorter than the chapters or games (they run to ${hms(last)})`)
+                if (lastChapter > d + 1) return fail(res, 400, `duration ${b.duration} is shorter than the chapters (they run to ${hms(lastChapter)})`)
                 setDur(vod, d)
               }
               if ('tags' in b && !Array.isArray(b.tags)) return fail(res, 400, 'tags must be a list')
@@ -1583,36 +1580,6 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
               if ('createdAt' in b) vod.createdAt = new Date(String(b.createdAt)).toISOString()
               if ('cutReason' in b) row.cut_reason = b.cutReason?.trim() || null
               return send(res, 200, adminVod(sv ? synthVod(sv) : vod))
-            }
-            if (part === 'games' && method === 'GET') {
-              if (!gameRows.has(id)) {
-                const page = (await publicJson(publicApi, `/games?vod_id=${encodeURIComponent(id)}&$limit=100&$sort[start_time]=1`)) as { data: Json[] }
-                gameRows.set(id, page.data)
-              }
-              return send(res, 200, v2 ? { items: gameRows.get(id), next_cursor: null } : gameRows.get(id))
-            }
-            if (part === 'games' && method === 'PUT') {
-              if (vod.merged_into) return fail(res, 409, `vod ${id} is merged into ${vod.merged_into.id}`)
-              if (!Array.isArray(b.games)) return fail(res, 400, 'games must be a list')
-              const dur = durOf(vod)
-              let prevStart = -1
-              let prevEnd = -1
-              const rows: Json[] = []
-              for (const [i, g] of (b.games as Json[]).entries()) {
-                const start = Number(g.start_time)
-                const end = Number(g.end_time)
-                if (!Number.isFinite(start) || start < 0) return fail(res, 400, `games[${i}].start_time must be a number of seconds >= 0`)
-                if (!Number.isFinite(end) || end <= start) return fail(res, 400, `games[${i}] must end after it starts`)
-                if (start < prevStart) return fail(res, 400, `games[${i}] starts before games[${i - 1}]; sort games by start_time`)
-                if (start < prevEnd - 0.5) return fail(res, 400, `games[${i}] starts at ${start}s, inside games[${i - 1}] (which ends at ${prevEnd}s)`)
-                if (dur > 0 && end > dur + 1) return fail(res, 400, `games[${i}] ends at ${end}s, after the end of the VOD (${dur}s)`)
-                if (typeof g.game_name !== 'string' || !g.game_name.trim()) return fail(res, 400, `games[${i}].game_name must be a non-empty string`)
-                prevStart = start
-                prevEnd = end
-                rows.push({ ...g, id: g.id ?? `mock-${id}-${i}`, vodId: id, start_time: String(start), end_time: String(end), updatedAt: iso() })
-              }
-              gameRows.set(id, rows)
-              return send(res, 200, adminVod(vod))
             }
             if (part === 'chapters' && method === 'PUT') {
               if (typeof b.locked !== 'boolean') return fail(res, 400, 'locked must be true or false')

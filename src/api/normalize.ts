@@ -1,6 +1,6 @@
 import { toSeconds } from '../time'
-import type { Chapter, GamePlayed, GameUpload, Preview, Synthetic, Upload, UploadGap, Vod } from '../types'
-import type { RawChapter, RawGamePlayed, RawGameUpload, RawPreview, RawSynthetic, RawUpload, RawVod } from './types'
+import type { Chapter, GamePlayed, Preview, Synthetic, Upload, UploadGap, Vod } from '../types'
+import type { RawChapter, RawGamePlayed, RawPreview, RawSynthetic, RawUpload, RawVod } from './types'
 
 /** Name used for chapters where the stream had no Twitch category. */
 export const NO_CATEGORY = 'No category'
@@ -55,21 +55,6 @@ export function normalizeUploads(raw: RawUpload[]): Upload[] {
   return uploads.sort((a, b) => (a.type === b.type ? a.part - b.part : 0))
 }
 
-export function normalizeGameUpload(g: RawGameUpload): GameUpload {
-  return {
-    id: g.id,
-    vodId: g.vodId,
-    start: Number(g.start_time) || 0,
-    end: Number(g.end_time) || 0,
-    sourceVodId: g.sourceVodId ?? null,
-    videoId: g.video_id,
-    gameId: g.game_id ?? null,
-    gameName: g.game_name ?? null,
-    title: g.title ?? null,
-    thumbnail: g.thumbnail_url ?? g.chapter_image ?? null,
-  }
-}
-
 export function normalizeVod(raw: RawVod): Vod {
   const duration = typeof raw.duration_seconds === 'number' ? raw.duration_seconds : toSeconds(raw.duration ?? '')
   return {
@@ -80,7 +65,6 @@ export function normalizeVod(raw: RawVod): Vod {
     chapters: (raw.chapters ?? []).map(normalizeChapter).sort((a, b) => a.start - b.start),
     uploads: normalizeUploads(raw.youtube ?? []),
     drive: (raw.drive ?? []).map((d) => ({ id: d.id, type: d.type })),
-    games: (raw.games ?? []).map(normalizeGameUpload),
     thumbnail: raw.thumbnail_url ?? null,
     streamId: raw.stream_id ?? null,
     mergedInto: raw.merged_into?.id ? { id: raw.merged_into.id, offset: Number(raw.merged_into.offset) || 0 } : null,

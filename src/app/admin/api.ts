@@ -323,7 +323,7 @@ export interface VodPatch {
   hidden?: boolean
   /** An http(s) URL, or null for the default (YouTube's). */
   thumbnailUrl?: string | null
-  /** HH:MM:SS; refused when chapters or games rows run past it. */
+  /** HH:MM:SS; refused when chapters run past it. */
   duration?: string
   /** ISO 8601 with an offset. */
   createdAt?: string
@@ -331,21 +331,6 @@ export interface VodPatch {
   cutReason?: string | null
   /** Replaces the VOD's tags (the automatic ones included: the archive keeps only known site tags). */
   tags?: string[]
-}
-
-/** A games row (the public `/games` shape): which game was played when, for the games pages. */
-export interface GameRow {
-  id?: string
-  /** Seconds, as strings from the API; numbers are taken too. */
-  start_time: string | number
-  end_time: string | number
-  game_id: string | null
-  game_name: string
-  title?: string | null
-  thumbnail_url?: string | null
-  chapter_image?: string | null
-  video_provider?: string | null
-  video_id?: string | null
 }
 
 /** GET /admin/site/tags: how each VOD tag shows on the site, in order (docs/admin-api.md, "Site tags"). */
@@ -732,14 +717,6 @@ export class AdminClient {
   async updateVod(id: string, patch: VodPatch): Promise<AdminVod> {
     const { thumbnailUrl, createdAt, cutReason, ...rest } = patch
     await this.patchVod(id, { ...rest, thumbnail_url: thumbnailUrl, created_at: createdAt, cut_reason: cutReason })
-    return this.vod(id)
-  }
-  async games(id: string, signal?: AbortSignal): Promise<GameRow[]> {
-    return (await this.request<{ items: GameRow[] }>('GET', `/api/v2/vods/${enc(id)}/games`, undefined, signal)).items
-  }
-  /** Replaces the VOD's games rows: sorted by start, no overlaps, inside the duration. */
-  async saveGames(id: string, games: GameRow[]): Promise<AdminVod> {
-    await this.request('PUT', `/api/v2/vods/${enc(id)}/games`, { games })
     return this.vod(id)
   }
   async saveChapters(id: string, chapters: ChapterEdit[], locked: boolean): Promise<AdminVod> {

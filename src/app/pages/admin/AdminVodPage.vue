@@ -16,7 +16,6 @@ import DetailsEditor from '../../admin/DetailsEditor.vue'
 import DriveEditor from '../../admin/DriveEditor.vue'
 import { vodSeconds } from '../../admin/edits'
 import EmotesPanel from '../../admin/EmotesPanel.vue'
-import GamesEditor from '../../admin/GamesEditor.vue'
 import MediaPreview from '../../admin/preview/MediaPreview.vue'
 import { providePreview } from '../../admin/preview/previewState'
 import SplicePanel from '../../admin/SplicePanel.vue'
@@ -65,7 +64,7 @@ const botGaps = computed(() =>
 const duration = computed(() => (vod.value ? vodSeconds(vod.value) : 0))
 
 // The Timeline workbench's tabs. A link to #censor (the censor review) opens that tab.
-type TimelineTab = 'chapters' | 'games' | 'censor'
+type TimelineTab = 'chapters' | 'censor'
 const tab = ref<TimelineTab>(route.hash === '#censor' ? 'censor' : 'chapters')
 // Each editor's row count and whether it has unsaved changes. `saved` is the count while it was last clean, so a
 // draft reads "Chapters 12 → 13 •".
@@ -87,7 +86,6 @@ const tabs = computed<Option<TimelineTab>[]>(() =>
   (
     [
       ['chapters', 'Chapters'],
-      ['games', 'Games'],
       ['censor', 'Censor'],
     ] as const
   ).map(([value, label]) => {
@@ -202,7 +200,7 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
         <!-- A VOD merged into another, or a synthetic one, has no chapters, uploads or emotes of its own to edit. -->
         <template v-if="!vod.merged_into && !vod.synthetic">
           <!-- The Timeline workbench: the preview stays in view beside the editors that set times from it and draw on it.
-               All three stay mounted under the tabs, so switching keeps a draft; its tab shows a dot. -->
+               Both stay mounted under the tabs, so switching keeps a draft; its tab shows a dot. -->
           <section id="timeline" class="panel vods-panel vx-glass-rim">
             <h2 class="vods-eyebrow">Timeline</h2>
             <div class="workbench">
@@ -213,9 +211,6 @@ onMounted(() => (document.title = `VOD ${props.id} · Manage · ${site.name}`))
                 <UiTabs v-model="tab" :options="tabs" label="Timeline editor" class="tabs" />
                 <div v-show="tab === 'chapters'" role="tabpanel" aria-label="Chapters">
                   <ChaptersEditor :vod="vod" :duration="duration" @saved="saved" @draft="(rows, dirty) => draft('chapters', rows, dirty)" />
-                </div>
-                <div v-show="tab === 'games'" role="tabpanel" aria-label="Games">
-                  <GamesEditor :vod="vod" :duration="duration" @saved="saved" @draft="(rows, dirty) => draft('games', rows, dirty)" />
                 </div>
                 <div v-show="tab === 'censor'" role="tabpanel" aria-label="Censor">
                   <CensorEditor :vod="vod" :duration="duration" @saved="saved" @draft="(rows, dirty) => draft('censor', rows, dirty)" />

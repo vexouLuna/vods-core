@@ -19,10 +19,8 @@ describe('vodThumbnail', () => {
   it("prefers the archive's own thumbnail over the uploads'", () => {
     expect(vodThumbnail(normalizeVod(raw))).toBe('own.jpg')
   })
-  it('falls back to the first upload, then a game upload', () => {
+  it('falls back to the first upload', () => {
     expect(vodThumbnail(normalizeVod({ ...raw, thumbnail_url: null }))).toBe('part1.jpg')
-    const games = [{ id: 'g', vodId: '42', start_time: '0', end_time: '1', video_id: 'v', thumbnail_url: 'game.jpg' }]
-    expect(vodThumbnail(normalizeVod({ ...raw, thumbnail_url: null, youtube: [], games }))).toBe('game.jpg')
     expect(vodThumbnail(normalizeVod({ ...raw, thumbnail_url: null, youtube: [] }))).toBeNull()
   })
 })

@@ -1,7 +1,7 @@
 // Editing a VOD's chapters and uploads: draft rows for the forms, the same checks the worker makes (so mistakes show
 // next to the row before saving), and the request bodies. Pure functions; the pages hold the drafts.
 import { boxArt, normalizeVod, toClock, toSeconds, type RawChapter, type RawDrive, type RawUpload } from '../../index'
-import type { AdminVod, CensorCover, CensorRange, CensorRegion, ChapterEdit, GameRow, VodPatch, YoutubeEdit } from './api'
+import type { AdminVod, CensorCover, CensorRange, CensorRegion, ChapterEdit, VodPatch, YoutubeEdit } from './api'
 import { isAutoTag, vodTags } from '../lib/vodTags'
 
 let nextKey = 1
@@ -483,63 +483,4 @@ export function detailsPatch(d: DetailsDraft, vod: AdminVod): VodPatch {
     if (at) patch.createdAt = at
   }
   return patch
-}
-
-// ---- games rows ----
-
-export interface GameDraft extends GameValue {
-  key: number
-  start: number
-  end: number
-  /** The row's other fields (upload id, title, thumbnail…), sent back unchanged. */
-  rest: Omit<GameRow, 'start_time' | 'end_time' | 'game_id' | 'game_name' | 'chapter_image'>
-  /** The saved box art, kept when the game didn't change. */
-  image: string | null
-}
-
-export function gameDrafts(rows: readonly GameRow[] | null | undefined): GameDraft[] {
-  return (rows ?? []).map(({ start_time, end_time, game_id, game_name, chapter_image, ...rest }) => ({
-    key: key(),
-    name: game_name || null,
-    gameId: game_id ?? null,
-    imageTemplate: templateOf(chapter_image),
-    image: chapter_image ?? null,
-    start: Number(start_time),
-    end: Number(end_time),
-    rest,
-  }))
-}
-
-/** Games rows from the VOD's chapters (cut ones and gaps left out), as a starting point. */
-export function gamesFromChapters(chapters: readonly RawChapter[] | null | undefined): GameDraft[] {
-  return chapterDrafts(chapters)
-    .filter((c) => !c.restricted && c.kind !== 'gap' && c.name)
-    .sort((a, b) => a.start - b.start)
-    .map((c) => ({ key: key(), name: c.name, gameId: c.gameId, imageTemplate: c.imageTemplate, image: null, start: c.start, end: c.end, rest: {} }))
-}
-
-export function newGame(rows: readonly GameDraft[], duration: number): GameDraft {
-  return { key: key(), name: null, gameId: null, imageTemplate: null, image: null, ...nextSpan(rows, duration), rest: {} }
-}
-
-/** Problems per row (by key), as the worker checks them: a game, then as `spanErrors`. */
-export function gameErrors(rows: readonly GameDraft[], duration: number): Map<number, string> {
-  return spanErrors(rows, duration, 'row', (r) => (r.name?.trim() ? null : 'Pick a game.'))
-}
-
-/** The PUT body's rows, sorted by start (the worker refuses them unsorted). */
-export function gameEdits(rows: readonly GameDraft[]): GameRow[] {
-  return [...rows]
-    .sort((a, b) => a.start - b.start)
-    .map((r) => {
-      const same = r.image && templateOf(r.image) === r.imageTemplate
-      return {
-        ...r.rest,
-        start_time: r.start,
-        end_time: r.end,
-        game_id: r.gameId,
-        game_name: (r.name ?? '').trim(),
-        chapter_image: same ? r.image : boxArt(r.imageTemplate, 40),
-      }
-    })
 }

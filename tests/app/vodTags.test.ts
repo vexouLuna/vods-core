@@ -6,7 +6,7 @@ import { splitTags, tagStyle, vodTags } from '../../src/app/lib/vodTags'
 const now = new Date(2026, 9, 2, 12, 0).getTime()
 const daysAgo = (n: number) => new Date(now - n * 24 * 3600 * 1000)
 const vod = (o: Partial<Vod> = {}): Vod =>
-  ({ id: '1', title: '', createdAt: daysAgo(30), duration: 0, chapters: [], uploads: [], drive: [], games: [], thumbnail: null, streamId: null, tags: [], ...o }) as Vod
+  ({ id: '1', title: '', createdAt: daysAgo(30), duration: 0, chapters: [], uploads: [], drive: [], thumbnail: null, streamId: null, tags: [], ...o }) as Vod
 const syn = (first: Date | null, last: Date | null): Synthetic => ({
   supersedes: false,
   segments: [],

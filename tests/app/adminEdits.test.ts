@@ -10,10 +10,6 @@ import {
   detailsPatch,
   driveId,
   formatTime,
-  gameDrafts,
-  gameEdits,
-  gameErrors,
-  gamesFromChapters,
   headerDraft,
   headerErrors,
   headerPatch,
@@ -184,38 +180,6 @@ describe('header draft', () => {
     expect(lockedTags(v, now).map((l) => l.value)).toEqual(['hidden', 'merged', 'new', 'vods'])
     const s = vod({ tags: ['compilation'], synthetic: { supersedes: true, segments: [] } })
     expect(lockedTags(s, now + 30 * 86400_000).map((l) => l.value)).toEqual(['merge or split', 'compilation'])
-  })
-})
-
-describe('games draft', () => {
-  const row = { start_time: '60', end_time: 120, game_id: '9', game_name: 'Doom', chapter_image: 'https://img/box-40x53.jpg', video_id: 'yt' }
-
-  it('round-trips a row, keeping its box art and other fields, sorted by start', () => {
-    const drafts = gameDrafts([row, { ...row, start_time: 0, end_time: 60, game_name: 'Quake', chapter_image: undefined }])
-    const out = gameEdits(drafts)
-    expect(out.map((r) => r.game_name)).toEqual(['Quake', 'Doom'])
-    expect(out[1]).toMatchObject({ start_time: 60, end_time: 120, chapter_image: row.chapter_image, video_id: 'yt' })
-  })
-
-  it('flags a missing game, a backwards row, overlap and running past the VOD', () => {
-    const [a, b, c, d] = gameDrafts([
-      { ...row, start_time: 0, end_time: 100 },
-      { ...row, start_time: 50, end_time: 150 },
-      { ...row, start_time: 200, end_time: 190 },
-      { ...row, start_time: 300, end_time: 5000, game_name: '' },
-    ])
-    const errors = gameErrors([a!, b!, c!, d!], 3600)
-    expect(errors.has(a!.key)).toBe(false)
-    expect(errors.get(b!.key)).toMatch(/Overlaps/)
-    expect(errors.get(c!.key)).toMatch(/after the start/)
-    expect(errors.get(d!.key)).toBe('Pick a game.')
-    const [e] = gameDrafts([{ ...row, start_time: 0, end_time: 5000 }])
-    expect(gameErrors([e!], 3600).get(e!.key)).toMatch(/Ends after/)
-  })
-
-  it('copy from chapters leaves out cut chapters', () => {
-    const rows = gamesFromChapters([raw({ name: 'A', start: 0, end: 100 }), raw({ name: 'B', start: 100, end: 50, restricted: true })])
-    expect(rows.map((r) => [r.name, r.start, r.end])).toEqual([['A', 0, 100]])
   })
 })
 

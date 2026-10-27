@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Manage → VOD's preview: the VOD's file on the server (the source, or what the censor step made of it) or its YouTube
 // uploads, seekable frame by frame, with the censor ranges on a timeline and their boxes drawn over the picture. The
-// chapters, games and censor editors below set times from its playhead and jump it (previewState).
+// chapters and censor editors below set times from its playhead and jump it (previewState).
 //
 // Only one browser tab on the whole server streams a server file at a time (useMediaLease). Nothing is claimed until
 // Load is pressed; when another tab has the files, this says who and since when (from the file list, which claims
