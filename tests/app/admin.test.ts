@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProblemError } from '@vex/platform-web'
-import { AdminClient } from '../../src/app/admin/api'
+import { AdminClient, followedGames } from '../../src/app/admin/api'
 
 function fakeFetch(status: number, body: unknown, headers: Record<string, string> = {}) {
   return vi.fn(async (_url: string, _init?: RequestInit) =>
@@ -167,5 +167,13 @@ describe('AdminClient: VODs, settings and storage', () => {
     const err = await bad.vodList({ cursor: 'x' }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ProblemError)
     expect((err as ProblemError).message).toBe('not a cursor')
+  })
+})
+
+describe('followedGames', () => {
+  it('reads both shapes of auto', () => {
+    expect(followedGames({ game_ids: ['1', '2'] })).toEqual(['1', '2'])
+    expect(followedGames({ game_id: '1' })).toEqual(['1'])
+    expect(followedGames(null)).toEqual([])
   })
 })

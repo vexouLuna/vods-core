@@ -502,8 +502,9 @@ export interface SyntheticVod {
   /** When it was made, and when its segments, title or tags last changed. */
   made_at: string | null
   changed_at: string | null
-  /** A game it follows: its segments are every window of it, kept so by the archive. Null: by hand. */
-  auto: { game_id: string } | null
+  /** The games it follows: its segments are every window of any of them, oldest VOD first, kept so by the archive. Null: by
+   * hand. One made before it could follow several (or by an older archive) has `game_id` instead: read it with `followedGames`. */
+  auto: { game_ids: string[] } | { game_id: string } | null
   segments: SyntheticSegment[]
   /** Set when it has compiled uploads; outdated: its segments changed since they were made. Absent from older archives. */
   compiled?: { outdated: boolean } | null
@@ -536,9 +537,13 @@ export interface SyntheticInput {
   supersedes?: boolean
   tags?: string[]
   segments?: Partial<SyntheticSegment>[]
-  /** Follow a game (its windows replace `segments`); null stops. Segments sent without it stop it too. */
-  auto?: { game_id: string } | null
+  /** Follow games (their windows replace `segments`); null stops. Segments sent without it stop it too. `game_ids` needs
+   * twitch-archive#239; `game_id` (one game) is the older shape. */
+  auto?: { game_ids: string[] } | { game_id: string } | null
 }
+
+/** The games `auto` follows, either shape; none when it follows nothing. */
+export const followedGames = (auto: SyntheticVod['auto']): string[] => (!auto ? [] : 'game_ids' in auto ? auto.game_ids : [auto.game_id])
 
 /** GET /api/v2/playthrough-candidates: a window of a real, shown VOD playing the game, oldest first. */
 export interface PlaythroughWindow {
