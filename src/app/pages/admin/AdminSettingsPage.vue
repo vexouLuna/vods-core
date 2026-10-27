@@ -7,6 +7,7 @@ import { timeAgo } from '../../lib/time'
 import { computed, onMounted, ref } from 'vue'
 import { errorText } from '@vex/platform-web'
 import type { RuntimeSetting } from '../../admin/api'
+import GameListInput from '../../admin/GameListInput.vue'
 import ManageShell from '../../admin/ManageShell.vue'
 import { admin } from '../../admin/session'
 import { settingChanges, settingLabel, showValue, toDraft, type SettingDraft } from '../../admin/settings'
@@ -15,6 +16,8 @@ import { site } from '../../site'
 
 const toast = useToast()
 const GROUPS = ['Capture', 'YouTube', 'Pipeline', 'Runner']
+// The list settings that hold game names (they get the Twitch category search); the other lists stay free tags.
+const GAME_LISTS = ['restricted_games', 'censor_allow_games']
 
 const items = ref<RuntimeSetting[] | null>(null)
 const loadError = ref<string | null>(null)
@@ -187,6 +190,12 @@ onMounted(() => {
                 type="number"
                 mono
                 :invalid="pending.errors.has(s.key)"
+              />
+              <GameListInput
+                v-else-if="s.type === 'list' && GAME_LISTS.includes(s.key)"
+                v-model="(drafts[s.key] as string[])"
+                class="list"
+                :label="settingLabel(s.key)"
               />
               <UiTagInput
                 v-else-if="s.type === 'list'"

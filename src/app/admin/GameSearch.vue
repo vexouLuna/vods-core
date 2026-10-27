@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Pick a chapter's game from Twitch's categories (GET /admin/twitch/games). Shows the current game with its box art;
-// typing searches, arrows + Enter pick, "No category" clears it.
+// typing searches, arrows + Enter pick, "No category" clears it. `freeText` also offers the typed text as it is (a game
+// Twitch can't find); `blank` words the closed button as an "add" button instead of showing the current game.
 import { boxArt, NO_CATEGORY } from '../../index'
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { errorText } from '@vex/platform-web'
@@ -8,7 +9,7 @@ import type { TwitchGame } from './api'
 import type { GameValue } from './edits'
 import { admin } from './session'
 
-const props = defineProps<{ label?: string; invalid?: boolean }>()
+const props = defineProps<{ label?: string; invalid?: boolean; freeText?: boolean; blank?: string }>()
 const model = defineModel<GameValue>({ required: true })
 
 const open = ref(false)
@@ -20,8 +21,12 @@ const active = ref(0)
 const input = ref<{ focus(): void } | null>(null)
 const listId = useId()
 
+const typed = computed(() => query.value.trim())
 const options = computed<GameValue[]>(() => [
   ...results.value.map((g) => ({ name: g.name, gameId: g.gameId, imageTemplate: g.imageTemplate })),
+  ...(props.freeText && !loading.value && typed.value && !results.value.some((g) => g.name.toLowerCase() === typed.value.toLowerCase())
+    ? [{ name: typed.value, gameId: null, imageTemplate: null }]
+    : []),
   { name: null, gameId: null, imageTemplate: null },
 ])
 
@@ -74,7 +79,7 @@ function onKey(e: KeyboardEvent) {
   else if (e.key === 'ArrowUp') active.value = Math.max(active.value - 1, 0)
   else if (e.key === 'Enter') {
     const g = options.value[active.value]
-    if (g && (results.value.length || !query.value.trim())) pick(g)
+    if (g && (props.freeText ? !loading.value : results.value.length || !typed.value)) pick(g)
   } else if (e.key === 'Escape') {
     e.stopPropagation()
     close()
@@ -90,7 +95,10 @@ function onBlur(e: FocusEvent) {
 
 <template>
   <div class="game" :class="{ 'is-invalid': props.invalid }" @focusout="onBlur">
-    <button v-if="!open" type="button" class="current vods-input" :aria-label="`${label ?? 'Game'}: ${model.name ?? NO_CATEGORY}. Change`" @click="start">
+    <button v-if="!open && blank" type="button" class="current vods-input" :aria-label="blank" @click="start">
+      <span class="name vods-muted">{{ blank }}</span>
+    </button>
+    <button v-else-if="!open" type="button" class="current vods-input" :aria-label="`${label ?? 'Game'}: ${model.name ?? NO_CATEGORY}. Change`" @click="start">
       <img v-if="boxArt(model.imageTemplate, 30)" :src="boxArt(model.imageTemplate, 30)!" alt="" class="art" />
       <span v-else class="art ph" aria-hidden="true" />
       <span class="name" :class="{ 'vods-muted': !model.name }">{{ model.name ?? NO_CATEGORY }}</span>
@@ -117,7 +125,7 @@ function onBlur(e: FocusEvent) {
         <li
           v-for="(g, i) in options"
           :id="`${listId}-${i}`"
-          :key="g.gameId ?? 'none'"
+          :key="g.gameId ?? g.name ?? 'none'"
           role="option"
           :aria-selected="i === active"
           :class="{ 'is-active': i === active }"
@@ -126,7 +134,7 @@ function onBlur(e: FocusEvent) {
         >
           <img v-if="boxArt(g.imageTemplate, 30)" :src="boxArt(g.imageTemplate, 30)!" alt="" class="art" loading="lazy" />
           <span v-else class="art ph" aria-hidden="true" />
-          <span :class="{ 'vods-muted': !g.name }">{{ g.name ?? NO_CATEGORY }}</span>
+          <span :class="{ 'vods-muted': !g.name }">{{ g.name ? (g.gameId || !freeText ? g.name : `Use “${g.name}”`) : NO_CATEGORY }}</span>
         </li>
       </ul>
       <UiButton class="cancel" variant="ghost" icon label="Cancel" @click="close">×</UiButton>
