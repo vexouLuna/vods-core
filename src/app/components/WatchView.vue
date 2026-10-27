@@ -154,7 +154,7 @@ watchEffect(() => learnGameColors(posterGames.value))
                 </div>
               </div>
             </div>
-            <div v-else-if="curBad" class="unavail">
+            <div v-else-if="curBad" class="unavail corner">
               <div class="vods-panel vx-glass-rim un-card" role="status">
                 <div class="vods-eyebrow">{{ label(partIndex) }} of {{ spans.length }}</div>
                 <b>This part isn't playable on YouTube <span class="vods-muted">({{ statusText[status[partIndex]!] }})</span></b>
@@ -351,9 +351,12 @@ watchEffect(() => learnGameColors(posterGames.value))
 .unavail { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; background: rgb(0 0 0 / 0.75); }
 /* The player's own cards (next stream, end of the VOD) sit straight on the black where the video was, no panel. */
 .unavail.bare { background: #000; }
-.un-card { max-width: 400px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
-.un-card p { font-size: 13px; line-height: 1.5; margin: 0; }
-.un-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+/* A part YouTube won't play: a small box in the corner. The embed stays visible and clickable under it (YouTube's
+   own error or "sign in to confirm you're not a bot" button lives in the iframe), so only the box takes clicks. */
+.unavail.corner { inset: auto auto 8px 8px; display: block; padding: 0; background: none; pointer-events: none; }
+.unavail.corner .un-card { pointer-events: auto; max-width: min(360px, calc(100cqw - 16px)); padding: 6px 8px 6px 10px; gap: 10px; flex-direction: row; align-items: center; font-size: 12px; line-height: 1.3; }
+.unavail.corner .un-card p, .unavail.corner .vods-eyebrow { display: none; }
+.unavail.corner .un-actions { margin-top: 0; gap: 6px; flex: none; }
 .smark-next { color: var(--vods-accent); margin-right: 4px; }
 .handoff-actions { align-items: center; justify-content: center; gap: 16px; flex-wrap: nowrap; }
 .handoff-btns { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -392,9 +395,9 @@ watchEffect(() => learnGameColors(posterGames.value))
   .stage { display: contents; }
   .video { flex: none; container-type: inline-size; }
   .video-box { width: 100%; }
-  .video:has(.unavail) .video-box { aspect-ratio: auto; min-height: 56.25cqw; display: grid; }
-  .unavail { position: relative; }
-  .video:has(.unavail) .yt { visibility: hidden; }
+  .video:has(.unavail:not(.corner)) .video-box { aspect-ratio: auto; min-height: 56.25cqw; display: grid; }
+  .unavail:not(.corner) { position: relative; }
+  .video:has(.unavail:not(.corner)) .yt { visibility: hidden; }
   /* Same controls as desktop, reflowed: title on its own line, everything else wraps below it */
   .row { flex-wrap: wrap; gap: 6px; }
   .time { margin-right: auto; }
