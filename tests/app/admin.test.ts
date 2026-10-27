@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ProblemError } from '@vex/platform-web'
-import { AdminClient } from '../../src/app/admin/api'
+import { AdminClient, followedGames } from '../../src/app/admin/api'
 
 function fakeFetch(status: number, body: unknown, headers: Record<string, string> = {}) {
   return vi.fn(async (_url: string, _init?: RequestInit) =>
@@ -48,6 +48,7 @@ describe('AdminClient', () => {
     await c.createSynthetic({ id: 'elden-ring', tags: ['compilation'], segments: [{ vod_id: '1', start: 5 }] })
     await c.updateSynthetic('elden ring', { title: 'x' })
     await c.playthroughCandidates('512953')
+    await c.playthroughCandidates(['512953', '21779'])
     await c.syntheticDmca('elden ring')
     const sent = fetch.mock.calls.map(([url, init]) => [url, init!.method, init!.body ?? null])
     expect(sent).toEqual([
@@ -55,6 +56,7 @@ describe('AdminClient', () => {
       ['/api/v2/synthetic', 'POST', JSON.stringify({ id: 'elden-ring', tags: ['compilation'], segments: [{ vod_id: '1', start: 5 }] })],
       ['/api/v2/synthetic/elden%20ring', 'PUT', JSON.stringify({ title: 'x' })],
       ['/api/v2/playthrough-candidates?game_id=512953', 'GET', null],
+      ['/api/v2/playthrough-candidates?game_id=512953&game_id=21779', 'GET', null],
       ['/api/v2/synthetic/elden%20ring/dmca', 'GET', null],
     ])
   })
@@ -167,5 +169,13 @@ describe('AdminClient: VODs, settings and storage', () => {
     const err = await bad.vodList({ cursor: 'x' }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ProblemError)
     expect((err as ProblemError).message).toBe('not a cursor')
+  })
+})
+
+describe('followedGames', () => {
+  it('reads both shapes of auto', () => {
+    expect(followedGames({ game_ids: ['1', '2'] })).toEqual(['1', '2'])
+    expect(followedGames({ game_id: '1' })).toEqual(['1'])
+    expect(followedGames(null)).toEqual([])
   })
 })

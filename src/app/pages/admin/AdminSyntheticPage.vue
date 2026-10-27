@@ -13,8 +13,9 @@ import { computed, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { errorText } from '@vex/platform-web'
 import { JobsTable, usePoll } from '@vex/platform-web/vue'
-import type { AdminVod, PlaythroughWindow, SyntheticDmca, SyntheticInput, SyntheticVod } from '../../admin/api'
+import { followedGames, type AdminVod, type PlaythroughWindow, type SyntheticDmca, type SyntheticInput, type SyntheticVod } from '../../admin/api'
 import DetailsEditor from '../../admin/DetailsEditor.vue'
+import GameIdListInput, { type GameRef } from '../../admin/GameIdListInput.vue'
 import ManageShell from '../../admin/ManageShell.vue'
 import PlaythroughBuilder from '../../admin/PlaythroughBuilder.vue'
 import { admin } from '../../admin/session'
@@ -44,9 +45,12 @@ const form = ref({ id: '', title: '', tags: [] as string[] })
 const full = ref<AdminVod | null>(null)
 const header = ref<InstanceType<typeof VodHeaderPanel> | null>(null)
 const segments = ref<Row[]>([])
-// The game a playthrough follows (the archive keeps its segments to that game's windows), or the one it was just built from.
-const follow = ref<{ id: string; name: string | null } | null>(null)
+// The games a playthrough follows (the archive keeps its segments to their windows), or the ones it was just built from.
+// A name is null until known: from the builder, the search, or the VOD's own chapters (`gameName`).
+const follows = ref<GameRef[]>([])
 const keepUp = ref(false)
+const gameName = (g: GameRef) =>
+  g.name ?? full.value?.chapters?.find((c) => c.gameId != null && String(c.gameId) === g.id)?.name ?? `game ${g.id}`
 
 function fill(v: SyntheticVod | null) {
   vod.value = v
@@ -59,7 +63,7 @@ function fill(v: SyntheticVod | null) {
     row({ vod_id: s.vod_id, start: s.start, end: s.end, at: keepAt ? s.at : null, label: s.label ?? '' }),
   )
   if (!segments.value.length) segments.value = [row()]
-  follow.value = v?.auto ? { id: v.auto.game_id, name: null } : null
+  follows.value = followedGames(v?.auto ?? null).map((id) => ({ id, name: follows.value.find((g) => g.id === id)?.name ?? null }))
   keepUp.value = !!v?.auto
 }
 async function load() {
@@ -116,8 +120,9 @@ async function setSources(hide: boolean) {
 const move = (i: number, by: -1 | 1) => (segments.value = moved(segments.value, i, by))
 const remove = (i: number) => (segments.value = segments.value.filter((_, j) => j !== i))
 const addRow = () => (segments.value = [...segments.value, row()])
-function addWindows(windows: PlaythroughWindow[], game: string | null, gameId: string | null) {
-  if (gameId) follow.value = { id: gameId, name: game }
+function addWindows(windows: PlaythroughWindow[], games: GameRef[]) {
+  follows.value = [...follows.value, ...games.filter((g) => !follows.value.some((x) => x.id === g.id))]
+  const game = games.map((g) => g.name).filter(Boolean).join(' + ') || null
   const kept = segments.value.filter((s) => s.vod_id.trim())
   segments.value = [...kept, ...windows.map((w) => row({ vod_id: w.segment.vod_id, start: w.segment.start, end: w.segment.end, label: w.segment.label }))]
   // A playthrough is tagged so (by hand: any tag can be taken off); an existing one's go to its header panel's draft.
@@ -146,7 +151,9 @@ const idError = computed(() => {
 const segError = (s: Row) =>
   !s.vod_id.trim() ? 'Give a VOD id.' : s.start != null && s.end != null && s.end <= s.start ? 'The end must come after the start.' : null
 const segErrors = computed(() => segments.value.map(segError))
-const valid = computed(() => !idError.value && segments.value.length > 0 && segErrors.value.every((e) => !e))
+const valid = computed(
+  () => !idError.value && segments.value.length > 0 && segErrors.value.every((e) => !e) && !(keepUp.value && !follows.value.length),
+)
 const total = computed(() =>
   segments.value.every((s) => s.start != null && s.end != null) ? segments.value.reduce((n, s) => n + (s.end! - s.start!), 0) : null,
 )
@@ -167,8 +174,8 @@ async function save() {
       ...(s.label.trim() ? { label: s.label.trim() } : {}),
     })),
   }
-  // Following a game, the archive makes the segments (it ignores these); without, they are a hand edit, which stops it.
-  if (keepUp.value && follow.value) body.auto = { game_id: follow.value.id }
+  // Following games, the archive makes the segments (it ignores these); without, they are a hand edit, which stops it.
+  if (keepUp.value && follows.value.length) body.auto = { game_ids: follows.value.map((g) => g.id) }
   try {
     if (isNew.value) {
       const made = await admin.createSynthetic({ ...body, id: form.value.id.trim(), title: form.value.title.trim() || null, tags: form.value.tags })
@@ -313,11 +320,23 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
             <UiButton size="sm" class="push" @click="builderOpen = !builderOpen">{{ builderOpen ? 'Close builder' : 'Build a playthrough…' }}</UiButton>
           </div>
           <div v-if="builderOpen" class="builder"><PlaythroughBuilder @add="addWindows" /></div>
-          <UiCheckbox
-            v-if="follow"
-            v-model="keepUp"
-            :label="`Keep up to date: every window of ${follow.name ?? `game ${follow.id}`}, new streams included (the segments below then aren't saved)`"
-          />
+          <template v-if="follows.length || keepUp">
+            <UiCheckbox
+              v-model="keepUp"
+              :label="`Keep up to date: every window of ${follows.length ? follows.map(gameName).join(', ') : 'the games it follows'}, new streams included (the segments below then aren't saved)`"
+            />
+            <UiField
+              v-if="keepUp"
+              label="Follows"
+              class="follows"
+              help="Every window of any of these, oldest VOD first; games back to back in one VOD are one segment. Saving rebuilds the segments."
+              :error="follows.length ? undefined : 'Pick a game to follow.'"
+            >
+              <template #default>
+                <GameIdListInput v-model="follows" label="Games it follows" :name-of="gameName" />
+              </template>
+            </UiField>
+          </template>
           <p class="vods-muted small">
             Each is a window of a VOD (a Twitch id, a merged one like 123-m, or another synthetic), played one after another. Empty start or end: the source's own; empty
             “at”: right after the one before.
@@ -412,6 +431,7 @@ a { color: inherit; }
 .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .head .sec { margin: 0; }
 .push { margin-left: auto; }
+.follows { margin: 8px 0; }
 .builder { margin: 10px 0; padding: 12px; border: 1px solid var(--vods-line); border-radius: var(--vods-radius, 8px); }
 .segs { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
 .seg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 10px; padding-top: 8px; border-top: 1px solid var(--vods-line); }

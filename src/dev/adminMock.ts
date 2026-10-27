@@ -380,7 +380,7 @@ async function youtubeCheckJson(api: string): Promise<Json> {
 
 async function vodOf(api: string, id: string): Promise<Json | null> {
   if (!id || deleted.has(id)) return null
-  const sv = synthetics.get(id)
+  const sv = await adopt(api, id)
   if (sv) return synthVod(sv)
   if (!vods.has(id)) {
     try {
@@ -422,17 +422,90 @@ type Synth = {
 }
 const synthetics = new Map<string, Synth>()
 const synthLen = (sv: Synth) => sv.segments.reduce((n, g) => Math.max(n, g.at + g.end - g.start), 0)
-// The game each follows (the mock keeps it, but doesn't recompute the segments from it).
-const autos = new Map<string, { game_id: string }>()
+// The games each follows ({game_ids}, or an older one's {game_id}): sent with a POST or PUT, its segments are every window
+// of those games (`gameWindows`), but the mock doesn't keep them up to date afterwards.
+const autos = new Map<string, Json>()
 const keepAuto = (id: string, b: Json) => {
-  if (b.auto) autos.set(id, b.auto as { game_id: string })
+  if (b.auto) autos.set(id, b.auto as Json)
   else if ('auto' in b || 'segments' in b) autos.delete(id)
+}
+const followed = (auto: Json): string[] => (Array.isArray(auto.game_ids) ? auto.game_ids.map(String) : auto.game_id ? [String(auto.game_id)] : [])
+
+/** Where the public archive's newest shown VODs play any of `games`, oldest first, as playthrough-candidates items: a
+ * VOD's chapters of them less than a second apart (or with a merge's gap between) make one window, like the worker's.
+ * Public chapters keep the legacy shape: `end` is the length. */
+async function gameWindows(api: string, games: string[]): Promise<Json[]> {
+  const recent = ((await publicJson(api, '/vods?$limit=50&$sort[createdAt]=-1')) as { data: Json[] }).data
+  return recent
+    .filter((v) => !hidden.has(String(v.id)) && !(v.tags as string[] | undefined)?.includes('compilation'))
+    .sort((a, c) => Date.parse(a.createdAt) - Date.parse(c.createdAt))
+    .flatMap((v) => {
+      vods.set(String(v.id), v)
+      const out: [number, number][] = []
+      let reach: number | null = null
+      for (const c of [...((v.chapters as Json[]) ?? [])].sort((a, c) => (Number(a.start) || 0) - (Number(c.start) || 0))) {
+        const start = Number(c.start) || 0
+        const end = Math.min(start + (Number(c.end) || 0), durOf(v) || Infinity)
+        if (end <= start) continue
+        if (c.kind === 'gap') reach = reach != null && start - reach < 1 ? Math.max(reach, end) : reach
+        else if (c.restricted === true) reach = null
+        else if (games.includes(String(c.gameId))) {
+          const last = out[out.length - 1]
+          if (last && reach != null && start - reach < 1) last[1] = Math.max(last[1], end)
+          else out.push([start, end])
+          reach = out[out.length - 1]![1]
+        }
+      }
+      const label = String(v.createdAt).slice(0, 10)
+      return out.map(([start, end]) => ({
+        vod_id: String(v.id), title: v.title ?? null, created_at: v.createdAt, start, end, length: end - start, segment: { vod_id: String(v.id), start, end, label },
+      }))
+    })
+}
+type Problem = { status: number; code: string; error: string }
+/** A body's segments from its `auto`, when it has one (the worker ignores the segments sent with it). */
+async function withAuto(api: string, b: Json): Promise<Json | Problem> {
+  if (!b.auto) return b
+  const games = followed(b.auto as Json)
+  if (!games.length) return { status: 422, code: 'invalid_synthetic', error: 'auto must be {"game_ids": ["<game id>", ...]}' }
+  const windows = await gameWindows(api, games)
+  if (!windows.length) return { status: 422, code: 'invalid_synthetic', error: `No VOD plays ${games.join(', ')}.` }
+  return { ...b, segments: windows.map((w) => w.segment) }
+}
+/** A synthetic VOD the public archive has and the mock doesn't yet: its segments and, tagged compilation, the game most
+ * of it plays as an older archive's {game_id} (the public API doesn't say what it follows). */
+async function adopt(api: string, id: string): Promise<Synth | undefined> {
+  if (synthetics.has(id) || deleted.has(id) || (vods.has(id) && !vods.get(id)!.synthetic)) return synthetics.get(id)
+  const v = (await publicJson(api, `/vods/${encodeURIComponent(id)}`).catch(() => null)) as Json | null
+  const segs = (v?.synthetic as Json | null)?.segments as Json[] | undefined
+  if (v && !segs) vods.set(id, v)
+  if (!v || !segs) return undefined
+  const sv: Synth = {
+    id, title: v.title ?? null, supersedes: !!v.synthetic.supersedes, tags: v.tags ?? [], created_at: v.createdAt ?? null,
+    made_at: v.createdAt, changed_at: v.updatedAt ?? v.createdAt, thumbnail_url: v.thumbnail_url ?? null,
+    segments: segs.map((g) => ({ vod_id: String(g.vodId), start: g.start, end: g.end, at: g.at, label: g.label ?? null, stream: String(g.stream) })),
+  }
+  for (const g of sv.segments) await vodOf(api, g.vod_id)
+  synthetics.set(id, sv)
+  const counts = new Map<string, number>()
+  for (const c of (v.chapters as Json[]) ?? []) if (c.gameId) counts.set(String(c.gameId), (counts.get(String(c.gameId)) ?? 0) + (Number(c.end) || 0))
+  const top = [...counts].sort((a, b) => b[1] - a[1])[0]
+  if (top && sv.tags.includes('compilation')) autos.set(id, { game_id: top[0] })
+  return sv
 }
 const syntheticView = (sv: Synth) => ({ ...sv, auto: autos.get(sv.id) ?? null, hidden: hidden.has(sv.id), duration: hms(synthLen(sv)) })
 /** The synthetic VOD as /admin/vods/{id} and the v2 list show it. */
 const synthVod = (sv: Synth): Json => ({
   id: sv.id, title: sv.title, createdAt: sv.created_at, duration: hms(synthLen(sv)), duration_seconds: synthLen(sv),
-  thumbnail_url: sv.thumbnail_url ?? vods.get(sv.segments[0]?.vod_id ?? '')?.thumbnail_url ?? null, stream_id: null, tags: sv.tags, chapters: [], youtube: [], drive: [],
+  thumbnail_url: sv.thumbnail_url ?? vods.get(sv.segments[0]?.vod_id ?? '')?.thumbnail_url ?? null, stream_id: null, tags: sv.tags,
+  chapters: sv.segments.flatMap((g) =>
+    ((vods.get(g.vod_id)?.chapters as Json[] | undefined) ?? []).flatMap((c) => {
+      const from = Math.max(Number(c.start) || 0, g.start)
+      const to = Math.min((Number(c.start) || 0) + (Number(c.end) || 0), g.end)
+      return to > from ? [{ ...c, start: g.at + from - g.start, end: to - from }] : []
+    }),
+  ),
+  youtube: [], drive: [],
   ...(sv.cut_reason ? { cut_reason: sv.cut_reason } : {}),
   synthetic: {
     supersedes: sv.supersedes, thumbnailUrl: sv.thumbnail_url ?? null,
@@ -1228,17 +1301,21 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             const nid = String(b.id ?? '').trim()
             if (!nid || /^\d+$/.test(nid)) return problem(res, 422, 'invalid_synthetic', 'The id must not be only digits: those are Twitch VOD ids.')
             if (synthetics.has(nid) || vods.has(nid)) return problem(res, 409, 'synthetic_conflict', `${nid} already exists.`)
-            const made = await buildSynthetic(publicApi, nid, b, null)
+            const body = await withAuto(publicApi, b)
+            if ('error' in body) return problem(res, body.status, body.code, body.error)
+            const made = await buildSynthetic(publicApi, nid, body, null)
             if ('error' in made) return problem(res, made.status, made.code, made.error)
             synthetics.set(nid, made)
             keepAuto(nid, b)
             return send(res, 201, syntheticView(made))
           }
-          const sv = id ? synthetics.get(id) : undefined
+          const sv = id ? await adopt(publicApi, id) : undefined
           if (!sv) return problem(res, 404, 'vod_not_found', `No synthetic VOD ${id}.`)
           if (method === 'GET') return send(res, 200, syntheticView(sv))
           if (method === 'PUT') {
-            const next = await buildSynthetic(publicApi, sv.id, { ...sv, ...b }, sv)
+            const body = await withAuto(publicApi, b)
+            if ('error' in body) return problem(res, body.status, body.code, body.error)
+            const next = await buildSynthetic(publicApi, sv.id, { ...sv, ...body }, sv)
             if ('error' in next) return problem(res, next.status, next.code, next.error)
             synthetics.set(sv.id, next)
             keepAuto(sv.id, b)
@@ -1250,23 +1327,9 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           }
         }
         if (path === '/api/v2/playthrough-candidates' && method === 'GET') {
-          const game = url.searchParams.get('game_id')
-          if (!game) return problem(res, 422, 'invalid_request', 'game_id is required.')
-          const recent = ((await publicJson(publicApi, '/vods?$limit=50&$sort[createdAt]=-1')) as { data: Json[] }).data
-          const items = recent
-            .filter((v) => !hidden.has(String(v.id)))
-            .flatMap((v) =>
-              ((v.chapters as Json[]) ?? [])
-                .filter((c) => String(c.gameId) === game)
-                .map((c) => {
-                  const start = Number(c.start) || 0
-                  const end = Number(c.end) || durOf(v)
-                  const label = String(v.createdAt).slice(0, 10)
-                  return { vod_id: String(v.id), title: v.title ?? null, created_at: v.createdAt, start, end, length: end - start, segment: { vod_id: String(v.id), start, end, label } }
-                }),
-            )
-            .sort((a, c) => Date.parse(a.created_at) - Date.parse(c.created_at))
-          return send(res, 200, { items })
+          const games = url.searchParams.getAll('game_id').filter(Boolean)
+          if (!games.length) return problem(res, 422, 'invalid_request', 'game_id is required.')
+          return send(res, 200, { items: await gameWindows(publicApi, games) })
         }
 
         // ---- runtime settings ----
