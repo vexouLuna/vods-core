@@ -1,17 +1,17 @@
 <script setup lang="ts">
-// Builds a playthrough: pick a game, then the windows of real VODs that played it
-// (GET /api/v2/playthrough-candidates, oldest first), and add them as segments, in that order.
+// Builds a playthrough: pick its games (a series may span several), then the windows of real VODs that played any of
+// them (GET /api/v2/playthrough-candidates: oldest first, games back to back in one VOD as one window, as the archive
+// keeps a followed playthrough), and add them as segments, in that order.
 import { toClock } from '../../index'
 import { computed, ref, watch } from 'vue'
 import { errorText } from '@vex/platform-web'
 import type { PlaythroughWindow } from './api'
-import type { GameValue } from './edits'
-import GameSearch from './GameSearch.vue'
+import GameIdListInput, { type GameRef } from './GameIdListInput.vue'
 import { admin } from './session'
 
-const emit = defineEmits<{ add: [windows: PlaythroughWindow[], game: string | null, gameId: string | null] }>()
+const emit = defineEmits<{ add: [windows: PlaythroughWindow[], games: GameRef[]] }>()
 
-const game = ref<GameValue>({ name: null, gameId: null, imageTemplate: null })
+const games = ref<GameRef[]>([])
 const windows = ref<PlaythroughWindow[] | null>(null)
 const picked = ref(new Set<string>())
 const error = ref<string | null>(null)
@@ -19,15 +19,15 @@ const key = (w: PlaythroughWindow) => `${w.vod_id}@${w.start}`
 
 let ctrl: AbortController | null = null
 watch(
-  () => game.value.gameId,
-  async (id) => {
+  () => games.value.map((g) => g.id),
+  async (ids) => {
     ctrl?.abort()
     windows.value = null
     error.value = null
-    if (!id) return
+    if (!ids.length) return
     const mine = (ctrl = new AbortController())
     try {
-      const { items } = await admin.playthroughCandidates(id, mine.signal)
+      const { items } = await admin.playthroughCandidates(ids, mine.signal)
       windows.value = items
       picked.value = new Set(items.map(key))
     } catch (e) {
@@ -48,11 +48,13 @@ const total = computed(() => chosen.value.reduce((s, w) => s + w.length, 0))
 
 <template>
   <div class="builder">
-    <GameSearch v-model="game" label="Game" />
-    <p v-if="!game.gameId" class="vods-muted small">Pick a game to see every window of a public VOD that played it.</p>
+    <GameIdListInput v-model="games" label="Games" />
+    <p v-if="!games.length" class="vods-muted small">
+      Pick a game (or each game of a series) to see every window of a public VOD that played it, oldest first.
+    </p>
     <UiCallout v-else-if="error" tone="error" title="Couldn't find its windows">{{ error }}</UiCallout>
     <div v-else-if="!windows" class="sk" aria-busy="true"><UiSkeleton v-for="i in 3" :key="i" h="28px" /></div>
-    <p v-else-if="!windows.length" class="vods-muted small">No public VOD has a chapter of {{ game.name }}.</p>
+    <p v-else-if="!windows.length" class="vods-muted small">No public VOD has a chapter of {{ games.length === 1 ? games[0]!.name : 'any of these games' }}.</p>
     <template v-else>
       <ul class="windows">
         <li v-for="w in windows" :key="key(w)">
@@ -61,7 +63,7 @@ const total = computed(() => chosen.value.reduce((s, w) => s + w.length, 0))
         </li>
       </ul>
       <div class="row">
-        <UiButton variant="primary" :disabled="!chosen.length" @click="emit('add', chosen, game.name, game.gameId)">
+        <UiButton variant="primary" :disabled="!chosen.length" @click="emit('add', chosen, games)">
           Add {{ chosen.length }} {{ chosen.length === 1 ? 'window' : 'windows' }} ({{ toClock(total) }})
         </UiButton>
       </div>

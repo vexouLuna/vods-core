@@ -15,8 +15,7 @@ import { errorText } from '@vex/platform-web'
 import { JobsTable, usePoll } from '@vex/platform-web/vue'
 import { followedGames, type AdminVod, type PlaythroughWindow, type SyntheticDmca, type SyntheticInput, type SyntheticVod } from '../../admin/api'
 import DetailsEditor from '../../admin/DetailsEditor.vue'
-import type { GameValue } from '../../admin/edits'
-import GameSearch from '../../admin/GameSearch.vue'
+import GameIdListInput, { type GameRef } from '../../admin/GameIdListInput.vue'
 import ManageShell from '../../admin/ManageShell.vue'
 import PlaythroughBuilder from '../../admin/PlaythroughBuilder.vue'
 import { admin } from '../../admin/session'
@@ -46,22 +45,12 @@ const form = ref({ id: '', title: '', tags: [] as string[] })
 const full = ref<AdminVod | null>(null)
 const header = ref<InstanceType<typeof VodHeaderPanel> | null>(null)
 const segments = ref<Row[]>([])
-// The games a playthrough follows (the archive keeps its segments to their windows), or the one it was just built from.
+// The games a playthrough follows (the archive keeps its segments to their windows), or the ones it was just built from.
 // A name is null until known: from the builder, the search, or the VOD's own chapters (`gameName`).
-const follows = ref<{ id: string; name: string | null }[]>([])
+const follows = ref<GameRef[]>([])
 const keepUp = ref(false)
-const gameName = (g: { id: string; name: string | null }) =>
+const gameName = (g: GameRef) =>
   g.name ?? full.value?.chapters?.find((c) => c.gameId != null && String(c.gameId) === g.id)?.name ?? `game ${g.id}`
-const blankGame = (): GameValue => ({ name: null, gameId: null, imageTemplate: null })
-const newGame = ref<GameValue>(blankGame())
-function followGame(g: { id: string; name: string | null }) {
-  if (!follows.value.some((x) => x.id === g.id)) follows.value = [...follows.value, g]
-}
-function addFollowed(g: GameValue) {
-  if (g.gameId) followGame({ id: g.gameId, name: g.name })
-  newGame.value = blankGame()
-}
-const unfollow = (id: string) => (follows.value = follows.value.filter((g) => g.id !== id))
 
 function fill(v: SyntheticVod | null) {
   vod.value = v
@@ -131,8 +120,9 @@ async function setSources(hide: boolean) {
 const move = (i: number, by: -1 | 1) => (segments.value = moved(segments.value, i, by))
 const remove = (i: number) => (segments.value = segments.value.filter((_, j) => j !== i))
 const addRow = () => (segments.value = [...segments.value, row()])
-function addWindows(windows: PlaythroughWindow[], game: string | null, gameId: string | null) {
-  if (gameId) followGame({ id: gameId, name: game })
+function addWindows(windows: PlaythroughWindow[], games: GameRef[]) {
+  follows.value = [...follows.value, ...games.filter((g) => !follows.value.some((x) => x.id === g.id))]
+  const game = games.map((g) => g.name).filter(Boolean).join(' + ') || null
   const kept = segments.value.filter((s) => s.vod_id.trim())
   segments.value = [...kept, ...windows.map((w) => row({ vod_id: w.segment.vod_id, start: w.segment.start, end: w.segment.end, label: w.segment.label }))]
   // A playthrough is tagged so (by hand: any tag can be taken off); an existing one's go to its header panel's draft.
@@ -333,7 +323,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
           <template v-if="follows.length || keepUp">
             <UiCheckbox
               v-model="keepUp"
-              :label="`Keep up to date: every window of ${follows.length === 1 ? gameName(follows[0]!) : 'the games it follows'}, new streams included (the segments below then aren't saved)`"
+              :label="`Keep up to date: every window of ${follows.length ? follows.map(gameName).join(', ') : 'the games it follows'}, new streams included (the segments below then aren't saved)`"
             />
             <UiField
               v-if="keepUp"
@@ -343,17 +333,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
               :error="follows.length ? undefined : 'Pick a game to follow.'"
             >
               <template #default>
-                <div class="games">
-                  <ul v-if="follows.length" class="chips" aria-label="Games it follows">
-                    <li v-for="g in follows" :key="g.id">
-                      <UiChip :title="`Twitch game ${g.id}`">
-                        {{ gameName(g) }}
-                        <button type="button" class="x" :aria-label="`Stop following ${gameName(g)}`" @click="unfollow(g.id)">×</button>
-                      </UiChip>
-                    </li>
-                  </ul>
-                  <GameSearch :model-value="newGame" blank="Add a game…" label="Add a game to follow" @update:model-value="addFollowed" />
-                </div>
+                <GameIdListInput v-model="follows" label="Games it follows" :name-of="gameName" />
               </template>
             </UiField>
           </template>
@@ -452,10 +432,6 @@ a { color: inherit; }
 .head .sec { margin: 0; }
 .push { margin-left: auto; }
 .follows { margin: 8px 0; }
-.games { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-width: 32rem; }
-.chips { display: flex; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; }
-.x { font: inherit; border: 0; background: none; color: var(--vods-muted); cursor: pointer; padding: 0 0 0 4px; }
-.x:hover { color: var(--vods-ink); }
 .builder { margin: 10px 0; padding: 12px; border: 1px solid var(--vods-line); border-radius: var(--vods-radius, 8px); }
 .segs { list-style: none; margin: 8px 0 12px; padding: 0; display: grid; gap: 8px; }
 .seg { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 10px; padding-top: 8px; border-top: 1px solid var(--vods-line); }

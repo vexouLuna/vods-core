@@ -845,8 +845,10 @@ export class AdminClient {
   deleteSynthetic(id: string): Promise<SyntheticVod> {
     return this.request('DELETE', `/api/v2/synthetic/${enc(id)}`)
   }
-  playthroughCandidates(gameId: string, signal?: AbortSignal): Promise<{ items: PlaythroughWindow[] }> {
-    return this.request('GET', `/api/v2/playthrough-candidates?game_id=${encodeURIComponent(gameId)}`, undefined, signal)
+  /** Several games (twitch-archive#239): every window of any of them, oldest first, back-to-back ones as one. */
+  playthroughCandidates(gameIds: string | string[], signal?: AbortSignal): Promise<{ items: PlaythroughWindow[] }> {
+    const q = [gameIds].flat().map((id) => `game_id=${encodeURIComponent(id)}`).join('&')
+    return this.request('GET', `/api/v2/playthrough-candidates?${q}`, undefined, signal)
   }
 
   // ---- VOD jobs and fixes (the worker's existing routes) ----
