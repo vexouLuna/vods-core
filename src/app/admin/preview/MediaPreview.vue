@@ -3,8 +3,9 @@
 // uploads, seekable frame by frame, with the censor ranges on a timeline and their boxes drawn over the picture. The
 // chapters, games and censor editors below set times from its playhead and jump it (previewState).
 //
-// Only one browser tab on the whole server streams a server file at a time (useMediaLease): when another has it, this
-// says who and since when, offers YouTube instead, or takes it over behind a warning. Drafts are never touched.
+// Only one browser tab on the whole server streams a server file at a time (useMediaLease). Nothing is claimed until
+// Load is pressed; when another tab has the files, this says who and since when (from the file list, which claims
+// nothing), offers YouTube instead, or takes them over behind a warning. Drafts are never touched.
 import { errorText, stamp } from '@vex/platform-web'
 import type { Option } from '@vex/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -60,9 +61,21 @@ const lease = useMediaLease(() => props.vod.id)
 const who = (h: MediaHolder | null) => (h ? `${h.login ?? 'The password login'} (${h.browser})` : 'Someone')
 const since = (h: MediaHolder | null) => (h ? `${timeAgo(h.acquired_at)}, at ${stamp(h.acquired_at)}` : '')
 const takeOpen = ref(false)
+/** Load was pressed on this page: until then the server file isn't claimed or loaded. */
+const wanted = ref(false)
+/** Another tab's lease as the file list saw it, before this one tried to claim. */
+const other = computed(() => (list.value?.lease && !list.value.lease.yours ? list.value.lease : null))
+/** Whose lease the warnings name: the list's until this tab tries to claim, then the server's answer. */
+const holder = computed(() => (lease.state.value === 'idle' ? other.value : lease.holder.value))
+
+function load() {
+  wanted.value = true
+  void loadServer()
+}
 
 async function takeOver() {
   takeOpen.value = false
+  wanted.value = true
   if (await lease.claim(file.value, true)) await loadServer()
 }
 
@@ -146,10 +159,18 @@ async function loadYouTube() {
   }
 }
 
-watch([source, file], async ([s]) => {
+watch([source, file], async ([s], [was]) => {
   loadError.value = null
-  if (s === 'youtube') await loadYouTube()
-  else await loadServer()
+  if (s === 'youtube') {
+    wanted.value = false
+    await loadYouTube()
+  } else if (wanted.value) await loadServer()
+  else {
+    stopYouTube()
+    preview.ready.value = false
+    // Back from YouTube: who holds the files may have changed.
+    if (was === 'youtube') await loadList()
+  }
 })
 
 // Another tab took the files: stop here (the server closes the stream too) and keep the playhead.
@@ -162,10 +183,8 @@ watch(lease.state, (s) => {
 })
 
 onMounted(async () => {
-  const before = `${source.value}/${file.value}`
   await loadList()
-  // A changed source or file loads through the watcher above.
-  if (`${source.value}/${file.value}` === before) await (source.value === 'server' ? loadServer() : loadYouTube())
+  // A server file waits for Load; a switch to YouTube (no file here) loads through the watcher above.
 })
 onBeforeUnmount(() => {
   cancelAnimationFrame(raf)
@@ -249,14 +268,14 @@ function setEnd(end: 'start' | 'end') {
       <UiCallout v-if="!list.items.length" tone="info" title="No file of this VOD on the server">
         {{ noFileWhy }}<template v-if="youtube"> Its YouTube uploads can be previewed instead.</template>
       </UiCallout>
-      <UiCallout v-else-if="lease.state.value === 'in_use'" tone="warn" title="Another tab is playing the server's files">
-        {{ who(lease.holder.value) }} has had them since {{ since(lease.holder.value) }}<template v-if="lease.holder.value?.vod_id">, on VOD {{ lease.holder.value.vod_id }}</template>.
+      <UiCallout v-else-if="lease.state.value === 'in_use' || (!wanted && other)" tone="warn" title="Another tab is playing the server's files">
+        {{ who(holder) }} has had them since {{ since(holder) }}<template v-if="holder?.vod_id">, on VOD {{ holder.vod_id }}</template>.
         Only one tab on the whole server can stream them at a time.
         <template #actions>
           <span class="acts">
             <UiButton v-if="youtube" size="sm" @click="source = 'youtube'">Use YouTube instead</UiButton>
-            <UiButton size="sm" @click="loadServer">Try again</UiButton>
-            <UiButton size="sm" variant="danger" @click="takeOpen = true">Use it here instead</UiButton>
+            <UiButton v-if="lease.state.value === 'in_use'" size="sm" @click="loadServer">Try again</UiButton>
+            <UiButton size="sm" variant="danger" @click="takeOpen = true">Load anyway</UiButton>
           </span>
         </template>
       </UiCallout>
@@ -290,6 +309,9 @@ function setEnd(end: 'start' | 'end') {
         @error="lease.state.value === 'held' && (loadError = 'The file could not be played.')"
       />
       <div v-show="source === 'youtube'" ref="ytEl" class="media yt" />
+      <div v-if="source === 'server' && list?.items.length && !wanted && !other" class="load">
+        <UiButton variant="primary" @click="load">Load the server file</UiButton>
+      </div>
       <RegionLayer :aspect="aspect" :rows="rows" :time="preview.time.value" :selected="preview.selected.value" :show-active="showDrafts && !burnedIn" />
     </div>
     <p v-if="burnedIn" class="vods-muted small">
@@ -345,7 +367,7 @@ function setEnd(end: 'start' | 'end') {
 
   <UiDialog v-model:open="takeOpen" title="Take the server's files from the other tab?" width="500px">
     <UiCallout tone="error" title="This stops their preview at once">
-      {{ who(lease.holder.value) }} is using them<template v-if="lease.holder.value"> (since {{ since(lease.holder.value) }})</template>.
+      {{ who(holder) }} is using them<template v-if="holder"> (since {{ since(holder) }})</template>.
       Their video stops mid-play, and they'll see that you took it and when. They can take it back the same way.
     </UiCallout>
     <p class="vods-muted small">Only one tab on the whole server streams these files, to spare the disk and the connection. The take-over is written to the audit log.</p>
@@ -363,6 +385,7 @@ function setEnd(end: 'start' | 'end') {
 .top, .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .stage { position: relative; width: 100%; max-height: 70vh; background: #000; border-radius: var(--vods-radius); overflow: hidden; }
 .media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.load { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; }
 .yt :deep(iframe) { width: 100%; height: 100%; border: 0; }
 .clock { font-size: 13px; }
 .spacer { flex: 1; }
