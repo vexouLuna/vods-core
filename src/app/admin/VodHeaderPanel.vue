@@ -119,7 +119,7 @@ async function setHidden(hidden: boolean) {
     </form>
 
     <UiConfirm v-model:open="hideOpen" title="Hide this VOD?" width="460px" tone="danger" confirm-label="Hide it" :loading="hiding" @confirm="setHidden(true)">
-      It leaves the public site at once: the VOD list, the games pages and the chat. Links to its watch page stop
+      It leaves the public site at once: the VOD list and the chat. Links to its watch page stop
       working (they show "not found") until it's made public again. Nothing is deleted.
     </UiConfirm>
   </section>

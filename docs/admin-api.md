@@ -126,14 +126,10 @@ account live playback tokens are asked for as, so a live recording has no stitch
   "createdAt"?: ISO, "cutReason"?: text | null}` → the updated VOD (with `hidden`). `thumbnailUrl: null` falls back
   to the first YouTube part's. `cutReason` (trimmed, 500 characters at most; blank or null clears it) is why the VOD
   was cut: the public VOD JSON carries it as `cut_reason` only when set, and the page for a VOD cut in full shows it.
-  The duration can't end before the last chapter or games row. A merged VOD refuses everything but `hidden` (409).
+  The duration can't end before the last chapter. A merged VOD refuses everything but `hidden` (409).
   Audited with before and after (twitch-archive PR #30).
-- Hidden VODs are gone from the public API as if missing: not in `/vods` or `/games`, 404 on `/vods/{id}` and its
+- Hidden VODs are gone from the public API as if missing: not in `/vods`, 404 on `/vods/{id}` and its
   comments, left out of games-played and `/v1/status`'s latest VOD.
-- `GET /admin/vods/{id}/games` → the VOD's games rows `[{start_time, end_time, game_id, game_name, chapter_image,
-  title?, thumbnail_url?, video_provider?, video_id?}]`; `PUT` with `{"games": [...]}` replaces them. Validated:
-  sorted by start, no overlaps, inside the duration, `game_name` required. These are what the games pages list, not
-  the chapters; the editor can start them from the chapters.
 - `PUT /admin/vods/{id}/chapters` `{"chapters": [{"name", "gameId", "imageTemplate"?, "start", "length",
   "restricted", "kind"?}], "locked": bool}` → the updated VOD. `kind: "gap"` keeps a merge's gap chapter one. Validate: sorted by start, no overlaps, inside the VOD's
   duration, lengths > 0. Store `image` too (template with a small size filled in) so old readers keep working.
@@ -153,7 +149,7 @@ account live playback tokens are asked for as, so a live recording has no stitch
 ## 4b. Merging and splitting VODs (twitch-archive PR #16)
 
 For one broadcast that Twitch cut in two (merge), or two streams in one VOD (split). Nothing is re-uploaded; rows
-(chapters, parts, chat, games, emotes) move in one transaction, and every splice can be undone, latest first.
+(chapters, parts, chat, emotes) move in one transaction, and every splice can be undone, latest first.
 
 - `GET /admin/vods/{id}` also has `splices: [{id, kind: "merge"|"split", vodId, otherId, offset, gap, detail,
   createdAt, undoneAt, undoable}]`, and `merged_into: {id, offset}` on a VOD merged into another one.

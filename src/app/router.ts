@@ -22,7 +22,6 @@ export interface VodsPages {
   list: VodsPage
   /** The watch page (it takes `id`, and `type`: 'vod', 'live', or null for whichever set exists). */
   watch: VodsPage
-  games: VodsPage
   notFound: VodsPage
   /** Manage: the archive's admin pages. Every one but `login` needs a dashboard session (installVodsSession). `home`
    * (the homepage cards) is optional: a site without it has no /manage/home. */
@@ -59,7 +58,6 @@ export function vodsRoutes(pages: VodsPages): RouteRecordRaw[] {
     { path: '/vods/:id', component: pages.watch, props: (r) => ({ id: r.params.id, type: 'vod' }) },
     { path: '/live/:id', component: pages.watch, props: (r) => ({ id: r.params.id, type: 'live' }) },
     { path: '/youtube/:id', component: pages.watch, props: (r) => ({ id: r.params.id, type: null }) },
-    { path: '/games/:id', component: pages.games, props: true },
     // Manage: the archive's admin pages. Every page but the login needs a dashboard session; see installVodsSession.
     { path: '/manage/login', component: m.login, meta: { public: true } },
     { path: '/manage', component: m.overview },

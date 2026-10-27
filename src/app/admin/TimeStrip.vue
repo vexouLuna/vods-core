@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// A VOD's rows (chapters, games) as coloured stretches over its length, with 0:00 and the end under it. Restricted
+// A VOD's rows (chapters, censor) as coloured stretches over its length, with 0:00 and the end under it. Restricted
 // stretches are hatched; a row with a problem is outlined.
 import { clamp } from '@vex/ui/utils'
 import { toClock } from '../../index'

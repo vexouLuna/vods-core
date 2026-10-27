@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The watch page body, shared by /vods/:id (and /live, /youtube) and /games/:id: YouTube player, the timeline across
+// The watch page body, shared by /vods/:id (and /live, /youtube): YouTube player, the timeline across
 // all parts, a controls row (chapters, part picker, copy link, download, theater, shortcuts) and the chat replay.
 // On phones the same controls reflow under the video and chat goes below; nothing is dropped.
 // A synthetic VOD (a merge, split or playthrough) plays windows of other VODs: its timeline is a SegmentTimeline, chat

@@ -21,7 +21,6 @@ export function makeVod(opts: { duration: number; parts: (number | null)[]; chap
     chapters: (opts.chapters ?? []).map((c) => ({ name: 'Game', gameId: null, image: null, start: 0, end: 0, restricted: false, ...c })),
     uploads,
     drive: [],
-    games: [],
     thumbnail: null,
     streamId: null,
     tags: [],

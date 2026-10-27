@@ -21,7 +21,7 @@ export interface TimelineProps {
   time: number | (() => number)
   status: readonly PartStatus[]
   partIndex: number
-  /** Label for part i (P1, or a game name on the games page). */
+  /** Label for part i (P1). */
   partLabel?: (i: number) => string
   /**
    * Where a playthrough moves on to its next stream. Each gets a small break: it takes room on the bar but no time

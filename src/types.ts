@@ -58,21 +58,6 @@ export interface DriveFile {
   type: UploadType
 }
 
-/** A per-game upload (`/games/:id` pages): one game's stretch of a VOD as its own video. */
-export interface GameUpload {
-  id: string
-  vodId: string
-  /** On a synthetic VOD: the real VOD the upload is of (`start`/`end` are synthetic time). */
-  sourceVodId?: string | null
-  start: number
-  end: number
-  videoId: string
-  gameId: string | null
-  gameName: string | null
-  title: string | null
-  thumbnail: string | null
-}
-
 export interface Vod {
   id: string
   title: string
@@ -82,7 +67,6 @@ export interface Vod {
   chapters: Chapter[]
   uploads: Upload[]
   drive: DriveFile[]
-  games: GameUpload[]
   thumbnail: string | null
   streamId: string | null
   /** Set when this VOD was merged into another: watch `id` at `offset + t` instead. */

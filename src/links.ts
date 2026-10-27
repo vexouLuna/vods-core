@@ -4,12 +4,11 @@ import type { UploadType, Vod } from './types'
 
 type Thumbed = Pick<Vod, 'thumbnail'> & {
   uploads: readonly Pick<Vod['uploads'][number], 'thumbnail'>[]
-  games: readonly Pick<Vod['games'][number], 'thumbnail'>[]
 }
 
-/** The archive's own thumbnail, else the first upload's, else the first game upload's. */
+/** The archive's own thumbnail, else the first upload's, . */
 export function vodThumbnail(vod: Thumbed): string | null {
-  return vod.thumbnail ?? vod.uploads.find((u) => u.thumbnail)?.thumbnail ?? vod.games.find((g) => g.thumbnail)?.thumbnail ?? null
+  return vod.thumbnail ?? vod.uploads.find((u) => u.thumbnail)?.thumbnail ?? null
 }
 
 /**
