@@ -1,5 +1,29 @@
 # @vex/vods-core
 
+## 0.41.0
+
+### Minor Changes
+
+- da9e343: The Settings page's game lists (restricted games, games uploaded without the IGDB check) pick games from Twitch's categories like the chapters do, keep typed names for games Twitch can't find, and keep "No category". `GameSearch` gains `freeText` and `blank` props.
+- b5a1edc: Overview: the YouTube tile shows what decides whether uploads are allowed (the channel's long-upload status, whether
+  it is linked, its privacy and the granted scopes), warning on what makes YouTube refuse an upload; and a "Twitch app"
+  tile shows the app client the censor check uses (masked id, whether it gets a token), apart from the ad-free account.
+  New `Health` fields `youtube.channel.status`, `youtube.grantedScopes` and `twitchApp`, read from twitch-archive's
+  `/admin/health` (vexouLuna/twitch-archive#215); an older worker leaves them out and the tiles look as before.
+- d80e09f: Remove the games rows (the old per-game YouTube uploads), which nothing writes any more. **Breaking:** `Vod.games` and
+  the `GameUpload` type are gone, `normalizeVod` no longer reads `games`, `AdminClient.games()`/`saveGames()` and the
+  `GameRow` type are gone, and `VodsPages` has no `games` page (a site passing one fails its type check; drop it). The
+  `/games/:id` route and page are gone, and the admin VOD page loses its Games tab. `/v1/games-played` (the most played
+  lists) and the chapters' game picker are unchanged. Release this before twitch-archive stops sending `games`; an older
+  API that still sends it is fine, the field is ignored.
+
+### Patch Changes
+
+- d6ac7a3: Manage → VOD's preview no longer takes the server file's lease when the page opens. It shows a Load button, or, when
+  another tab has the files, the warning (who, since when, which VOD) with a Load anyway button that takes them over.
+- 68390db: Manage → Synthetic: a segment's VOD may be any VOD id (a merged `<id>-m` one or another synthetic included), not only
+  digits, and a row's error shows on its own line so the VOD field stays level with the rest of the row.
+
 ## 0.40.1
 
 ### Patch Changes
