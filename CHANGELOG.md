@@ -1,5 +1,17 @@
 # @vex/vods-core
 
+## 0.42.1
+
+### Patch Changes
+
+- 24ddb09: The watch page tells a merge or split from a playthrough by its stream count, not by `synthetic.supersedes`, which the
+  archive stopped setting in its 0022 migration (ADR 0005): a VOD of one stream gets no stream breaks on the seek bar and
+  keeps P1, P2… part labels. With the twitch-archive fix that numbers a merge as one stream again, a merge's page, and a
+  playthrough that plays one, show that broadcast as one stream.
+- 1be1fcb: When a part isn't playable on YouTube, the watch page shows a small box at the bottom middle of the player instead
+  of a panel over the whole video. The embed stays visible and clickable, so YouTube's own message and its "Sign in to
+  confirm you're not a bot" button still work; the box keeps the skip-to-another-part buttons.
+
 ## 0.42.0
 
 ### Minor Changes
