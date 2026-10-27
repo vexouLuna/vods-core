@@ -146,8 +146,8 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
   const chapters = computed(() => props.timeline.chapters.filter((c) => c.end > range.value.start && c.start < range.value.end))
   const chapter = computed(() => props.timeline.chapterAt(time.value))
   const chapterIdx = computed(() => (chapter.value ? chapters.value.indexOf(chapter.value) : -1))
-  /** A playthrough's streams (a merge or split plays as one VOD, so it has none to tell apart). */
-  const streams = computed(() => (props.segments && !props.vod.synthetic?.supersedes ? props.segments.streams() : []))
+  /** A playthrough's streams (the archive numbers a merge or split as one stream, so it has none to tell apart). */
+  const streams = computed(() => props.segments?.streams() ?? [])
   /** Where each stream after the first starts: a break on the bar. */
   const streamBreaks = computed(() => streams.value.slice(1).map((s) => s.start))
   /** Where a playthrough's stream skips part of its VOD (two windows of one VOD, back to back). */
