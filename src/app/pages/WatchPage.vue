@@ -102,10 +102,10 @@ const other = computed(() => {
   return v.uploads.some((u) => u.type === alt) ? `/${alt === 'vod' ? 'vods' : 'live'}/${v.id}` : null
 })
 
-/** A playthrough's parts are numbered within their stream: S1-P1, S1-P2, S2-P1… (a merge or split keeps P1, P2…). */
+/** A playthrough's parts are numbered within their stream: S1-P1, S1-P2, S2-P1… (one stream, as a merge or split is, keeps P1, P2…). */
 const partLabel = computed(() => {
   const seg = segments.value
-  if (!seg || vod.value?.synthetic?.supersedes) return undefined
+  if (!seg || seg.streams().length < 2) return undefined
   return (i: number) => {
     const at = seg.clipInStream(i)
     return at ? `S${at.stream + 1}-P${at.part + 1}` : `P${i + 1}`
