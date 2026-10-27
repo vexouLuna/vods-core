@@ -1,5 +1,18 @@
 # @vex/vods-core
 
+## 0.42.0
+
+### Minor Changes
+
+- 8a2583b: A compilation's segments panel has a "Follows" field while "Keep up to date" is on: the games it follows, by name, with
+  a game search to add more and × to drop one. Saving sends `auto: { game_ids }` and the archive rebuilds the segments
+  from every window of any of them, oldest VOD first. "Build a playthrough…" takes several games too: it lists the
+  same windows (back-to-back games in one VOD as one) and fills Follows with all of them. Needs twitch-archive#239 on the
+  server. `playthroughCandidates()` takes one id or several. `SyntheticVod.auto` is now
+  `{ game_ids } | { game_id } | null` (an older row keeps `game_id`); `followedGames(auto)` reads either. The dev mock
+  rebuilds a followed compilation's segments, loads the public archive's synthetic VODs, and takes `game_id` more than
+  once for playthrough candidates.
+
 ## 0.41.0
 
 ### Minor Changes
