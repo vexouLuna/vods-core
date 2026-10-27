@@ -144,7 +144,7 @@ const idError = computed(() => {
   return null
 })
 const segError = (s: Row) =>
-  !/^\d+$/.test(s.vod_id.trim()) ? 'A Twitch VOD id.' : s.start != null && s.end != null && s.end <= s.start ? 'The end must come after the start.' : null
+  !s.vod_id.trim() ? 'Give a VOD id.' : s.start != null && s.end != null && s.end <= s.start ? 'The end must come after the start.' : null
 const segErrors = computed(() => segments.value.map(segError))
 const valid = computed(() => !idError.value && segments.value.length > 0 && segErrors.value.every((e) => !e))
 const total = computed(() =>
@@ -319,13 +319,13 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
             :label="`Keep up to date: every window of ${follow.name ?? `game ${follow.id}`}, new streams included (the segments below then aren't saved)`"
           />
           <p class="vods-muted small">
-            Each is a window of a Twitch VOD, played one after another. Empty start or end: the source's own; empty
+            Each is a window of a VOD (a Twitch id, a merged one like 123-m, or another synthetic), played one after another. Empty start or end: the source's own; empty
             “at”: right after the one before.
           </p>
           <ol class="segs">
             <li v-for="(s, i) in segments" :key="s.key" class="seg">
               <span class="n vods-mono">{{ i + 1 }}</span>
-              <UiField label="VOD" :error="s.vod_id && segErrors[i] ? segErrors[i]! : undefined">
+              <UiField label="VOD">
                 <template #default="{ id: fid }"><UiInput :id="fid" v-model="s.vod_id" mono placeholder="2200000000" class="vodid" /></template>
               </UiField>
               <UiField label="Start"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.start" optional placeholder="start" /></template></UiField>
@@ -339,6 +339,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
                 <UiButton size="sm" variant="ghost" :disabled="i === segments.length - 1" :aria-label="`Move segment ${i + 1} down`" @click="move(i, 1)">↓</UiButton>
                 <UiButton size="sm" variant="ghost" :aria-label="`Remove segment ${i + 1}`" @click="remove(i)">✕</UiButton>
               </span>
+              <p v-if="s.vod_id && segErrors[i]" class="segerr" role="alert">{{ segErrors[i] }}</p>
             </li>
           </ol>
           <UiButton size="sm" @click="addRow">Add a segment</UiButton>
@@ -417,6 +418,7 @@ a { color: inherit; }
 .seg > * { margin: 0; }
 .n { align-self: center; min-width: 1.5em; opacity: 0.6; }
 .vodid { width: 9.5rem; }
+.segerr { flex-basis: 100%; margin: 0; font-size: 0.85em; color: var(--vods-bad); }
 .grow { flex: 1 1 10rem; }
 .claims { margin: 8px 0 12px; padding-left: 1.2em; display: grid; gap: 4px; }
 .other { margin-bottom: 12px; }
