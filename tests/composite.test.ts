@@ -202,6 +202,10 @@ describe('WatchPlayer on a SegmentTimeline', () => {
       mute: vi.fn(),
       unMute: vi.fn(),
       isMuted: () => false,
+      setVolume: vi.fn(),
+      getVolume: () => 100,
+      setPlaybackRate: vi.fn(),
+      getPlaybackRate: () => 1,
       destroy: vi.fn(),
     }
     return player

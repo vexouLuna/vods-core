@@ -13,6 +13,7 @@ import ChatPanel from './ChatPanel.vue'
 import CountdownRing from './CountdownRing.vue'
 import NextVodPreview from './NextVodPreview.vue'
 import TickText from './TickText.vue'
+import WatchIcon from './WatchIcon.vue'
 import WatchTimeline from './WatchTimeline.vue'
 import { useWatchView } from '../composables/useWatchView'
 import { gamesWithArt } from '../lib/art'
@@ -60,11 +61,18 @@ const {
   offsetText,
   playing,
   rate,
+  volume,
+  muted,
+  settings,
   partIndex,
   status,
   playerError,
   seek,
   playPart,
+  togglePlay,
+  setVolume,
+  toggleMute,
+  setRate,
   statusText,
   curBad,
   prevOk,
@@ -100,6 +108,9 @@ const {
   chatError,
   shortcuts,
 } = useWatchView(props, { notify: (message, options) => toast.show(message, options) })
+
+const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
+const rateOpts = RATES.map((r) => ({ value: String(r), label: `${r}×` }))
 
 // Game colours are the Deep Field palette's, so they stay with the look.
 const palette = computed(() => gamePalette(props.timeline.chapters.map((c) => c.name)))
@@ -167,7 +178,7 @@ watchEffect(() => learnGameColors(posterGames.value))
               </div>
             </div>
           </div>
-          <UiButton v-if="!chat.open" class="chat-reopen" icon label="Show chat" @click="chat.open = true">⇤</UiButton>
+          <UiButton v-if="!chat.open" class="chat-reopen" icon label="Show chat" @click="chat.open = true"><WatchIcon name="chat" /></UiButton>
           <ManageVodButton :id="vod.id" class="manage" :class="{ 'by-reopen': !chat.open }" />
         </div>
 
@@ -181,7 +192,7 @@ watchEffect(() => learnGameColors(posterGames.value))
           :aria-expanded="controlsOpen"
           @click="controlsOpen = !controlsOpen"
         >
-          <span aria-hidden="true">{{ controlsOpen ? '▾' : '▴' }}</span>
+          <WatchIcon :name="controlsOpen ? 'down' : 'up'" />
         </button>
         <div v-show="showControls" class="controls">
           <WatchTimeline
@@ -199,6 +210,8 @@ watchEffect(() => learnGameColors(posterGames.value))
             @seek="seek"
           />
           <div class="row">
+            <UiButton icon :label="playing ? 'Pause (k)' : 'Play (k)'" @click="togglePlay"><WatchIcon :name="playing ? 'pause' : 'play'" /></UiButton>
+            <UiButton icon :label="muted ? 'Unmute (m)' : 'Mute (m)'" :pressed="muted" @click="toggleMute"><WatchIcon :name="muted ? 'mute' : 'volume'" /></UiButton>
             <span class="time vods-mono"><TickText :text="clockText" /> <span class="vods-muted">/ {{ toClock(range.end) }}</span></span>
 
             <div class="now">
@@ -261,10 +274,10 @@ watchEffect(() => learnGameColors(posterGames.value))
               </UiPopover>
             </slot>
 
-            <UiButton icon label="Copy link at this time" @click="copyLink">⧉</UiButton>
+            <UiButton icon label="Copy link at this time" @click="copyLink"><WatchIcon name="copy" /></UiButton>
             <UiPopover v-if="relatedCount" prefer="up" align="right" width="min(320px, calc(100vw - 24px))" :cap="380">
               <template #trigger="{ toggle, open }">
-                <UiButton icon :label="madeOf.length ? 'Streams in this playthrough' : 'Playthroughs with this VOD'" :pressed="open" @click="toggle">☰</UiButton>
+                <UiButton icon :label="madeOf.length ? 'Streams in this playthrough' : 'Playthroughs with this VOD'" :pressed="open" @click="toggle"><WatchIcon name="list" /></UiButton>
               </template>
               <template #default="{ close }">
                 <template v-if="madeOf.length">
@@ -274,7 +287,7 @@ watchEffect(() => learnGameColors(posterGames.value))
                       <template #lead><span class="smark vods-mono" :class="{ 'is-current': i === currentStream }">{{ m.mark }}</span></template>
                       {{ m.title }}
                     </UiMenuItem>
-                    <UiButton icon size="sm" variant="ghost" :to="m.original" label="Open the original VOD" @click="close()">↗</UiButton>
+                    <UiButton icon size="sm" variant="ghost" :to="m.original" label="Open the original VOD" @click="close()"><WatchIcon name="external" /></UiButton>
                   </div>
                 </template>
                 <template v-if="appearsIn.length">
@@ -291,9 +304,9 @@ watchEffect(() => learnGameColors(posterGames.value))
                 </template>
               </template>
             </UiPopover>
-            <UiButton v-if="downloadUrl" icon label="Download VOD" :href="downloadUrl" external>⤓</UiButton>
+            <UiButton v-if="downloadUrl" icon label="Download VOD" :href="downloadUrl" external><WatchIcon name="download" /></UiButton>
             <UiButton icon :label="theater ? 'Leave theater mode' : 'Theater mode'" :pressed="theater" @click="theater = !theater">
-              {{ theater ? '⤡' : '⤢' }}
+              <WatchIcon :name="theater ? 'theater-off' : 'theater'" />
             </UiButton>
             <UiButton
               icon
@@ -302,17 +315,46 @@ watchEffect(() => learnGameColors(posterGames.value))
               :disabled="!fullscreen.supported"
               @click="toggleFullscreen"
             >
-              ⛶
+              <WatchIcon name="fullscreen" />
             </UiButton>
-            <UiPopover prefer="up" align="right" width="min(260px, calc(100vw - 24px))" role="dialog">
+            <UiPopover prefer="up" align="right" width="min(300px, calc(100vw - 24px))" role="dialog">
               <template #trigger="{ toggle, open }">
-                <UiButton icon label="Keyboard shortcuts" :pressed="open" @click="toggle">?</UiButton>
+                <UiButton icon label="Player settings" :pressed="open" @click="toggle"><WatchIcon name="settings" /></UiButton>
               </template>
-              <div class="vods-eyebrow menu-head">Shortcuts</div>
-              <div v-for="s in shortcuts" :key="s.label" class="kv">
-                <UiKbd>{{ s.display }}</UiKbd><span class="vods-muted">{{ s.label }}</span>
+              <div class="settings">
+                <div class="vods-eyebrow">Player settings</div>
+                <div class="set col">
+                  <span>Volume</span>
+                  <span class="set-row">
+                    <UiButton icon size="sm" variant="ghost" :label="muted ? 'Unmute' : 'Mute'" :pressed="muted" @click="toggleMute">
+                      <WatchIcon :name="muted ? 'mute' : 'volume'" />
+                    </UiButton>
+                    <UiSlider :model-value="muted ? 0 : volume" :min="0" :max="100" :step="5" label="Volume" class="grow" @update:model-value="setVolume" />
+                    <span class="vods-mono small pct">{{ muted ? 'muted' : `${volume}%` }}</span>
+                  </span>
+                </div>
+                <div class="set col">
+                  <span>Speed</span>
+                  <UiSegmented :model-value="String(rate)" :options="rateOpts" label="Playback speed" @update:model-value="(v) => v && setRate(Number(v))" />
+                </div>
+                <div class="set">
+                  <label for="watch-yt-controls">YouTube controls <span class="vods-muted small">YouTube's own bar over the video</span></label>
+                  <UiSwitch id="watch-yt-controls" v-model="settings.youtubeControls" />
+                </div>
               </div>
             </UiPopover>
+            <!-- Keyboard shortcuts mean nothing on a touch screen. -->
+            <span class="shortcuts">
+              <UiPopover prefer="up" align="right" width="min(260px, calc(100vw - 24px))" role="dialog">
+                <template #trigger="{ toggle, open }">
+                  <UiButton icon label="Keyboard shortcuts" :pressed="open" @click="toggle"><WatchIcon name="keyboard" /></UiButton>
+                </template>
+                <div class="vods-eyebrow menu-head">Shortcuts</div>
+                <div v-for="s in shortcuts" :key="s.label" class="kv">
+                  <UiKbd>{{ s.display }}</UiKbd><span class="vods-muted">{{ s.label }}</span>
+                </div>
+              </UiPopover>
+            </span>
           </div>
         </div>
       </section>
@@ -368,10 +410,11 @@ watchEffect(() => learnGameColors(posterGames.value))
 
 .controls { border-top: 1px solid var(--vods-line); background: rgb(0 0 0 / 0.7); }
 .peek {
-  display: grid; place-items: center; width: 100%; height: 14px; padding: 0; border: none; flex: none;
+  display: grid; place-items: center; width: 100%; height: 16px; padding: 0; border: none; flex: none;
   background: #000; color: var(--vods-muted); font-size: 10px; line-height: 1; cursor: pointer; opacity: 0.35;
   transition: opacity 0.15s, color 0.15s;
 }
+.peek .watch-icon { width: 14px; height: 14px; }
 .peek:hover, .peek:focus-visible { opacity: 1; color: var(--vods-ink); }
 .peek:focus-visible { outline: 2px solid var(--vods-accent); outline-offset: -2px; }
 .row { display: flex; align-items: center; gap: 8px; padding: 6px 12px 8px; min-width: 0; }
@@ -388,6 +431,18 @@ watchEffect(() => learnGameColors(posterGames.value))
 .stream-row > :first-child { flex: 1; min-width: 0; }
 .smark { font-size: 11px; color: var(--vods-muted); min-width: 2.5ch; }
 .smark.is-current { color: var(--vods-accent); }
+.settings { display: flex; flex-direction: column; padding: 8px; gap: 2px; }
+.set { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
+.set.col { flex-direction: column; align-items: stretch; gap: 6px; }
+.set-row { display: flex; align-items: center; gap: 6px; }
+.set label { display: flex; flex-direction: column; gap: 2px; }
+.grow { flex: 1; min-width: 0; }
+.small { font-size: 11px; }
+.pct { width: 6ch; text-align: right; }
+.shortcuts { display: contents; }
+@media (pointer: coarse) {
+  .shortcuts { display: none; }
+}
 .kv { display: flex; justify-content: space-between; gap: 10px; padding: 4px 8px; font-size: 12px; }
 
 .watch > :deep(.chat) { border-left: 1px solid var(--vods-line); }

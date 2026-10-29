@@ -26,6 +26,7 @@ import { chatSourceFor, useChatSettings } from './useChatSettings'
 import { useFullscreen } from './useFullscreen'
 import { useNextVod, type NextVod } from './useNextVod'
 import { useShortcuts, type Shortcut } from './useShortcuts'
+import { useWatchSettings } from './useWatchSettings'
 
 export interface WatchViewProps {
   vod: Vod
@@ -78,28 +79,55 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
   const partIndex = ref(props.start.index)
   const status = shallowRef<PartStatus[]>([])
   const playerError = ref<string | null>(null)
+  /** 0-100, and muted, as YouTube's player has them (it remembers them itself). */
+  const volume = ref(100)
+  const muted = ref(false)
+  const settings = useWatchSettings()
   let wp: WatchPlayer | null = null
 
-  onMounted(() => {
+  /** A YouTube player in `ytEl` from `start`. A new one replaces the old (YouTube's controls are set when it's made). */
+  function mount(start: Position, autoplay: boolean) {
+    const old = wp
     const p = (wp = new WatchPlayer(props.timeline, { skipBroken: false }))
+    if (old) {
+      p.status.splice(0, p.status.length, ...old.status) // what's known not to play stays known
+      old.destroy()
+    }
     status.value = [...p.status]
     p.on('time', (t) => (time.value = t))
     p.on('playing', (v) => (playing.value = v))
     p.on('rate', (r) => (rate.value = r))
+    p.on('volume', (v, m) => ((volume.value = v), (muted.value = m)))
     p.on('part', (i) => (partIndex.value = i))
     p.on('partError', () => (status.value = [...p.status]))
     p.on('ended', () => {
       playing.value = false
       if (handoff.value === null) void openEnd()
     })
-    mountYouTube(ytEl.value!, p, { start: props.start, autoplay: true }).catch((e: Error) => {
-      if (wp === p) playerError.value = e.message || 'The YouTube player could not load.'
-    })
-  })
+    // A fresh element each time: YouTube replaces the one it's given with its iframe.
+    const host = document.createElement('div')
+    ytEl.value!.replaceChildren(host)
+    mountYouTube(host, p, { start, autoplay, controls: settings.youtubeControls })
+      .then(() => wp === p && rate.value !== 1 && p.setRate(rate.value))
+      .catch((e: Error) => {
+        if (wp === p) playerError.value = e.message || 'The YouTube player could not load.'
+      })
+  }
+  onMounted(() => mount(props.start, true))
+  watch(
+    () => settings.youtubeControls,
+    () => wp && mount(props.timeline.locate(time.value), playing.value),
+  )
   onScopeDispose(() => {
     wp?.destroy()
     wp = null
   })
+  function setVolume(v: number) {
+    if (muted.value && v > 0) wp?.setMuted(false)
+    wp?.setVolume(v)
+  }
+  const toggleMute = () => wp?.setMuted(!muted.value)
+  const setRate = (r: number) => wp?.setRate(r)
 
   function seek(t: number) {
     jumped = true
@@ -337,6 +365,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     { keys: [' ', 'k'], display: 'space / k', label: 'Play / pause', run: togglePlay },
     { keys: ['j', 'ArrowLeft'], display: 'j / ←', label: 'Back 10s', run: () => seek(time.value - 10) },
     { keys: ['l', 'ArrowRight'], display: 'l / →', label: 'Forward 10s', run: () => seek(time.value + 10) },
+    { keys: ['m'], display: 'm', label: 'Mute / unmute', run: toggleMute },
     { keys: [','], display: ',', label: 'Previous chapter', run: () => stepChapter(-1) },
     { keys: ['.'], display: '.', label: 'Next chapter', run: () => stepChapter(1) },
     { keys: ['['], display: '[', label: 'Previous part', run: () => partIndex.value > 0 && playPart(partIndex.value - 1) },
@@ -364,12 +393,18 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     offsetText,
     playing,
     rate,
+    volume,
+    muted,
+    settings,
     partIndex,
     status,
     playerError,
     seek,
     playPart,
     togglePlay,
+    setVolume,
+    toggleMute,
+    setRate,
     // parts
     statusText: PART_STATUS_TEXT,
     curBad,

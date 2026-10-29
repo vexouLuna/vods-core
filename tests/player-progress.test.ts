@@ -5,7 +5,7 @@ import { Timeline } from '../src/timeline'
 import { fixtureVod } from './helpers'
 
 function fakePlayer() {
-  const state = { id: '', t: 0, s: YT_STATE.UNSTARTED as number }
+  const state = { id: '', t: 0, s: YT_STATE.UNSTARTED as number, vol: 100, muted: false, rate: 1 }
   const player: PlayerLike & { state: typeof state } = {
     state,
     loadVideoById: vi.fn((id: string, start = 0) => Object.assign(state, { id, t: start, s: YT_STATE.PLAYING })),
@@ -15,9 +15,13 @@ function fakePlayer() {
     pauseVideo: vi.fn(() => (state.s = YT_STATE.PAUSED)),
     getCurrentTime: () => state.t,
     getPlayerState: () => state.s,
-    mute: vi.fn(),
-    unMute: vi.fn(),
-    isMuted: () => false,
+    mute: vi.fn(() => (state.muted = true)),
+    unMute: vi.fn(() => (state.muted = false)),
+    isMuted: () => state.muted,
+    setVolume: vi.fn((v: number) => (state.vol = v)),
+    getVolume: () => state.vol,
+    setPlaybackRate: vi.fn((r: number) => (state.rate = r)),
+    getPlaybackRate: () => state.rate,
     destroy: vi.fn(),
   }
   return player
@@ -98,6 +102,31 @@ describe('WatchPlayer', () => {
     w.handleRate(2)
     w.handleRate(0.5)
     expect(rates).toEqual([2, 0.5])
+  })
+
+  it('sets volume and mute, and reports changes made in YouTube on the next tick', () => {
+    const w = new WatchPlayer(new Timeline(vod), { tickMs: 250 })
+    const p = fakePlayer()
+    const seen: [number, boolean][] = []
+    w.on('volume', (v, m) => seen.push([v, m]))
+    w.attach(p)
+    w.setVolume(140)
+    w.setMuted(true)
+    w.handleState(YT_STATE.PLAYING)
+    p.state.vol = 30 // moved in YouTube's own controls
+    vi.advanceTimersByTime(250)
+    expect(seen).toEqual([[100, false], [100, true], [30, true]])
+  })
+
+  it('keeps the speed asked for when the next part starts', () => {
+    const w = new WatchPlayer(new Timeline(vod))
+    const p = fakePlayer()
+    w.attach(p)
+    w.setRate(1.5)
+    p.state.rate = 1 // a new video starts at normal speed
+    w.playPart(1)
+    w.handleState(YT_STATE.PLAYING)
+    expect(p.state.rate).toBe(1.5)
   })
 })
 
