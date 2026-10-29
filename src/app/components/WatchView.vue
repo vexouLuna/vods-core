@@ -13,7 +13,6 @@ import ChatPanel from './ChatPanel.vue'
 import CountdownRing from './CountdownRing.vue'
 import NextVodPreview from './NextVodPreview.vue'
 import TickText from './TickText.vue'
-import WatchIcon from './WatchIcon.vue'
 import WatchTimeline from './WatchTimeline.vue'
 import { useWatchView } from '../composables/useWatchView'
 import { gamesWithArt } from '../lib/art'
@@ -188,7 +187,7 @@ watchEffect(() => learnGameColors(posterGames.value))
               </div>
             </div>
           </div>
-          <UiButton v-if="!chat.open" class="chat-reopen" icon label="Show chat" @click="chat.open = true"><WatchIcon name="chat" /></UiButton>
+          <UiButton v-if="!chat.open" class="chat-reopen" icon label="Show chat" @click="chat.open = true"><UiIcon name="chat" /></UiButton>
           <ManageVodButton :id="vod.id" class="manage" :class="{ 'by-reopen': !chat.open }" />
         </div>
 
@@ -202,7 +201,7 @@ watchEffect(() => learnGameColors(posterGames.value))
           :aria-expanded="controlsOpen"
           @click="controlsOpen = !controlsOpen"
         >
-          <WatchIcon :name="controlsOpen ? 'down' : 'up'" />
+          <UiIcon :name="controlsOpen ? 'down' : 'up'" />
         </button>
         <div v-show="showControls" class="controls">
           <WatchTimeline
@@ -220,8 +219,8 @@ watchEffect(() => learnGameColors(posterGames.value))
             @seek="seek"
           />
           <div class="row">
-            <UiButton icon :label="playing ? 'Pause (k)' : 'Play (k)'" @click="togglePlay"><WatchIcon :name="playing ? 'pause' : 'play'" /></UiButton>
-            <UiButton icon :label="muted ? 'Unmute (m)' : 'Mute (m)'" :pressed="muted" @click="toggleMute"><WatchIcon :name="muted ? 'mute' : 'volume'" /></UiButton>
+            <UiButton icon :label="playing ? 'Pause (k)' : 'Play (k)'" @click="togglePlay"><UiIcon :name="playing ? 'pause' : 'play'" /></UiButton>
+            <UiButton icon :label="muted ? 'Unmute (m)' : 'Mute (m)'" :pressed="muted" @click="toggleMute"><UiIcon :name="muted ? 'mute' : 'volume'" /></UiButton>
             <span class="time vods-mono"><TickText :text="clockText" /> <span class="vods-muted">/ {{ toClock(range.end) }}</span></span>
             <span v-if="saved" class="saved" :class="saved" role="status" :title="SAVED_TEXT[saved][1]">{{ SAVED_TEXT[saved][0] }}</span>
 
@@ -285,10 +284,10 @@ watchEffect(() => learnGameColors(posterGames.value))
               </UiPopover>
             </slot>
 
-            <UiButton icon label="Copy link at this time" @click="copyLink"><WatchIcon name="copy" /></UiButton>
+            <UiButton icon label="Copy link at this time" @click="copyLink"><UiIcon name="copy" /></UiButton>
             <UiPopover v-if="relatedCount" prefer="up" align="right" width="min(320px, calc(100vw - 24px))" :cap="380">
               <template #trigger="{ toggle, open }">
-                <UiButton icon :label="madeOf.length ? 'Streams in this playthrough' : 'Playthroughs with this VOD'" :pressed="open" @click="toggle"><WatchIcon name="list" /></UiButton>
+                <UiButton icon :label="madeOf.length ? 'Streams in this playthrough' : 'Playthroughs with this VOD'" :pressed="open" @click="toggle"><UiIcon name="list" /></UiButton>
               </template>
               <template #default="{ close }">
                 <template v-if="madeOf.length">
@@ -298,7 +297,7 @@ watchEffect(() => learnGameColors(posterGames.value))
                       <template #lead><span class="smark vods-mono" :class="{ 'is-current': i === currentStream }">{{ m.mark }}</span></template>
                       {{ m.title }}
                     </UiMenuItem>
-                    <UiButton icon size="sm" variant="ghost" :to="m.original" label="Open the original VOD" @click="close()"><WatchIcon name="external" /></UiButton>
+                    <UiButton icon size="sm" variant="ghost" :to="m.original" label="Open the original VOD" @click="close()"><UiIcon name="external" /></UiButton>
                   </div>
                 </template>
                 <template v-if="appearsIn.length">
@@ -315,9 +314,9 @@ watchEffect(() => learnGameColors(posterGames.value))
                 </template>
               </template>
             </UiPopover>
-            <UiButton v-if="downloadUrl" icon label="Download VOD" :href="downloadUrl" external><WatchIcon name="download" /></UiButton>
+            <UiButton v-if="downloadUrl" icon label="Download VOD" :href="downloadUrl" external><UiIcon name="download" /></UiButton>
             <UiButton icon :label="theater ? 'Leave theater mode' : 'Theater mode'" :pressed="theater" @click="theater = !theater">
-              <WatchIcon :name="theater ? 'theater-off' : 'theater'" />
+              <UiIcon :name="theater ? 'theater-off' : 'theater'" />
             </UiButton>
             <UiButton
               icon
@@ -326,11 +325,11 @@ watchEffect(() => learnGameColors(posterGames.value))
               :disabled="!fullscreen.supported"
               @click="toggleFullscreen"
             >
-              <WatchIcon name="fullscreen" />
+              <UiIcon name="fullscreen" />
             </UiButton>
             <UiPopover prefer="up" align="right" width="min(300px, calc(100vw - 24px))" role="dialog">
               <template #trigger="{ toggle, open }">
-                <UiButton icon label="Player settings" :pressed="open" @click="toggle"><WatchIcon name="settings" /></UiButton>
+                <UiButton icon label="Player settings" :pressed="open" @click="toggle"><UiIcon name="settings" /></UiButton>
               </template>
               <div class="settings">
                 <div class="vods-eyebrow">Player settings</div>
@@ -338,7 +337,7 @@ watchEffect(() => learnGameColors(posterGames.value))
                   <span>Volume</span>
                   <span class="set-row">
                     <UiButton icon size="sm" variant="ghost" :label="muted ? 'Unmute' : 'Mute'" :pressed="muted" @click="toggleMute">
-                      <WatchIcon :name="muted ? 'mute' : 'volume'" />
+                      <UiIcon :name="muted ? 'mute' : 'volume'" />
                     </UiButton>
                     <UiSlider :model-value="muted ? 0 : volume" :min="0" :max="100" :step="5" label="Volume" class="grow" @update:model-value="setVolume" />
                     <span class="vods-mono small pct">{{ muted ? 'muted' : `${volume}%` }}</span>
@@ -358,7 +357,7 @@ watchEffect(() => learnGameColors(posterGames.value))
             <span class="shortcuts">
               <UiPopover prefer="up" align="right" width="min(260px, calc(100vw - 24px))" role="dialog">
                 <template #trigger="{ toggle, open }">
-                  <UiButton icon label="Keyboard shortcuts" :pressed="open" @click="toggle"><WatchIcon name="keyboard" /></UiButton>
+                  <UiButton icon label="Keyboard shortcuts" :pressed="open" @click="toggle"><UiIcon name="keyboard" /></UiButton>
                 </template>
                 <div class="vods-eyebrow menu-head">Shortcuts</div>
                 <div v-for="s in shortcuts" :key="s.label" class="kv">
