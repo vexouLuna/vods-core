@@ -138,8 +138,8 @@ watchEffect(() => learnGameColors(posterGames.value))
             <div v-if="buffering && !playerError" class="buffering"><UiSpinner :size="40" label="Loading video" /></div>
             <div v-if="playerError" class="unavail">
               <div class="vods-panel vx-glass-rim un-card">
-                <b>The YouTube player didn't load</b>
-                <p class="vods-muted">{{ playerError }} Check that youtube.com isn't blocked, then reload the page.</p>
+                <b>The video player didn't load</b>
+                <p class="vods-muted">{{ playerError }} An ad or content blocker may be blocking youtube.com: allow it for this site, then reload the page.</p>
               </div>
             </div>
             <div v-else-if="handoffCard" class="unavail bare" role="dialog" aria-label="Next stream">
@@ -177,7 +177,7 @@ watchEffect(() => learnGameColors(posterGames.value))
             </div>
             <div v-else-if="curBad" class="unavail corner">
               <div class="vods-panel vx-glass-rim un-card" role="status">
-                <b>This part isn't playable on YouTube <span class="vods-muted">({{ statusText[status[partIndex]!] }})</span></b>
+                <b>This part can't play here <span class="vods-muted">({{ statusText[status[partIndex]!] }})</span></b>
                 <span class="un-sub vods-muted">
                   {{ label(partIndex) }} of {{ spans.length }} · {{ toClock(spans[partIndex]!.start) }} – {{ toClock(spans[partIndex]!.end) }} of the VOD
                 </span>
@@ -426,8 +426,8 @@ watchEffect(() => learnGameColors(posterGames.value))
 
 .controls { border-top: 1px solid var(--vods-line); background: rgb(0 0 0 / 0.7); }
 .peek {
-  display: grid; place-items: center; width: 100%; height: 16px; padding: 0; border: none; flex: none;
-  background: #000; color: var(--vods-muted); font-size: 10px; line-height: 1; cursor: pointer; opacity: 0.35;
+  display: grid; place-items: center; width: 100%; height: 24px; padding: 0; border: none; flex: none;
+  background: #000; color: var(--vods-muted); font-size: 10px; line-height: 1; cursor: pointer; opacity: 0.6;
   transition: opacity 0.15s, color 0.15s;
 }
 .peek .watch-icon { width: 14px; height: 14px; }
