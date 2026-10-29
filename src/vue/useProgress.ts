@@ -1,8 +1,11 @@
 import { onScopeDispose, shallowRef, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
-import { resumeProgress, type Progress } from '../progress'
+import { resumeProgress, type Progress, type SaveStatus } from '../progress'
 import { useVodsContext } from './context'
 
 /**
+ * `status` says where the last save went (`saved` with the account, `local` in this browser only, `failed`), null
+ * before the first.
+ *
  * Loads where the viewer left off (`resume`, null when there's nothing worth resuming; its `t` is where to pick
  * up, which on a VOD that grew since they finished it is where the new part starts) and saves the position
  * every `everyMs` while playing, on pause, and when the page goes away.
@@ -16,6 +19,7 @@ export function useProgress(opts: {
 }) {
   const { progress } = useVodsContext()
   const resume = shallowRef<Progress | null>(null)
+  const status = shallowRef<SaveStatus | null>(null)
   const every = opts.everyMs ?? 10_000
   let lastSave = 0
 
@@ -33,7 +37,10 @@ export function useProgress(opts: {
     const duration = toValue(opts.duration)
     if (!duration || opts.time.value <= 0) return
     lastSave = Date.now()
-    void progress.set({ vodId: toValue(opts.vodId), t: opts.time.value, duration })
+    progress.set({ vodId: toValue(opts.vodId), t: opts.time.value, duration }).then(
+      (s) => (status.value = s ?? 'saved'),
+      () => (status.value = 'failed'),
+    )
   }
 
   watch(opts.time, () => {
@@ -48,5 +55,5 @@ export function useProgress(opts: {
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onHide)
   })
 
-  return { resume, save }
+  return { resume, save, status }
 }

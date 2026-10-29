@@ -55,6 +55,11 @@ export function useChat(opts: UseChatOptions) {
   const sources = shallowRef<ChatSources | null>(null)
   /** The chat being shown: the one asked for, or the archive's pick once a page says which (null until then). */
   const served = shallowRef<ChatSource | null>(null)
+  /** The first page since a (re)start is on its way: nothing to show yet, but not empty either. */
+  const loading = shallowRef(false)
+  /** The archive has no chat at all for this VOD (known once the first page says how much each chat has). */
+  const noChat = computed(() => !!sources.value && sources.value.bot + sources.value.replay === 0)
+  let loaded = false
   let replay: ChatReplay | null = null
   let ctrl: AbortController | undefined
 
@@ -68,6 +73,8 @@ export function useChat(opts: UseChatOptions) {
     replay?.dispose()
     replay = new ChatReplay(client, vodId, { ...opts, source: wanted() })
     served.value = wanted() ?? null
+    loaded = false
+    loading.value = false
     shown = []
     messages.value = []
   }
@@ -130,6 +137,7 @@ export function useChat(opts: UseChatOptions) {
     busy = true
     const r = replay
     const at = target()
+    if (!loaded) loading.value = true
     try {
       if (at.vodId !== r.vodId) return // a segment change: start() swaps the replay
       const update = await r.update(at.t)
@@ -144,9 +152,11 @@ export function useChat(opts: UseChatOptions) {
         messages.value = render(shown)
       }
       error.value = null
+      loaded = true
     } catch (e) {
       if ((e as Error).name !== 'AbortError') error.value = e as Error
     } finally {
+      if (r === replay) loading.value = false
       busy = false
       if (again) {
         again = false
@@ -170,5 +180,5 @@ export function useChat(opts: UseChatOptions) {
     ctrl?.abort()
   })
 
-  return { messages, error, emotes, badges, sources, served, vodId }
+  return { messages, error, loading, noChat, emotes, badges, sources, served, vodId }
 }

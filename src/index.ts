@@ -44,5 +44,5 @@ export {
 export { tokenize, resolveBadges, toChatMessage, loginOf, chatName, removalNote, type ChatLine, type NameMode, type Removal, type Token, type EmoteToken, type GifToken, type EmoteLayer, type Modifier, type Badge, type ChatMessage } from './chat/message'
 export { ChatReplay, type CommentSource, type ReplayOptions, type ReplayUpdate } from './chat/replay'
 
-export { LocalProgressStore, isFinished, isResumable, resumeAt, resumeProgress, type Progress, type ResumeOptions, type ProgressStore, type KeyValueStorage, type LocalProgressOptions } from './progress'
+export { LocalProgressStore, isFinished, isResumable, resumeAt, resumeProgress, type Progress, type ResumeOptions, type ProgressStore, type SaveStatus, type KeyValueStorage, type LocalProgressOptions } from './progress'
 export { AccountProgressStore, MERGE_BATCH, type AccountLink, type AccountProgressOptions } from './accountProgress'

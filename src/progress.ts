@@ -11,9 +11,16 @@ export interface Progress {
   updatedAt: number
 }
 
+/**
+ * Where a save went: `saved` with the account, `local` in this browser only (signed out, or the account couldn't be
+ * reached), `failed` nowhere (storage blocked or full).
+ */
+export type SaveStatus = 'saved' | 'local' | 'failed'
+
 export interface ProgressStore {
   get(vodId: string): Promise<Progress | null>
-  set(p: Omit<Progress, 'updatedAt'> & { updatedAt?: number }): Promise<void>
+  /** Says where the save went; a store that returns nothing is taken to have saved it. */
+  set(p: Omit<Progress, 'updatedAt'> & { updatedAt?: number }): Promise<SaveStatus | void>
   remove(vodId: string): Promise<void>
   /** Most recent first. */
   list(limit?: number): Promise<Progress[]>
@@ -103,12 +110,15 @@ export class LocalProgressStore implements ProgressStore {
     }
   }
 
-  private write(all: Record<string, Progress>): void {
+  /** False when it couldn't be written (no storage, quota, blocked); progress is a convenience, never an error. */
+  private write(all: Record<string, Progress>): boolean {
     const entries = Object.values(all).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, this.max)
     try {
-      this.storage?.setItem(this.key, JSON.stringify(Object.fromEntries(entries.map((e) => [e.vodId, e]))))
+      if (!this.storage) return false
+      this.storage.setItem(this.key, JSON.stringify(Object.fromEntries(entries.map((e) => [e.vodId, e]))))
+      return true
     } catch {
-      // quota or blocked: progress is a convenience, never an error
+      return false
     }
   }
 
@@ -116,16 +126,16 @@ export class LocalProgressStore implements ProgressStore {
     return this.read()[vodId] ?? null
   }
 
-  async set(p: Omit<Progress, 'updatedAt'> & { updatedAt?: number }): Promise<void> {
+  async set(p: Omit<Progress, 'updatedAt'> & { updatedAt?: number }): Promise<SaveStatus> {
     const all = this.read()
     const entry: Progress = { vodId: p.vodId, t: Math.floor(p.t), duration: Math.floor(p.duration), updatedAt: p.updatedAt ?? Date.now() }
     // A finished entry is kept: should the VOD grow (a playthrough's new stream), it resumes where that starts.
     if (entry.t < this.minT) {
       // Back at the start (a restart): nothing worth resuming.
-      if (!all[p.vodId]) return
+      if (!all[p.vodId]) return 'local'
       delete all[p.vodId]
     } else all[p.vodId] = entry
-    this.write(all)
+    return this.write(all) ? 'local' : 'failed'
   }
 
   /** Removes each of `vodIds` in one read and write. */

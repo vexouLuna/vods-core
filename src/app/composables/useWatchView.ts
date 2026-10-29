@@ -12,6 +12,7 @@ import {
   type DriveFile,
   type PartStatus,
   type PlayableTimeline,
+  type SaveStatus,
   type Position,
   type SegmentTimeline,
   type Span,
@@ -82,6 +83,8 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
   /** 0-100, and muted, as YouTube's player has them (it remembers them itself). */
   const volume = ref(100)
   const muted = ref(false)
+  /** YouTube is loading video, or the player isn't ready yet. */
+  const buffering = ref(true)
   const settings = useWatchSettings()
   let wp: WatchPlayer | null = null
 
@@ -96,6 +99,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     status.value = [...p.status]
     p.on('time', (t) => (time.value = t))
     p.on('playing', (v) => (playing.value = v))
+    p.on('buffering', (b) => (buffering.value = b))
     p.on('rate', (r) => (rate.value = r))
     p.on('volume', (v, m) => ((volume.value = v), (muted.value = m)))
     p.on('part', (i) => (partIndex.value = i))
@@ -107,10 +111,17 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     // A fresh element each time: YouTube replaces the one it's given with its iframe.
     const host = document.createElement('div')
     ytEl.value!.replaceChildren(host)
+    buffering.value = true
     mountYouTube(host, p, { start, autoplay, controls: settings.youtubeControls })
-      .then(() => wp === p && rate.value !== 1 && p.setRate(rate.value))
+      .then(() => {
+        if (wp !== p) return
+        buffering.value = false
+        if (rate.value !== 1) p.setRate(rate.value)
+      })
       .catch((e: Error) => {
-        if (wp === p) playerError.value = e.message || 'The YouTube player could not load.'
+        if (wp !== p) return
+        buffering.value = false
+        playerError.value = e.message || 'The YouTube player could not load.'
       })
   }
   onMounted(() => mount(props.start, true))
@@ -358,7 +369,8 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     if (s) knownSources.value = { vodId: replay.vodId.value, sources: s }
   })
   const chatError = computed(() => replay.error.value?.message ?? null)
-  if (props.track !== false) useProgress({ vodId: () => props.vod.id, duration: () => props.vod.duration, time, playing })
+  /** Where the watch position last went (null: not saved yet, or not tracked). */
+  const saved = props.track !== false ? useProgress({ vodId: () => props.vod.id, duration: () => props.vod.duration, time, playing }).status : shallowRef<SaveStatus | null>(null)
 
   // ---- keyboard ----
   const shortcuts = computed<Shortcut[]>(() => [
@@ -392,6 +404,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     clockText,
     offsetText,
     playing,
+    buffering,
     rate,
     volume,
     muted,
@@ -448,6 +461,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     // chat
     replay,
     chatError,
+    saved,
     shortcuts,
   }
 }

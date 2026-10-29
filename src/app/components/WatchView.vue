@@ -60,6 +60,7 @@ const {
   clockText,
   offsetText,
   playing,
+  buffering,
   rate,
   volume,
   muted,
@@ -106,11 +107,19 @@ const {
   another,
   replay,
   chatError,
+  saved,
   shortcuts,
 } = useWatchView(props, { notify: (message, options) => toast.show(message, options) })
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const rateOpts = RATES.map((r) => ({ value: String(r), label: `${r}×` }))
+
+/** The watch position's last save, short for the controls row and in full for its tooltip. */
+const SAVED_TEXT = {
+  saved: ['Place saved', 'Your place in this VOD is saved to your account.'],
+  local: ['Saved on this device', 'Your place in this VOD is saved in this browser only. Sign in to keep it on every device.'],
+  failed: ['Place not saved', "Your place in this VOD couldn't be saved: this browser is blocking site storage."],
+} as const
 
 // Game colours are the Deep Field palette's, so they stay with the look.
 const palette = computed(() => gamePalette(props.timeline.chapters.map((c) => c.name)))
@@ -126,6 +135,7 @@ watchEffect(() => learnGameColors(posterGames.value))
         <div class="video">
           <div class="video-box">
             <div class="yt"><div ref="ytEl"></div></div>
+            <div v-if="buffering && !playerError" class="buffering"><UiSpinner :size="40" label="Loading video" /></div>
             <div v-if="playerError" class="unavail">
               <div class="vods-panel vx-glass-rim un-card">
                 <b>The YouTube player didn't load</b>
@@ -213,6 +223,7 @@ watchEffect(() => learnGameColors(posterGames.value))
             <UiButton icon :label="playing ? 'Pause (k)' : 'Play (k)'" @click="togglePlay"><WatchIcon :name="playing ? 'pause' : 'play'" /></UiButton>
             <UiButton icon :label="muted ? 'Unmute (m)' : 'Mute (m)'" :pressed="muted" @click="toggleMute"><WatchIcon :name="muted ? 'mute' : 'volume'" /></UiButton>
             <span class="time vods-mono"><TickText :text="clockText" /> <span class="vods-muted">/ {{ toClock(range.end) }}</span></span>
+            <span v-if="saved" class="saved" :class="saved" role="status" :title="SAVED_TEXT[saved][1]">{{ SAVED_TEXT[saved][0] }}</span>
 
             <div class="now">
               <UiPopover prefer="up" width="min(340px, calc(100vw - 24px))" :cap="380">
@@ -364,6 +375,8 @@ watchEffect(() => learnGameColors(posterGames.value))
         :messages="replay.messages.value"
         :settings="chat"
         :error="chatError"
+        :loading="replay.loading.value"
+        :no-chat="replay.noChat.value"
         :playing="playing"
         :sources="replay.sources.value"
         :served="replay.served.value"
@@ -383,6 +396,9 @@ watchEffect(() => learnGameColors(posterGames.value))
 .video { position: relative; flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; background: #000; }
 .video-box { position: relative; width: min(100cqw, 100cqh * 16 / 9); aspect-ratio: 16 / 9; }
 .yt, .yt :deep(iframe) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.buffering { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.saved { font-size: 11px; color: var(--vods-muted); white-space: nowrap; }
+.saved.failed { color: var(--vods-warn); }
 .chat-reopen { position: absolute; right: 8px; top: 8px; }
 /* Over the black above the player's own top-right icons; beside "show chat" when that's there. */
 .manage { right: 8px; top: 8px; opacity: 0.7; }

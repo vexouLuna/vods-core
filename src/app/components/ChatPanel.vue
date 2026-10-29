@@ -13,6 +13,10 @@ const props = defineProps<{
   messages: ChatMessage[]
   settings: ChatSettings
   error?: string | null
+  /** The first page is on its way. */
+  loading?: boolean
+  /** The archive has no chat for this VOD. */
+  noChat?: boolean
   playing: boolean
   /** Messages each recording has for this VOD; null until chat's first page (or from an older archive). */
   sources?: ChatSources | null
@@ -161,6 +165,8 @@ const sizeOpts = [
 
     <div ref="lines" class="lines" aria-live="off" @scroll.passive="onScroll">
       <p v-if="error" class="note vods-muted">Chat couldn't load: {{ error }}</p>
+      <p v-else-if="noChat" class="note vods-muted">This VOD has no chat recording.</p>
+      <p v-else-if="loading && !messages.length" class="note vods-muted"><UiSpinner :size="12" /> Loading chat…</p>
       <p v-else-if="!messages.length" class="note vods-muted">{{ playing ? 'No chat here yet.' : 'Chat plays along with the video.' }}</p>
       <ChatLine
         v-for="m in messages"

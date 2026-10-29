@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { WatchPlayer, YT_STATE, type PlayerLike } from '../src/player'
+import { mountYouTube, WatchPlayer, YT_STATE, type PlayerLike } from '../src/player'
 import { isResumable, LocalProgressStore, resumeAt, resumeProgress, type KeyValueStorage } from '../src/progress'
 import { Timeline } from '../src/timeline'
 import { fixtureVod } from './helpers'
@@ -118,6 +118,31 @@ describe('WatchPlayer', () => {
     expect(seen).toEqual([[100, false], [100, true], [30, true]])
   })
 
+  it('reports buffering until YouTube plays, pauses or fails', () => {
+    const w = new WatchPlayer(new Timeline(vod))
+    w.attach(fakePlayer())
+    const seen: boolean[] = []
+    w.on('buffering', (b) => seen.push(b))
+    w.handleState(YT_STATE.BUFFERING)
+    w.handleState(YT_STATE.BUFFERING)
+    w.handleState(YT_STATE.PLAYING)
+    w.handleState(YT_STATE.BUFFERING)
+    w.handleError(150)
+    expect(seen).toEqual([true, false, true, false])
+  })
+
+  it('mountYouTube gives up when the player is never ready', async () => {
+    vi.stubGlobal('window', { YT: { Player: vi.fn() } }) // the API loads, but the player never calls onReady
+    try {
+      const mounted = mountYouTube({} as HTMLElement, new WatchPlayer(new Timeline(vod)), { readyTimeoutMs: 1000 })
+      const failed = expect(mounted).rejects.toThrow("didn't start in time")
+      await vi.advanceTimersByTimeAsync(1000)
+      await failed
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('keeps the speed asked for when the next part starts', () => {
     const w = new WatchPlayer(new Timeline(vod))
     const p = fakePlayer()
@@ -171,7 +196,7 @@ describe('LocalProgressStore', () => {
       removeItem: () => undefined,
     }
     const store = new LocalProgressStore({ storage: throwing })
-    await expect(store.set({ vodId: 'a', t: 100, duration: 1000 })).resolves.toBeUndefined()
+    await expect(store.set({ vodId: 'a', t: 100, duration: 1000 })).resolves.toBe('failed')
     expect(await store.get('a')).toBeNull()
   })
 
