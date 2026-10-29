@@ -50,7 +50,7 @@
 .vods-display { padding-bottom: 0.08em; /* the clipped gradient cuts descenders otherwise */ }
 .vods-eyebrow {
   font-family: var(--vx-font-mono);
-  font-size: 11px;
+  font-size: var(--vx-text-xs);
   font-weight: 400;
   text-transform: uppercase;
   letter-spacing: 0.12em;
@@ -75,9 +75,9 @@
 }
 .vods-ring { transition: box-shadow 0.15s; }
 .vods-ring:hover, a:hover > .vods-ring, .vods-ring:focus-visible {
-  box-shadow: 0 0 0 4px rgb(0 0 0 / 0.55), 0 0 0 5px var(--vx-ring);
+  box-shadow: 0 0 0 4px var(--vx-scrim), 0 0 0 5px var(--vx-ring);
 }
-.vods-overlay { font-family: var(--vx-font-sans); color: var(--vx-ink); font-size: 14px; line-height: 1.5; }
+.vods-overlay { font-family: var(--vx-font-sans); color: var(--vx-ink); font-size: var(--vx-text-lg); line-height: 1.5; }
 .vods-overlay *, .vods-overlay *::before, .vods-overlay *::after { box-sizing: border-box; }
 .vods-input {
   height: var(--vx-ctl);
@@ -85,14 +85,14 @@
   width: 100%;
   padding: 0 10px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--vx-text-md);
   color: var(--vx-ink);
   background: var(--vx-glass);
   border: 1px solid var(--vx-glass-line);
   border-radius: var(--vx-radius-sm);
 }
 .vods-input::placeholder { color: var(--vx-muted); }
-.vods-input:focus { outline: 1px solid var(--vx-accent); outline-offset: 1px; }
+.vods-input:focus { outline: none; }
 .vods-btn {
   display: inline-flex;
   align-items: center;
@@ -102,7 +102,7 @@
   height: var(--vx-ctl);
   padding: 0 12px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--vx-text-md);
   line-height: 1;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -117,7 +117,7 @@
 }
 .vods-btn:hover { background: var(--vx-hover); border-color: color-mix(in srgb, var(--vx-accent) 55%, transparent); color: var(--vx-ink); }
 .vods-btn.is-primary { background: var(--vx-accent); border-color: var(--vx-accent); color: var(--vx-bg); font-weight: 600; box-shadow: none; }
-.vods-btn.is-sm { height: var(--vx-ctl-sm); padding: 0 9px; font-size: 12px; gap: 5px; }
+.vods-btn.is-sm { height: var(--vx-ctl-sm); padding: 0 9px; font-size: var(--vx-text-sm); gap: 5px; }
 .vods-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 16px; margin: 0; }
-.vods-facts dt { font-family: var(--vx-font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--vx-muted); margin-bottom: 2px; }
+.vods-facts dt { font-family: var(--vx-font-mono); font-size: var(--vx-text-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--vx-muted); margin-bottom: 2px; }
 .vods-facts dd { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; overflow-wrap: anywhere; }
