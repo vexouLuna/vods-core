@@ -1,5 +1,11 @@
 # @vex/vods-core
 
+## 0.44.0
+
+### Minor Changes
+
+- add0e7e: A `UiIcon` control: the watch page's icons now come from the site's set (`Icon` in `createVodsApp({ ui })`, Deep Field's `VxIcon`). It's optional: a site that passes none gets the app's own drawings, the same 16 names and props.
+
 ## 0.43.0
 
 ### Minor Changes
