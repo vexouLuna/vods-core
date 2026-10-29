@@ -44,6 +44,16 @@ function loadBadges(client: ArchiveClient): Promise<RawBadges> {
   return request
 }
 
+/**
+ * The chat to ask for: the viewer's choice, unless this VOD has none of it and has the other one (then the other).
+ * `sources` is unknown (null) until the first page is in; the choice is asked for as is until then.
+ */
+export function chatSourceFor(pref: ChatSource | 'auto', sources: ChatSources | null): ChatSource | 'auto' {
+  if (pref === 'auto' || !sources) return pref
+  const other: ChatSource = pref === 'bot' ? 'replay' : 'bot'
+  return sources[pref] === 0 && sources[other] > 0 ? other : pref
+}
+
 export function useChat(opts: UseChatOptions) {
   const { client, fetch } = useVodsContext()
   const messages = shallowRef<ChatMessage[]>([])

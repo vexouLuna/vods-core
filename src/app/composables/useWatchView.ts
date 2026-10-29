@@ -1,29 +1,15 @@
-// The watch page without its look: the YouTube player across parts, the part and chapter state, theater and
-// fullscreen, copy link, the related VODs, a playthrough's handoff to its next stream (with its countdown), the
-// end-of-VOD suggestion, chat replay, watch progress and the keyboard shortcuts. WatchView.vue draws it; a site with
-// its own UI binds the same refs. Call it from a component's setup: it mounts the player once the component is.
-import { computed, onMounted, onScopeDispose, ref, shallowRef, toRef, watch } from 'vue'
-import {
-  mountYouTube,
-  toClock,
-  WatchPlayer,
-  watchPath,
-  type ChatSources,
-  type DriveFile,
-  type PartStatus,
-  type PlayableTimeline,
-  type SaveStatus,
-  type Position,
-  type SegmentTimeline,
-  type Span,
-  type Vod,
-} from '../../index'
-import { useChat, useProgress } from '../../vue/index'
+// The watch page without its look: the player, chat and progress (useWatchPlayer, from the vue entry) plus what the
+// app adds: the part and chapter state, theater and fullscreen, copy link, the related VODs, a playthrough's handoff to
+// its next stream (with its countdown), the end-of-VOD suggestion, the player settings and the keyboard shortcuts.
+// WatchView.vue draws it. Call it from a component's setup: it mounts the player once the component is.
+import { computed, onScopeDispose, ref, shallowRef, toRef, watch } from 'vue'
+import { toClock, watchPath, type DriveFile, type PartStatus, type PlayableTimeline, type Position, type SegmentTimeline, type Span, type Vod } from '../../index'
+import { useWatchPlayer } from '../../vue/index'
 import { cutNote, unplayable } from '../lib/cuts'
 import type { Notify } from '../lib/notify'
 import { clamp } from '../lib/place'
 import { partOffset, streamEntered } from '../lib/watch'
-import { chatSourceFor, useChatSettings } from './useChatSettings'
+import { useChatSettings } from './useChatSettings'
 import { useFullscreen } from './useFullscreen'
 import { useNextVod, type NextVod } from './useNextVod'
 import { useShortcuts, type Shortcut } from './useShortcuts'
@@ -73,92 +59,35 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
   const label = (i: number) => props.partLabel?.(i) ?? `Part ${props.timeline.uploads[i]?.part ?? i + 1}`
 
   // ---- player ----
-  const ytEl = ref<HTMLElement | null>(null)
-  const time = ref(props.timeline.toVod(props.start))
-  const playing = ref(false)
-  const rate = ref(1)
-  const partIndex = ref(props.start.index)
-  const status = shallowRef<PartStatus[]>([])
-  const playerError = ref<string | null>(null)
-  /** 0-100, and muted, as YouTube's player has them (it remembers them itself). */
-  const volume = ref(100)
-  const muted = ref(false)
-  /** YouTube is loading video, or the player isn't ready yet. */
-  const buffering = ref(true)
   const settings = useWatchSettings()
-  let wp: WatchPlayer | null = null
-
-  /** A YouTube player in `ytEl` from `start`. A new one replaces the old (YouTube's controls are set when it's made). */
-  function mount(start: Position, autoplay: boolean) {
-    const old = wp
-    const p = (wp = new WatchPlayer(props.timeline, { skipBroken: false }))
-    if (old) {
-      p.status.splice(0, p.status.length, ...old.status) // what's known not to play stays known
-      old.destroy()
-    }
-    status.value = [...p.status]
-    p.on('time', (t) => (time.value = t))
-    p.on('playing', (v) => (playing.value = v))
-    p.on('buffering', (b) => (buffering.value = b))
-    p.on('rate', (r) => (rate.value = r))
-    p.on('volume', (v, m) => ((volume.value = v), (muted.value = m)))
-    p.on('part', (i) => (partIndex.value = i))
-    p.on('partError', () => (status.value = [...p.status]))
-    p.on('ended', () => {
-      playing.value = false
-      if (handoff.value === null) void openEnd()
-    })
-    // A fresh element each time: YouTube replaces the one it's given with its iframe.
-    const host = document.createElement('div')
-    ytEl.value!.replaceChildren(host)
-    buffering.value = true
-    mountYouTube(host, p, { start, autoplay, controls: settings.youtubeControls })
-      .then(() => {
-        if (wp !== p) return
-        buffering.value = false
-        if (rate.value !== 1) p.setRate(rate.value)
-      })
-      .catch((e: Error) => {
-        if (wp !== p) return
-        buffering.value = false
-        playerError.value = e.message || 'The YouTube player could not load.'
-      })
-  }
-  onMounted(() => mount(props.start, true))
-  watch(
-    () => settings.youtubeControls,
-    () => wp && mount(props.timeline.locate(time.value), playing.value),
-  )
-  onScopeDispose(() => {
-    wp?.destroy()
-    wp = null
+  const player = useWatchPlayer({
+    vodId: () => props.vod.id,
+    duration: () => props.vod.duration,
+    timeline: () => props.timeline,
+    start: props.start,
+    controls: () => settings.youtubeControls,
+    segments: () => props.segments,
+    chat: { source: () => chat.source, offset: toRef(chat, 'delay') },
+    track: props.track !== false,
+    onEnded: () => handoff.value === null && void openEnd(),
   })
-  function setVolume(v: number) {
-    if (muted.value && v > 0) wp?.setMuted(false)
-    wp?.setVolume(v)
-  }
-  const toggleMute = () => wp?.setMuted(!muted.value)
-  const setRate = (r: number) => wp?.setRate(r)
+  const { el: ytEl, time, playing, buffering, rate, volume, muted, partIndex, status, error: playerError, setVolume, toggleMute, setRate, saved } = player
+  const replay = player.chat!
 
   function seek(t: number) {
     jumped = true
     ending.value = null
     if (handoff.value !== null) closeHandoff(true)
-    const to = props.timeline.watchable(clamp(t, range.value.start, range.value.end))
-    time.value = to
-    wp?.seek(to)
+    player.seek(clamp(t, range.value.start, range.value.end))
   }
   function playPart(i: number) {
     jumped = true
     if (handoff.value !== null) closeHandoff(false)
-    if (wp) wp.playPart(i)
-    else time.value = spans.value[i]?.start ?? time.value
+    player.playPart(i)
   }
   function togglePlay() {
-    if (!wp) return
     if (handoff.value !== null) return closeHandoff(true)
-    if (wp.isPlaying()) wp.pause()
-    else wp.play()
+    player.togglePlay()
   }
 
   // ---- what changes on every tick, as getters for small children ----
@@ -292,7 +221,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
   }
   function openHandoff(i: number) {
     handoff.value = i
-    wp?.pause()
+    player.pause()
     countdown.value = AUTO_CONTINUE
     const until = Date.now() + AUTO_CONTINUE * 1000
     countdownTimer = setInterval(() => {
@@ -306,7 +235,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     countdown.value = null
     grace.value = false
     handoff.value = null
-    if (play) wp?.play()
+    if (play) player.play()
   }
   onScopeDispose(() => (clearInterval(countdownTimer), clearTimeout(graceTimer)))
   const handoffCard = computed(() => {
@@ -351,26 +280,8 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
   }
   watch(playing, (v) => v && (ending.value = null))
 
-  // ---- chat + progress ----
-  // The chats the VOD whose chat is showing has (on a synthetic VOD, the playing source's), once chat's first page
-  // says (kept here, since useChat's own ref doesn't exist yet when its options are first read). Tagged with the VOD,
-  // so the next VOD doesn't start from this one's.
-  const knownSources = shallowRef<{ vodId: string; sources: ChatSources } | null>(null)
-  const replay = useChat({
-    vodId: () => props.vod.id,
-    time,
-    playing,
-    offset: toRef(chat, 'delay'),
-    segments: () => props.segments ?? null,
-    chatSource: () =>
-      chatSourceFor(chat.source, knownSources.value && knownSources.value.vodId === replay.vodId.value ? knownSources.value.sources : null),
-  })
-  watch(replay.sources, (s) => {
-    if (s) knownSources.value = { vodId: replay.vodId.value, sources: s }
-  })
+  // ---- chat ----
   const chatError = computed(() => replay.error.value?.message ?? null)
-  /** Where the watch position last went (null: not saved yet, or not tracked). */
-  const saved = props.track !== false ? useProgress({ vodId: () => props.vod.id, duration: () => props.vod.duration, time, playing }).status : shallowRef<SaveStatus | null>(null)
 
   // ---- keyboard ----
   const shortcuts = computed<Shortcut[]>(() => [
