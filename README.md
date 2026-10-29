@@ -85,32 +85,104 @@ with every chapter cut.
 
 ## Using the engine on its own
 
+A site with its own watch page uses the root and `vue` entries only: no `app`, no `Ui*` controls, and no CSS to
+import (the engine has no styles; `app.css` and `deep-field.css` are the app's). It needs `vue` (and a router, or
+any way to get the VOD id).
+
 ```ts
 // main.ts
+import { createApp } from 'vue'
 import { defineVodsConfig } from '@vex/vods-core'
 import { createVods } from '@vex/vods-core/vue'
+import Watch from './Watch.vue'
 
 const config = defineVodsConfig({
   channel: 'vexouLuna',
   twitchId: '38656648',
   apiBase: 'https://vods.example.net/backend',
   startDate: '2024-09-16',
-  defaultPartDuration: 10800, // optional; strings like "10800" are parsed
 })
-app.use(createVods(config))
+createApp(Watch, { id: new URLSearchParams(location.search).get('vod') ?? '' })
+  .use(createVods(config)) // progress: LocalProgressStore unless you pass `{ progress }` (see below)
+  .mount('#app')
 ```
 
-```ts
-// a watch page
-const { vod, timeline } = useWatch(() => route.params.id as string)
-const time = ref(0), playing = ref(false)
-const watch = new WatchPlayer(timeline.value!)            // once the timeline exists
-watch.on('time', (t) => (time.value = t))
-watch.on('playing', (p) => (playing.value = p))
-await mountYouTube(el, watch, { start: timeline.value!.resolveStart({ t: parseTimestamp(route.query.t as string) }) })
-const { messages, sources, served } = useChat({ vodId, time, playing, offset: chatOffset, chatSource })  // chatSource: 'auto' | 'replay' | 'bot'
-const { resume } = useProgress({ vodId, duration: () => vod.value?.duration ?? 0, time, playing })
+`useWatch` loads the VOD; the player goes in a child that mounts once the timeline exists, since
+`useWatchPlayer` mounts the YouTube player when its component does:
+
+```vue
+<!-- Watch.vue -->
+<script setup lang="ts">
+import { parseTimestamp } from '@vex/vods-core'
+import { useWatch } from '@vex/vods-core/vue'
+import Player from './Player.vue'
+
+const props = defineProps<{ id: string }>()
+const { vod, timeline, loading, notFound, error, reload } = useWatch(() => props.id)
+const t = parseTimestamp(new URLSearchParams(location.search).get('t') ?? '')
+</script>
+
+<template>
+  <p v-if="loading">Loading…</p>
+  <p v-else-if="notFound">There's no VOD with this id.</p>
+  <p v-else-if="error">The archive didn't answer. <button @click="reload">Try again</button></p>
+  <Player v-else-if="vod && timeline" :key="vod.id" :vod="vod" :timeline="timeline" :start="timeline.resolveStart({ t })" />
+</template>
 ```
+
+```vue
+<!-- Player.vue -->
+<script setup lang="ts">
+import { toClock, type PlayableTimeline, type Position, type Vod } from '@vex/vods-core'
+import { useWatchPlayer } from '@vex/vods-core/vue'
+
+const props = defineProps<{ vod: Vod; timeline: PlayableTimeline; start: Position }>()
+const p = useWatchPlayer({
+  vodId: () => props.vod.id,
+  duration: () => props.vod.duration,
+  timeline: () => props.timeline,
+  start: props.start,
+  chat: { source: 'auto' }, // or 'bot' / 'replay', a ref, or `false` for no chat
+  onEnded: () => console.log('the last part ended'),
+})
+const chat = p.chat!
+</script>
+
+<template>
+  <div style="aspect-ratio: 16 / 9"><div :ref="(el) => (p.el.value = el as HTMLElement)" /></div>
+  <!-- error: the IFrame API was blocked (an ad blocker, a firewall) or the player wasn't ready within 15s -->
+  <p v-if="p.error.value">{{ p.error.value }} Allow youtube.com and reload the page.</p>
+  <p v-else-if="p.buffering.value">Loading video…</p>
+  <!-- status[i]: why part i can't play ('processing', 'missing', 'blocked', 'error'); it isn't skipped by itself -->
+  <p v-if="p.status.value[p.partIndex.value] !== 'ok'">
+    This part can't play ({{ p.status.value[p.partIndex.value] }}).
+    <button @click="p.playPart(p.partIndex.value + 1)">Next part</button>
+  </p>
+
+  <button @click="p.togglePlay">{{ p.playing.value ? 'Pause' : 'Play' }}</button>
+  <button @click="p.toggleMute">{{ p.muted.value ? 'Unmute' : 'Mute' }}</button>
+  <input type="range" min="0" max="100" :value="p.volume.value" @input="p.setVolume(+($event.target as HTMLInputElement).value)" />
+  <input type="range" min="0" :max="vod.duration" :value="p.time.value" @change="p.seek(+($event.target as HTMLInputElement).value)" />
+  {{ toClock(p.time.value) }} / {{ toClock(vod.duration) }}
+  <span v-if="p.saved.value === 'failed'">Your place isn't being saved.</span>
+
+  <p v-if="chat.error.value">Chat didn't load. It tries again as the video plays.</p>
+  <p v-else-if="chat.noChat.value">This VOD has no chat recording.</p>
+  <p v-else-if="chat.loading.value">Loading chat…</p>
+  <!-- tokens are render-ready text, emotes and links, never HTML -->
+  <p v-for="m in chat.messages.value" :key="m.id">
+    <b :style="{ color: m.color ?? undefined }">{{ m.user }}</b>:
+    <template v-for="(tok, i) in m.tokens" :key="i">
+      <img v-if="tok.kind === 'emote'" :src="tok.image.src" :alt="tok.emote.code" height="28" />
+      <template v-else-if="tok.kind === 'text'">{{ tok.text }}</template>
+    </template>
+  </p>
+</template>
+```
+
+`useWatchPlayer` takes `controls: true` (or a ref) to show YouTube's own controls over the video; changing it makes
+a new YouTube player at the same time. For finer control, `WatchPlayer` and `mountYouTube` are what it is built
+on, and `useChat` / `useProgress` work on any `time` and `playing` refs.
 
 ## Modules
 
@@ -124,7 +196,7 @@ const { resume } = useProgress({ vodId, duration: () => vod.value?.duration ?? 0
 | `player` | `WatchPlayer`: drives the YouTube IFrame player across parts: seeks, auto-advance, part errors (`missing` / `blocked` / `processing`), VOD-time ticks, playback speed. `mountYouTube` wires the real player. |
 | `chat` | `ChatReplay` (paged, prefetching, seek-aware), `loadEmotes` (the channel and global sets the archive saved for the VOD, with today's 7TV globals only for rows saved before globals were kept; for VODs without saved sets, the channel's current sets, which the archive caches), `tokenize` / `resolveBadges` / `toChatMessage` (render-ready tokens, never HTML; zero-width emotes come as overlays of the emote they cover, BTTV / FFZ modifiers as effects on the emote they apply to). Chat has two sources: Twitch's replay of the VOD (`replay`) and doomtp-bot's live log (`bot`, with notices, redeems, cheers and removed messages, all on `ChatMessage`); `ChatReplay`'s `source` option picks one, and `sources` has how many messages each has. `loginOf` gives a username (the bot's, or a plain-ASCII display name in lower case). |
 | `progress` | `LocalProgressStore` (browser storage) behind a `ProgressStore` interface. `AccountProgressStore` keeps it with the viewer's vexoul.net account instead (see below). |
-| `vue` | `createVods`, `useVods`, `useWatch`, `useChat`, `useProgress`. Import from `@vex/vods-core/vue`. |
+| `vue` | `createVods`, `useVods`, `useWatch`, `useWatchPlayer`, `useChat`, `useProgress`. Import from `@vex/vods-core/vue`. |
 | `app` | `createVodsApp` and the site (`src/app/`): pages, components, the Manage dashboard, the router. Import from `@vex/vods-core/app`, with its styles from `@vex/vods-core/app.css`. |
 | `deep-field` | `deepField`, the Deep Field controls to pass as `createVodsApp({ ui })`, with `@vex/vods-core/deep-field.css`. |
 | `dev` | `adminMock`, the dev server's admin API. Import from `@vex/vods-core/dev` in a vite config. |
