@@ -17,6 +17,7 @@ import VodsShell from '../components/VodsShell.vue'
 import { loadGamesPlayed } from '../lib/gamesPlayed'
 import { shownHomeCards, siteOptions } from '../lib/siteOptions'
 import { tagConfig } from '../lib/vodTags'
+import { site } from '../site'
 import { listPath, parseListQuery, toApiFilter, toListQuery } from '../lib/listQuery'
 
 const { client, progress } = useVodsContext()
@@ -53,6 +54,8 @@ const resumeOf = (v: Vod) => resumeProgress(saved.value.get(v.id), v.duration)
 
 <template>
   <VodsShell>
+    <!-- The page's heading for screen readers and outlines; the header already shows the name. -->
+    <h1 class="sr-only">{{ site.name }}</h1>
     <section class="top">
       <template v-for="c in cards" :key="c.id">
         <template v-if="c.type === 'live'">
@@ -68,5 +71,6 @@ const resumeOf = (v: Vod) => resumeProgress(saved.value.get(v.id), v.duration)
 </template>
 
 <style scoped>
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .top { display: flex; flex-direction: column; gap: 10px; }
 </style>

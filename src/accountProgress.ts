@@ -1,7 +1,7 @@
 // Watch progress kept with the viewer's account (vex-auth's /v1/progress), so it follows them between
 // browsers. Signed out, or when the service can't be reached, it falls back to the browser's LocalProgressStore;
 // merge() moves those local entries to the account (newest wins per VOD) once someone signs in.
-import { LocalProgressStore, type Progress, type ProgressStore } from './progress'
+import { LocalProgressStore, type Progress, type ProgressStore, type SaveStatus } from './progress'
 
 /** The signed-in account, as `@vex/ui/account`'s Account provides it. */
 export interface AccountLink {
@@ -51,31 +51,36 @@ export class AccountProgressStore implements ProgressStore {
     return this.local.get(vodId)
   }
 
-  async set(p: Omit<Progress, 'updatedAt'> & { updatedAt?: number }): Promise<void> {
+  async set(p: Omit<Progress, 'updatedAt'> & { updatedAt?: number }): Promise<SaveStatus> {
     if (!this.account.signedIn()) return this.local.set(p)
     const entry: Progress = { vodId: p.vodId, t: Math.floor(p.t), duration: Math.floor(p.duration), updatedAt: p.updatedAt ?? Date.now() }
     // Back at the start: nothing worth resuming (the same rule as the local store). Finished entries are kept.
-    if (entry.t < this.minT) return this.remove(p.vodId)
+    if (entry.t < this.minT) return (await this.removed(p.vodId)) ? 'saved' : 'local'
     try {
       const res = await this.account.request(this.path(p.vodId), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ t: entry.t, duration: entry.duration, updatedAt: entry.updatedAt }),
       })
-      if (res.ok) return
+      if (res.ok) return 'saved'
     } catch {
       // unreachable
     }
-    await this.local.set(entry) // kept here, and merged into the account next time
+    return this.local.set(entry) // kept here, and merged into the account next time
   }
 
   async remove(vodId: string): Promise<void> {
+    await this.removed(vodId)
+  }
+
+  /** Removes it; true when the account's entry is gone too (false: signed out, or the account couldn't be reached). */
+  private async removed(vodId: string): Promise<boolean> {
     await this.local.remove(vodId)
-    if (!this.account.signedIn()) return
+    if (!this.account.signedIn()) return false
     try {
-      await this.account.request(this.path(vodId), { method: 'DELETE' })
+      return (await this.account.request(this.path(vodId), { method: 'DELETE' })).ok
     } catch {
-      // progress is a convenience, never an error
+      return false // progress is a convenience, never an error
     }
   }
 

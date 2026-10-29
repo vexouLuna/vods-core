@@ -59,7 +59,7 @@ describe('AccountProgressStore', () => {
   it('uses the browser while signed out', async () => {
     const { service, local, store } = setup()
     service.signed = false
-    await store.set({ vodId: 'a', t: 100, duration: 1000, updatedAt: 1 })
+    expect(await store.set({ vodId: 'a', t: 100, duration: 1000, updatedAt: 1 })).toBe('local')
     expect(await local.get('a')).toMatchObject({ t: 100 })
     expect(await store.get('a')).toMatchObject({ t: 100 })
     expect(service.calls).toEqual([])
@@ -67,7 +67,7 @@ describe('AccountProgressStore', () => {
 
   it('keeps progress with the account while signed in', async () => {
     const { service, local, store } = setup()
-    await store.set({ vodId: 'v:1', t: 100.7, duration: 1000.2, updatedAt: 5 })
+    expect(await store.set({ vodId: 'v:1', t: 100.7, duration: 1000.2, updatedAt: 5 })).toBe('saved')
     expect(service.calls).toEqual(['PUT /v1/progress/v%3A1'])
     expect(service.entries.get('v:1')).toEqual({ vodId: 'v:1', t: 100, duration: 1000, updatedAt: 5 })
     expect(await store.get('v:1')).toEqual({ vodId: 'v:1', t: 100, duration: 1000, updatedAt: 5 })
@@ -82,14 +82,14 @@ describe('AccountProgressStore', () => {
     await store.set({ vodId: 'a', t: 980, duration: 1000 })
     expect(service.entries.get('a')).toMatchObject({ t: 980, duration: 1000 })
     await store.set({ vodId: 'b', t: 100, duration: 1000 })
-    await store.set({ vodId: 'b', t: 5, duration: 1000 })
+    expect(await store.set({ vodId: 'b', t: 5, duration: 1000 })).toBe('saved')
     expect(service.entries.has('b')).toBe(false)
   })
 
   it('keeps a save locally when the service is down, and merges it later', async () => {
     const { service, local, store } = setup()
     service.down = true
-    await store.set({ vodId: 'a', t: 100, duration: 1000, updatedAt: 7 })
+    expect(await store.set({ vodId: 'a', t: 100, duration: 1000, updatedAt: 7 })).toBe('local')
     expect(await local.get('a')).toMatchObject({ t: 100 })
     expect(await store.get('a')).toMatchObject({ t: 100 })
     service.down = false

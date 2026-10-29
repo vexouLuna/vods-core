@@ -184,6 +184,28 @@ describe('vue composables', () => {
     expect(chat.served.value).toBe('replay')
   })
 
+  it('useChat says when chat is loading, and when the VOD has none', async () => {
+    let release!: () => void
+    const ready = new Promise<void>((r) => (release = r))
+    const { run } = setup(async (url) => {
+      if (url.includes('/comments')) {
+        await ready
+        return json({ comments: [], sources: { replay: 0, bot: 0 } })
+      }
+      if (url.includes('/emotes?')) return json({ total: 0, limit: 1, skip: 0, data: [] })
+      return json({}, 404)
+    })
+    const time = ref(0)
+    const chat = run(() => useChat({ vodId: 'v', time, playing: ref(true) }))
+    expect([chat.loading.value, chat.noChat.value]).toEqual([false, false])
+    time.value = 1
+    await flush()
+    expect([chat.loading.value, chat.noChat.value]).toEqual([true, false])
+    release()
+    await flush()
+    expect([chat.loading.value, chat.noChat.value]).toEqual([false, true])
+  })
+
   it('useChat renders messages again once emotes arrive after them', async () => {
     const page = { comments: [{ id: 'c0', vod_id: 'v', display_name: 'u', content_offset_seconds: 0, message: [{ text: 'SHEESH' }], user_badges: null, user_color: null }] }
     let releaseEmotes!: () => void
@@ -210,11 +232,13 @@ describe('vue composables', () => {
     const { run, ctx } = setup(async () => json({}, 404))
     const time = ref(0)
     const playing = ref(true)
-    run(() => useProgress({ vodId: 'v', duration: 1000, time, playing }))
+    const p = run(() => useProgress({ vodId: 'v', duration: 1000, time, playing }))
+    expect(p.status.value).toBeNull()
     time.value = 400
     playing.value = false
     await flush()
     expect((await ctx.progress.get('v'))?.t).toBe(400)
+    expect(p.status.value).toBe('local')
     const again = run(() => useProgress({ vodId: 'v', duration: 1000, time: ref(0), playing: ref(false) }))
     await flush()
     expect(again.resume.value?.t).toBe(400)

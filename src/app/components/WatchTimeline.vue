@@ -145,18 +145,21 @@ const {
 
 <style scoped>
 .timeline { padding: 2px 12px 0; }
-.labels { position: relative; height: 16px; }
+.labels { position: relative; height: 24px; }
+/* 24px tall to hit with a finger; the text stays small. */
 .plabel {
-  position: absolute; top: 1px; transform: translateX(2px); font-size: 10px; line-height: 1; padding: 1px 3px;
-  background: none; border: none; color: var(--vods-muted); cursor: pointer; border-radius: 3px; white-space: nowrap;
-  max-width: 12ch; overflow: hidden; text-overflow: ellipsis;
+  position: absolute; top: 0; height: 24px; display: flex; align-items: center; transform: translateX(-2px);
+  font-size: 10px; line-height: 1; padding: 0 5px; background: none; border: none; color: var(--vods-muted); cursor: pointer;
+  border-radius: 3px; white-space: nowrap; max-width: 14ch; overflow: hidden; text-overflow: ellipsis;
 }
 .plabel.cur { color: var(--vods-accent); }
 .plabel.hid { visibility: hidden; }
 .plabel.bad { text-decoration: line-through; opacity: 0.6; }
 .plabel:hover { color: var(--vods-ink); }
-.track { position: relative; height: 8px; cursor: pointer; margin: 2px 0 4px; touch-action: none; border-radius: 2px; outline-offset: 4px; }
-.track:hover, .track:focus-visible { height: 10px; margin-top: 1px; margin-bottom: 3px; }
+/* The bar stays thin; an invisible band 8px above and below makes it 24px to hit. */
+.track { position: relative; height: 8px; cursor: pointer; margin: 8px 0; touch-action: none; border-radius: 2px; outline-offset: 4px; }
+.track::before { content: ""; position: absolute; inset: -8px 0; }
+.track:hover, .track:focus-visible { height: 10px; margin-block: 7px; }
 .seg { position: absolute; top: 0; bottom: 0; border-right: 2px solid rgb(0 0 0 / 0.85); background: var(--c); }
 .seg.cut { background: var(--vods-hatch); }
 /* A merge's gap: the stream was down, so nothing to hatch; a dotted line through the middle marks the join. */

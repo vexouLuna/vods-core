@@ -20,6 +20,11 @@ export interface PlayerLike {
   mute(): void
   unMute(): void
   isMuted(): boolean
+  /** 0-100. */
+  setVolume(volume: number): void
+  getVolume(): number
+  setPlaybackRate(rate: number): void
+  getPlaybackRate(): number
   destroy(): void
 }
 
@@ -49,6 +54,8 @@ export interface PlayerEvents {
   /** VOD seconds, about 4× a second while playing, and once after every seek. */
   time: (t: number) => void
   playing: (playing: boolean) => void
+  /** YouTube is loading video (after a seek, a new part, a slow connection): show a spinner while on. */
+  buffering: (buffering: boolean) => void
   /** The upload being played changed. */
   part: (index: number) => void
   /** A part failed; `status` says why. */
@@ -57,6 +64,8 @@ export interface PlayerEvents {
   ended: () => void
   /** Playback speed changed (1 = normal), e.g. from YouTube's settings menu. */
   rate: (rate: number) => void
+  /** Volume (0-100) or mute changed, here or in YouTube's own controls; checked on every tick and after a change. */
+  volume: (volume: number, muted: boolean) => void
 }
 
 type Listeners = { [K in keyof PlayerEvents]: Set<PlayerEvents[K]> }
@@ -72,10 +81,14 @@ export class WatchPlayer {
   private player: PlayerLike | null = null
   private index = -1
   private timer: ReturnType<typeof setInterval> | undefined
-  private readonly listeners: Listeners = { time: new Set(), playing: new Set(), part: new Set(), partError: new Set(), ended: new Set(), rate: new Set() }
+  private readonly listeners: Listeners = { time: new Set(), playing: new Set(), buffering: new Set(), part: new Set(), partError: new Set(), ended: new Set(), rate: new Set(), volume: new Set() }
   readonly status: PartStatus[]
   private readonly tickMs: number
   private readonly skipBroken: boolean
+  /** The speed asked for here, put back when a new part starts (YouTube may reset it on a new video). */
+  private wantedRate = 1
+  private lastVolume: [number, boolean] | null = null
+  private buffering = false
 
   constructor(
     readonly timeline: PlayableTimeline,
@@ -99,7 +112,9 @@ export class WatchPlayer {
   attach(player: PlayerLike, start: Position = { index: 0, offset: 0 }, autoplay = true): void {
     this.player = player
     this.index = -1
+    this.lastVolume = null
     this.go(start, autoplay)
+    this.checkVolume()
   }
 
   get partIndex(): number {
@@ -143,6 +158,32 @@ export class WatchPlayer {
     this.player?.pauseVideo()
   }
 
+  /** 0-100. */
+  setVolume(volume: number): void {
+    this.player?.setVolume(Math.round(Math.min(100, Math.max(0, volume))))
+    this.checkVolume()
+  }
+
+  setMuted(muted: boolean): void {
+    if (muted) this.player?.mute()
+    else this.player?.unMute()
+    this.checkVolume()
+  }
+
+  /** Playback speed (1 = normal); YouTube rounds it to the speeds the video has. */
+  setRate(rate: number): void {
+    this.wantedRate = rate
+    this.player?.setPlaybackRate(rate)
+  }
+
+  private checkVolume(): void {
+    if (!this.player) return
+    const now: [number, boolean] = [this.player.getVolume(), this.player.isMuted()]
+    if (this.lastVolume?.[0] === now[0] && this.lastVolume[1] === now[1]) return
+    this.lastVolume = now
+    this.emit('volume', ...now)
+  }
+
   private go(pos: Position, autoplay: boolean): void {
     const player = this.player
     if (!player || pos.index < 0 || pos.index >= this.timeline.uploads.length) return
@@ -169,7 +210,10 @@ export class WatchPlayer {
 
   /** Wire these to the YT.Player `onStateChange` / `onError` events. */
   handleState(state: number): void {
+    const buffering = state === YT_STATE.BUFFERING
+    if (buffering !== this.buffering) this.emit('buffering', (this.buffering = buffering))
     if (state === YT_STATE.PLAYING) {
+      if (this.player && this.player.getPlaybackRate() !== this.wantedRate) this.player.setPlaybackRate(this.wantedRate)
       this.startTicking()
       this.emit('playing', true)
     } else if (state === YT_STATE.PAUSED || state === YT_STATE.ENDED) {
@@ -190,6 +234,7 @@ export class WatchPlayer {
 
   /** Wire this to the YT.Player `onPlaybackRateChange` event. */
   handleRate(rate: number): void {
+    this.wantedRate = rate
     this.emit('rate', rate)
   }
 
@@ -199,6 +244,7 @@ export class WatchPlayer {
     const status = statusFromYouTubeError(code)
     this.status[index] = status
     this.stopTicking()
+    if (this.buffering) this.emit('buffering', (this.buffering = false))
     this.emit('partError', index, status)
     if (this.skipBroken) {
       const next = this.nextPlayable(index)
@@ -216,6 +262,7 @@ export class WatchPlayer {
     const end = this.timeline.partEnd(this.index)
     if (end !== null && this.player && (this.player.getCurrentTime() || 0) >= end - CLIP_END_SLACK) return this.advance()
     this.emit('time', this.currentTime())
+    this.checkVolume()
   }
 
   private stopTicking(): void {
@@ -280,23 +327,29 @@ export function loadYouTubeApi(): Promise<YTNamespace> {
   return apiPromise
 }
 
+/** How long mountYouTube waits for the player to be ready by default, in ms. */
+export const READY_TIMEOUT = 15_000
+
 /**
  * Creates the YouTube player in `el` and attaches it to `watch`. YouTube's own controls stay on by default
- * (`controls: 1`). Resolves once the player is ready.
+ * (`controls: 1`). Resolves once the player is ready; rejects when the IFrame API can't load, or when the player
+ * isn't ready within `readyTimeoutMs` (so a page never waits forever).
  */
 export async function mountYouTube(
   el: HTMLElement,
   watch: WatchPlayer,
-  opts: { start?: Position; autoplay?: boolean; controls?: boolean } = {},
+  opts: { start?: Position; autoplay?: boolean; controls?: boolean; readyTimeoutMs?: number } = {},
 ): Promise<PlayerLike> {
   const YT = await loadYouTubeApi()
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("The YouTube player didn't start in time.")), opts.readyTimeoutMs ?? READY_TIMEOUT)
     new YT.Player(el, {
       width: '100%',
       height: '100%',
       playerVars: { autoplay: opts.autoplay === false ? 0 : 1, playsinline: 1, rel: 0, controls: opts.controls === false ? 0 : 1 },
       events: {
         onReady: (e) => {
+          clearTimeout(timer)
           watch.attach(e.target, opts.start, opts.autoplay !== false)
           resolve(e.target)
         },

@@ -1,7 +1,9 @@
 // The viewer's chat settings, remembered in this browser. Storage can be missing or throw (private mode, blocked
 // site data); the page then just starts from the defaults.
 import { reactive, watch } from 'vue'
-import type { ChatSource, ChatSources } from '../../index'
+import type { ChatSource } from '../../index'
+
+export { chatSourceFor } from '../../vue/index'
 
 export interface ChatSettings {
   /** Seconds; positive shows chat later. */
@@ -46,16 +48,6 @@ export const defaultChatSettings = (): ChatSettings => ({
   source: 'bot',
   names: 'display',
 })
-
-/**
- * The chat to ask for: the viewer's choice, unless this VOD has none of it and has the other one (then the other).
- * `sources` is unknown (null) until the first page is in; the choice is asked for as is until then.
- */
-export function chatSourceFor(pref: ChatSource | 'auto', sources: ChatSources | null): ChatSource | 'auto' {
-  if (pref === 'auto' || !sources) return pref
-  const other: ChatSource = pref === 'bot' ? 'replay' : 'bot'
-  return sources[pref] === 0 && sources[other] > 0 ? other : pref
-}
 
 /** The saved settings (from `get`, e.g. localStorage's), with anything missing or odd set to the default. */
 export function readSaved(get: (key: string) => string | null): ChatSettings {
