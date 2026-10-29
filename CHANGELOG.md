@@ -1,5 +1,35 @@
 # @vex/vods-core
 
+## 0.43.0
+
+### Minor Changes
+
+- d1044c8: The home page has a heading (the site's name, for screen readers and outlines). Chat and the watch page say what
+  happened and what to do next ("No messages at this point yet.", "Chat didn't load (…). It tries again as the video
+  plays.", a blocked player points at ad/content blockers), and theater mode's show/hide strip is 24px tall.
+- 922571c: Player, progress and chat say what state they're in. `WatchPlayer` has a `buffering` event; `mountYouTube` rejects
+  when the player isn't ready within `readyTimeoutMs` (15s by default) instead of waiting forever. `ProgressStore.set`
+  can say where a save went (`SaveStatus`: `saved` with the account, `local` in this browser only, `failed`), which
+  `LocalProgressStore` and `AccountProgressStore` do, and `useProgress` returns it as `status`. `useChat` returns
+  `loading` (the first page is on its way) and `noChat` (the VOD has no chat). The watch page shows a spinner while
+  the video loads, a short "place saved" note, and "Loading chat…" / "This VOD has no chat recording." in chat.
+- 3eb57b8: `useWatchPlayer` (vue entry): a watch page's player without a look, so a site with its own watch page doesn't copy
+  the app's wiring. It mounts the YouTube player across a VOD's parts and returns its state as refs (`time`,
+  `playing`, `buffering`, `rate`, `volume`, `muted`, `partIndex`, `status`, `error`), the controls (`seek`,
+  `playPart`, `togglePlay`, `setVolume`, `toggleMute`, `setRate`…), chat replay in step with it, and watch progress
+  (`resume`, `saved`). `useWatchView` is now the app's layer over it. `chatSourceFor` moved to the vue entry
+  (`useChatSettings` still re-exports it).
+- 6d7f3df: Watch page: YouTube's own controls are hidden by default; a "YouTube controls" switch in the new player settings
+  brings them back (remembered in this browser). The page has its own play/pause and mute buttons, and the settings
+  add volume and playback speed (0.5–2×). `WatchPlayer` gains `setVolume`, `setMuted`, `setRate` and a `volume`
+  event, and keeps the chosen speed across parts; `PlayerLike` now needs `setVolume`, `getVolume`, `setPlaybackRate`
+  and `getPlaybackRate` (YT.Player has them). The seek bar and part labels are 24px to hit (the bar still looks thin),
+  the controls use drawn icons instead of text glyphs, the shortcuts button is hidden on touch screens, and `m` mutes.
+
+### Patch Changes
+
+- 5a8cfaa: Re-copy the Deep Field rules from @vex/ui v0.33.0 (type-scale tokens, `--vx-scrim` ring, input focus); pin @vex/ui v0.33.0 and @vex/platform-web v0.14.0.
+
 ## 0.42.1
 
 ### Patch Changes
