@@ -16,6 +16,7 @@ import type {
   VxDialog,
   VxEmptyState,
   VxField,
+  VxIcon,
   VxInput,
   VxKbd,
   VxLink,
@@ -43,6 +44,7 @@ import type {
   VxTextarea,
   VxTooltip,
 } from '@vex/ui'
+import WatchIcon from './components/WatchIcon.vue'
 
 /**
  * The frame for every page: header with the brand, `nav`, the `actions` and `account` slots, the page in the default
@@ -65,6 +67,8 @@ export interface VodsUiComponents {
   Dialog: typeof VxDialog
   EmptyState: typeof VxEmptyState
   Field: typeof VxField
+  /** Optional: without one the app draws its own icons (WatchIcon), the same set. */
+  Icon: typeof VxIcon
   Input: typeof VxInput
   Kbd: typeof VxKbd
   Link: typeof VxLink
@@ -96,7 +100,7 @@ export interface VodsUiComponents {
 
 /** A site's look for the app: its controls, and anything else it installs (e.g. Deep Field's build stamp). */
 export interface VodsUi {
-  components: { [K in keyof VodsUiComponents]: Component }
+  components: { [K in Exclude<keyof VodsUiComponents, 'Icon'>]: Component } & { Icon?: Component }
   install?(app: App, ctx: { commit: string }): void
 }
 
@@ -107,7 +111,7 @@ declare module 'vue' {
   interface GlobalComponents extends Registered {}
 }
 
-const KEYS: (keyof VodsUiComponents)[] = [
+const KEYS: Exclude<keyof VodsUiComponents, 'Icon'>[] = [
   'AccountMenu', 'Button', 'Callout', 'ChapterBar', 'Checkbox', 'Chip', 'Confirm', 'DateInput', 'DateRange',
   'Dialog', 'EmptyState', 'Field', 'Input', 'Kbd', 'Link', 'LoadState', 'MenuItem', 'NavBar', 'PageHead',
   'Placeholder', 'Popover', 'Posters', 'Progress', 'SaveBar', 'Segmented', 'Select', 'Shell', 'Skeleton', 'Slider',
@@ -119,5 +123,6 @@ export function installUi(app: App, ui: VodsUi, commit: string): void {
   const missing = KEYS.filter((k) => !ui.components[k])
   if (missing.length) throw new Error(`createVodsApp: ui is missing ${missing.join(', ')}`)
   for (const k of KEYS) app.component(`Ui${k}`, ui.components[k])
+  app.component('UiIcon', ui.components.Icon ?? WatchIcon)
   ui.install?.(app, { commit })
 }

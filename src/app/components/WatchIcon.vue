@@ -1,15 +1,29 @@
 <script setup lang="ts">
-// The watch page's control icons: line drawings in the text colour, so they sit in any site's buttons (the Ui* set
-// has no icons). Decorative: the button around one carries its label.
-defineProps<{
-  name:
-    | 'play' | 'pause' | 'volume' | 'mute' | 'copy' | 'list' | 'download' | 'theater' | 'theater-off' | 'fullscreen'
-    | 'settings' | 'keyboard' | 'chat' | 'external' | 'up' | 'down'
-}>()
+// UiIcon for a site that brings none: the same drawings and props as Deep Field's VxIcon, in the text colour.
+// Decorative unless it has a `title`. shortcut: a copy of vex-ui's VX_ICONS, drop it once every site has a UiIcon.
+withDefaults(
+  defineProps<{
+    name:
+      | 'play' | 'pause' | 'volume' | 'mute' | 'copy' | 'list' | 'download' | 'theater' | 'theater-off' | 'fullscreen'
+      | 'settings' | 'keyboard' | 'chat' | 'external' | 'up' | 'down'
+    size?: number | string
+    title?: string
+  }>(),
+  { size: 18 },
+)
 </script>
 
 <template>
-  <svg class="watch-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+  <svg
+    class="watch-icon"
+    viewBox="0 0 24 24"
+    :width="size"
+    :height="size"
+    :role="title ? 'img' : undefined"
+    :aria-label="title"
+    :aria-hidden="title ? undefined : 'true'"
+    focusable="false"
+  >
     <template v-if="name === 'play'"><path d="M7 4.5v15l12-7.5z" class="fill" /></template>
     <template v-else-if="name === 'pause'"><rect x="6" y="5" width="4" height="14" rx="1" class="fill" /><rect x="14" y="5" width="4" height="14" rx="1" class="fill" /></template>
     <template v-else-if="name === 'volume'"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" /><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" /></template>

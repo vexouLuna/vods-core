@@ -3,6 +3,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { createApp, defineComponent } from 'vue'
+import WatchIcon from '../../src/app/components/WatchIcon.vue'
 import { installUi, type VodsUi } from '../../src/app/ui'
 
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), '../../src/app')
@@ -33,5 +34,14 @@ describe('the app is look-neutral', () => {
     installUi(app, full, 'abc123')
     expect(app.component('UiShell')).toBe(c)
     expect(seen).toBe('abc123')
+    expect(app.component('UiIcon')).toBe(c)
+  })
+
+  it('draws its own icons for a site that brings no Icon', () => {
+    const c = defineComponent({ render: () => null })
+    const noIcon = { components: new Proxy({}, { get: (_t, k) => (k === 'Icon' ? undefined : c) }) } as unknown as VodsUi
+    const app = createApp({})
+    installUi(app, noIcon, '')
+    expect(app.component('UiIcon')).toBe(WatchIcon)
   })
 })
