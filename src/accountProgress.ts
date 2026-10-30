@@ -1,4 +1,4 @@
-// Watch progress kept with the viewer's account (vex-auth's /v1/progress), so it follows them between
+// Watch progress kept with the viewer's account (vex-auth's /v2/progress), so it follows them between
 // browsers. Signed out, or when the service can't be reached, it falls back to the browser's LocalProgressStore;
 // merge() moves those local entries to the account (newest wins per VOD) once someone signs in.
 import { LocalProgressStore, type Progress, type ProgressStore, type SaveStatus } from './progress'
@@ -23,6 +23,10 @@ export interface AccountProgressOptions {
 /** The service takes at most this many entries per merge request. */
 export const MERGE_BATCH = 500
 
+/** list() asks for this many entries a page (the service's most), and gives up after LIST_PAGES pages. */
+const PAGE_SIZE = 500
+const LIST_PAGES = 20
+
 export class AccountProgressStore implements ProgressStore {
   readonly local: LocalProgressStore
   private readonly minT: number
@@ -36,14 +40,14 @@ export class AccountProgressStore implements ProgressStore {
   }
 
   private path(vodId: string) {
-    return `/v1/progress/${encodeURIComponent(vodId)}`
+    return `/v2/progress/${encodeURIComponent(vodId)}`
   }
 
   async get(vodId: string): Promise<Progress | null> {
     if (!this.account.signedIn()) return this.local.get(vodId)
     try {
       const res = await this.account.request(this.path(vodId))
-      if (res.status === 404) return null
+      if (res.status === 204 || res.status === 404) return null
       if (res.ok) return toProgress(await res.json())
     } catch {
       // fall through to what this browser has
@@ -60,7 +64,7 @@ export class AccountProgressStore implements ProgressStore {
       const res = await this.account.request(this.path(p.vodId), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ t: entry.t, duration: entry.duration, updatedAt: entry.updatedAt }),
+        body: JSON.stringify(toWire(entry)),
       })
       if (res.ok) return 'saved'
     } catch {
@@ -87,13 +91,29 @@ export class AccountProgressStore implements ProgressStore {
   async list(limit = Infinity): Promise<Progress[]> {
     if (!this.account.signedIn()) return this.local.list(limit)
     try {
-      const query = Number.isFinite(limit) ? `?limit=${Math.max(1, Math.floor(limit))}` : ''
-      const res = await this.account.request(`/v1/progress${query}`)
-      if (res.ok) return ((await res.json()).items as unknown[]).map(toProgress).slice(0, limit)
+      const out = await this.fetchAll(limit)
+      if (out) return out
     } catch {
       // fall through
     }
     return this.local.list(limit)
+  }
+
+  /** Follows the pages (newest first) until `limit` entries, the last page or LIST_PAGES; null when a page failed. */
+  private async fetchAll(limit: number): Promise<Progress[] | null> {
+    const out: Progress[] = []
+    let cursor: string | null = null
+    for (let page = 0; page < LIST_PAGES && out.length < limit; page++) {
+      const size = Math.min(PAGE_SIZE, Math.max(1, Math.floor(limit - out.length)))
+      const query: string = `?limit=${size}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+      const res = await this.account.request(`/v2/progress${query}`)
+      if (!res.ok) return null
+      const body = (await res.json()) as { items: unknown[]; next_cursor?: string | null }
+      out.push(...body.items.map(toProgress))
+      cursor = body.next_cursor ?? null
+      if (!cursor) break
+    }
+    return out.slice(0, limit)
   }
 
   /**
@@ -107,10 +127,10 @@ export class AccountProgressStore implements ProgressStore {
     for (let i = 0; i < entries.length; i += MERGE_BATCH) {
       const items = entries.slice(i, i + MERGE_BATCH)
       try {
-        const res = await this.account.request('/v1/progress/merge', {
+        const res = await this.account.request('/v2/progress/merge', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items }),
+          body: JSON.stringify({ items: items.map((e) => ({ vod_id: e.vodId, ...toWire(e) })) }),
         })
         if (!res.ok) break
       } catch {
@@ -123,7 +143,17 @@ export class AccountProgressStore implements ProgressStore {
   }
 }
 
+/** The service's snake_case entry, `updated_at` an ISO 8601 string; ours is epoch ms. */
 function toProgress(raw: unknown): Progress {
   const r = raw as Record<string, unknown>
-  return { vodId: String(r.vodId), t: Number(r.t), duration: Number(r.duration), updatedAt: Number(r.updatedAt) }
+  return {
+    vodId: String(r.vod_id),
+    t: Number(r.position_seconds),
+    duration: Number(r.duration_seconds),
+    updatedAt: Date.parse(String(r.updated_at)),
+  }
+}
+
+function toWire(p: Progress) {
+  return { position_seconds: p.t, duration_seconds: p.duration, updated_at: new Date(p.updatedAt).toISOString() }
 }

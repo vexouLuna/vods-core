@@ -118,8 +118,8 @@ function quiet(answer: 'admin' | 'viewer' | 503) {
   return vi.fn(async (url: string | URL | Request, init: RequestInit = {}) => {
     const u = String(url)
     const method = init.method ?? 'GET'
-    if (u.endsWith('/v1/me')) return Response.json({ id: '42', login: 'vexouluna', csrf: 'auth-csrf' })
-    if (u.endsWith('/v1/codes')) return Response.json({ code: 'c0de' })
+    if (u.endsWith('/v2/me')) return Response.json({ id: '42', login: 'vexouluna', csrf: 'auth-csrf' })
+    if (u.endsWith('/v2/codes')) return Response.json({ code: 'c0de' })
     if (u.endsWith('/admin/session') && method === 'POST') {
       if (answer === 503) return Response.json({ status: 503, code: 'unavailable' }, { status: 503 })
       if (answer === 'viewer') return Response.json({ admin: false })
@@ -132,7 +132,7 @@ function quiet(answer: 'admin' | 'viewer' | 503) {
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 10))
-const codesAsked = () => vi.mocked(fetch).mock.calls.filter(([u]) => String(u).endsWith('/v1/codes')).length
+const codesAsked = () => vi.mocked(fetch).mock.calls.filter(([u]) => String(u).endsWith('/v2/codes')).length
 
 describe('the quiet admin check', () => {
   it('gives a signed-in admin the dashboard session on the page they are on', async () => {
@@ -193,7 +193,7 @@ describe('the quiet admin check', () => {
     await vi.waitFor(() => expect(codesAsked()).toBe(1))
     user.value = { id: '8' }
     await vi.waitFor(() => expect(codesAsked()).toBe(2))
-    const body = vi.mocked(fetch).mock.calls.find(([u]) => String(u).endsWith('/v1/codes'))![1]!.body
+    const body = vi.mocked(fetch).mock.calls.find(([u]) => String(u).endsWith('/v2/codes'))![1]!.body
     expect(JSON.parse(String(body))).toEqual({ client_id: 'keeki-admin' })
   })
 
