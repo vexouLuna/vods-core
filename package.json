@@ -72,7 +72,7 @@
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
     "@types/node": "^22.20.5",
-    "@vex/ui": "github:vexouLuna/vex-ui#v0.33.0",
+    "@vex/ui": "github:vexouLuna/vex-ui#v0.34.0",
     "@vitejs/plugin-vue": "^6.0.0",
     "happy-dom": "^21.0.4",
     "typescript": "~5.9.3",
