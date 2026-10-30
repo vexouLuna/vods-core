@@ -162,7 +162,7 @@ function sessionOf(req: IncomingMessage) {
   return s && s.expires > Date.now() ? { token: m![1]!, ...s } : null
 }
 
-// ---- a fake vex-auth: its session, /v1/me and /v1/codes, and the codes the worker takes back ----
+// ---- a fake vex-auth: its session, /v2/me and /v2/codes, and the codes the worker takes back ----
 // /login signs in the fake admin (id 42), or a plain viewer with ?as=viewer or MOCK_ACCOUNT=viewer.
 const VIEWER: User = { id: '7', login: 'viewer', displayName: 'viewer', avatar: null, color: '#1E90FF' }
 const AUTH_COOKIE = 'mock_auth'
@@ -917,7 +917,7 @@ function storageJson() {
 }
 
 /**
- * The fake vex-auth. `MOCK_AUTH_CODES=<status>` makes POST /v1/codes answer that status instead (429, 409...), and
+ * The fake vex-auth. `MOCK_AUTH_CODES=<status>` makes POST /v2/codes answer that status instead (429, 409...), and
  * `MOCK_ADMIN_CODE=<status>` does the same for the worker's POST /admin/session {code} (503, 502...).
  */
 async function fakeAuth(req: IncomingMessage, res: ServerResponse, url: URL) {
@@ -933,18 +933,18 @@ async function fakeAuth(req: IncomingMessage, res: ServerResponse, url: URL) {
     res.writeHead(302, { location: back, 'set-cookie': `${AUTH_COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/` })
     return res.end()
   }
-  if (path === '/v1/me' && method === 'GET') {
+  if (path === '/v2/me' && method === 'GET') {
     if (!s) return problem(res, 401, 'signed_out', 'Not signed in')
     return send(res, 200, { ...s.user, csrf: s.csrf })
   }
-  if (path === '/v1/logout' && method === 'POST') {
+  if ((path === '/v1/logout' || path === '/v2/logout') && method === 'POST') {
     if (s) authSessions.delete(s.token)
     res.writeHead(204, { 'set-cookie': `${AUTH_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0` })
     return res.end()
   }
-  if (path === '/v1/codes' && method === 'POST') {
+  if (path === '/v2/codes' && method === 'POST') {
     if (!s) return problem(res, 401, 'signed_out', 'Not signed in')
-    if (req.headers['x-vex-csrf'] !== s.csrf) return problem(res, 403, 'csrf', 'Missing or wrong X-Vex-CSRF')
+    if (req.headers['x-csrf-token'] !== s.csrf) return problem(res, 403, 'csrf', 'Missing or wrong X-CSRF-Token')
     const forced = Number(process.env.MOCK_AUTH_CODES)
     if (forced) return problem(res, forced, 'mock', `MOCK_AUTH_CODES=${forced}`)
     const { client_id } = await body(req)

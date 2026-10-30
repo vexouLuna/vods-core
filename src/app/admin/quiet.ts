@@ -1,6 +1,6 @@
 // The quiet admin check: whether someone signed in to the site's account (vex-auth) is one of the archive's
 // admins, asked with two requests and no trip away from the page. vex-auth mints a one-time code for the archive
-// (POST /v1/codes), and the worker trades it for a dashboard session when the account is an admin (POST
+// (POST /v2/codes), and the worker trades it for a dashboard session when the account is an admin (POST
 // /admin/session {code}). Nothing is kept in the browser: installVodsSession asks once per account per page load.
 import { ProblemError } from '@vex/platform-web'
 import { signInWithCode } from './session'
@@ -23,14 +23,14 @@ export interface AuthRequests {
  */
 export async function quietAdminCheck(account: AuthRequests, clientId: string = ADMIN_CLIENT_ID): Promise<AdminCheck> {
   try {
-    const me = await account.request('/v1/me', { headers: { Accept: 'application/json' } })
+    const me = await account.request('/v2/me', { headers: { Accept: 'application/json' } })
     if (me.status === 401) return 'viewer'
     if (!me.ok) return 'unknown'
     const { csrf } = (await me.json()) as { csrf?: string | null }
     if (!csrf) return 'unknown'
-    const res = await account.request('/v1/codes', {
+    const res = await account.request('/v2/codes', {
       method: 'POST',
-      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-Vex-CSRF': csrf },
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
       body: JSON.stringify({ client_id: clientId }),
     })
     if (!res.ok) throw await ProblemError.from(res)

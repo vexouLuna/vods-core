@@ -25,8 +25,8 @@ function server(answers: { me?: () => Response; codes?: () => Response; session?
   return vi.fn(async (url: string | URL | Request, init: RequestInit = {}) => {
     const u = String(url)
     const method = init.method ?? 'GET'
-    if (u === `${AUTH}/v1/me` && method === 'GET') return (answers.me ?? (() => Response.json({ id: '42', login: 'vexouluna', csrf: 'auth-csrf' })))()
-    if (u === `${AUTH}/v1/codes` && method === 'POST') return (answers.codes ?? (() => Response.json({ code: 'c0de' })))()
+    if (u === `${AUTH}/v2/me` && method === 'GET') return (answers.me ?? (() => Response.json({ id: '42', login: 'vexouluna', csrf: 'auth-csrf' })))()
+    if (u === `${AUTH}/v2/codes` && method === 'POST') return (answers.codes ?? (() => Response.json({ code: 'c0de' })))()
     if (u.endsWith('/admin/session') && method === 'POST') return (answers.session ?? (() => Response.json(ADMIN_SESSION)))()
     if (u.endsWith('/admin/session')) return Response.json({ authenticated: false, csrf: null, expiresAt: null, passwordLogin: true, twitchLogin: true })
     return new Response('{}', { status: 404 })
@@ -61,9 +61,9 @@ describe('the quiet admin check', () => {
     expect(session.authenticated).toBe(true)
     expect(session.user?.id).toBe('42')
 
-    const [, codes] = calls(f, '/v1/codes')[0]!
+    const [, codes] = calls(f, '/v2/codes')[0]!
     expect(codes!.credentials).toBe('include')
-    expect(new Headers(codes!.headers).get('X-Vex-CSRF')).toBe('auth-csrf')
+    expect(new Headers(codes!.headers).get('X-CSRF-Token')).toBe('auth-csrf')
     expect(JSON.parse(String(codes!.body))).toEqual({ client_id: 'vods-admin' })
 
     const [, handoff] = calls(f, '/admin/session')[0]!
@@ -82,7 +82,7 @@ describe('the quiet admin check', () => {
     vi.stubGlobal('fetch', f)
     const { quietAdminCheck } = await load()
     await quietAdminCheck(account, 'other-archive')
-    expect(JSON.parse(String(calls(f, '/v1/codes')[0]![1]!.body))).toEqual({ client_id: 'other-archive' })
+    expect(JSON.parse(String(calls(f, '/v2/codes')[0]![1]!.body))).toEqual({ client_id: 'other-archive' })
   })
 
   it("is a viewer when the worker says {admin: false}, and makes no session", async () => {
@@ -97,7 +97,7 @@ describe('the quiet admin check', () => {
     vi.stubGlobal('fetch', f)
     const { quietAdminCheck } = await load()
     expect(await quietAdminCheck(account)).toBe('viewer')
-    expect(calls(f, '/v1/codes')).toHaveLength(0)
+    expect(calls(f, '/v2/codes')).toHaveLength(0)
   })
 
   it("is a viewer when vex-auth answers the code with 401 signed_out", async () => {
@@ -118,7 +118,7 @@ describe('the quiet admin check', () => {
     vi.stubGlobal('fetch', f)
     const { quietAdminCheck, session } = await load()
     expect(await quietAdminCheck(account)).toBe('unknown')
-    expect(calls(f, '/v1/codes')).toHaveLength(1)
+    expect(calls(f, '/v2/codes')).toHaveLength(1)
     expect(session.authenticated).toBe(false)
   })
 
@@ -133,7 +133,7 @@ describe('the quiet admin check', () => {
     vi.stubGlobal('fetch', f)
     const { quietAdminCheck, session } = await load()
     expect(await quietAdminCheck(account)).toBe('unknown')
-    expect(calls(f, '/v1/codes')).toHaveLength(1)
+    expect(calls(f, '/v2/codes')).toHaveLength(1)
     expect(session.authenticated).toBe(false)
   })
 

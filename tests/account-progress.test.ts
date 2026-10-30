@@ -7,10 +7,11 @@ function memoryStorage(): KeyValueStorage {
   return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v), removeItem: (k) => void m.delete(k) }
 }
 
-/** vex-auth's /v1/progress, in memory, newest winning per VOD. */
+/** vex-auth's /v2/progress, in memory: snake_case, ISO timestamps, paged newest first, newest winning per VOD. */
 class FakeService implements AccountLink {
   signed = true
   down = false
+  pageMax = 500
   entries = new Map<string, Progress>()
   calls: string[] = []
 
@@ -23,29 +24,42 @@ class FakeService implements AccountLink {
     if (!old || p.updatedAt >= old.updatedAt) this.entries.set(p.vodId, p)
   }
 
+  private wire(p: Progress) {
+    return { vod_id: p.vodId, position_seconds: p.t, duration_seconds: p.duration, updated_at: new Date(p.updatedAt).toISOString() }
+  }
+
+  private read(vodId: string, b: Record<string, unknown>): Progress {
+    return { vodId, t: Number(b.position_seconds), duration: Number(b.duration_seconds), updatedAt: Date.parse(String(b.updated_at)) }
+  }
+
   async request(path: string, init: RequestInit = {}): Promise<Response> {
     const method = init.method ?? 'GET'
     this.calls.push(`${method} ${path}`)
     if (this.down) throw new TypeError('offline')
     const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
     const sorted = () => [...this.entries.values()].sort((a, b) => b.updatedAt - a.updatedAt)
-    if (path === '/v1/progress/merge') {
-      for (const p of JSON.parse(String(init.body)).items) this.keep(p)
-      return json({ items: sorted() })
+    if (path === '/v2/progress/merge') {
+      for (const i of JSON.parse(String(init.body)).items) this.keep(this.read(i.vod_id, i))
+      return new Response(null, { status: 204 })
     }
-    const list = path.match(/^\/v1\/progress(?:\?limit=(\d+))?$/)
-    if (list) return json({ items: sorted().slice(0, Number(list[1] ?? Infinity)) })
-    const id = decodeURIComponent(path.replace('/v1/progress/', ''))
+    const list = path.match(/^\/v2\/progress(?:\?limit=(\d+))?(?:&cursor=(\d+))?$/)
+    if (list) {
+      const from = Number(list[2] ?? 0)
+      const size = Math.min(Number(list[1] ?? 50), this.pageMax)
+      const items = sorted().slice(from, from + size).map((p) => this.wire(p))
+      return json({ items, next_cursor: from + size < this.entries.size ? String(from + size) : null })
+    }
+    const id = decodeURIComponent(path.replace('/v2/progress/', ''))
     if (method === 'PUT') {
-      this.keep({ vodId: id, ...JSON.parse(String(init.body)) })
-      return json(this.entries.get(id))
+      this.keep(this.read(id, JSON.parse(String(init.body))))
+      return json(this.wire(this.entries.get(id)!))
     }
     if (method === 'DELETE') {
       this.entries.delete(id)
       return new Response(null, { status: 204 })
     }
     const p = this.entries.get(id)
-    return p ? json(p) : json({ error: 'not_found' }, 404)
+    return p ? json(this.wire(p)) : new Response(null, { status: 204 })
   }
 }
 
@@ -68,7 +82,7 @@ describe('AccountProgressStore', () => {
   it('keeps progress with the account while signed in', async () => {
     const { service, local, store } = setup()
     expect(await store.set({ vodId: 'v:1', t: 100.7, duration: 1000.2, updatedAt: 5 })).toBe('saved')
-    expect(service.calls).toEqual(['PUT /v1/progress/v%3A1'])
+    expect(service.calls).toEqual(['PUT /v2/progress/v%3A1'])
     expect(service.entries.get('v:1')).toEqual({ vodId: 'v:1', t: 100, duration: 1000, updatedAt: 5 })
     expect(await store.get('v:1')).toEqual({ vodId: 'v:1', t: 100, duration: 1000, updatedAt: 5 })
     expect(await store.get('nope')).toBeNull()
@@ -112,7 +126,16 @@ describe('AccountProgressStore', () => {
     for (let i = 0; i < MERGE_BATCH + 10; i++) await many.set({ vodId: `v${i}`, t: 100, duration: 1000, updatedAt: i })
     service.calls = []
     expect(await new AccountProgressStore(service, { local: many }).merge()).toBe(MERGE_BATCH + 10)
-    expect(service.calls).toEqual(['POST /v1/progress/merge', 'POST /v1/progress/merge'])
+    expect(service.calls).toEqual(['POST /v2/progress/merge', 'POST /v2/progress/merge'])
+  })
+
+  it('follows next_cursor to the last page', async () => {
+    const { service, store } = setup()
+    service.pageMax = 2
+    for (let i = 1; i <= 5; i++) service.entries.set(`v${i}`, { vodId: `v${i}`, t: 100, duration: 1000, updatedAt: i })
+    expect((await store.list()).map((p) => p.vodId)).toEqual(['v5', 'v4', 'v3', 'v2', 'v1'])
+    expect(service.calls).toEqual(['GET /v2/progress?limit=500', 'GET /v2/progress?limit=500&cursor=2', 'GET /v2/progress?limit=500&cursor=4'])
+    expect(await store.list(3)).toHaveLength(3)
   })
 
   it('merges nothing while signed out or when the service refuses', async () => {

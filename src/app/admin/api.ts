@@ -673,7 +673,7 @@ export class AdminClient {
   logout(): Promise<void> {
     return this.request('DELETE', '/admin/session')
   }
-  /** Trades a vex-auth code (POST /v1/codes) for a dashboard session, if the account is one of the admins. */
+  /** Trades a vex-auth code (POST /v2/codes) for a dashboard session, if the account is one of the admins. */
   codeSession(code: string): Promise<CodeSession> {
     return this.request('POST', '/admin/session', { code }, undefined, 'include')
   }
