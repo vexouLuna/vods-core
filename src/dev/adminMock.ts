@@ -1181,6 +1181,8 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             .filter((sv) => !q || sv.id === q || String(sv.title ?? '').toLowerCase().includes(q))
             .filter((sv) => (want === 'true' ? hidden.has(sv.id) : want === 'false' ? !hidden.has(sv.id) : true))
             .map(synthVod)
+          const allCut = (v: Json) => ((v.chapters as Json[] | undefined) ?? []).length > 0 && (v.chapters as Json[]).every((c) => c.restricted === true)
+          const cutIds = new Set([...synth, ...page].filter(allCut).map((v) => String(v.id)))
           const items = [...synth, ...page].map((v) => ({
             id: String(v.id), title: v.title ?? null, created_at: v.createdAt, duration: v.duration ?? null, duration_seconds: durOf(v),
             thumbnail_url: v.thumbnail_url ?? null, stream_id: v.stream_id ?? null, hidden: hidden.has(String(v.id)),
@@ -1192,7 +1194,8 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           const flag = (k: string) => (url.searchParams.has(k) ? url.searchParams.get(k) === 'true' : null)
           const uploaded = flag('uploaded')
           const busy = flag('busy')
-          const kept = items.filter((v) => (uploaded == null || v.uploaded === uploaded) && (busy == null || v.active_jobs.length > 0 === busy))
+          const fullyCut = flag('fully_cut')
+          const kept = items.filter((v) => (uploaded == null || v.uploaded === uploaded) && (busy == null || v.active_jobs.length > 0 === busy) && (fullyCut == null || cutIds.has(v.id) === fullyCut))
           return send(res, 200, { items: kept, next_cursor: more ? String(page[page.length - 1]!.id) : null })
         }
         // v2 PATCH: hidden and tags (the batch actions on /manage/vods); the details editor's fields go to /admin's PATCH.

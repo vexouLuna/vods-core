@@ -39,7 +39,7 @@ describe('overview health lines', () => {
   it('counts the stuck VODs, with a + past the page', async () => {
     const list = vi.spyOn(admin, 'vodList').mockResolvedValue({ items: [{ id: 'a' }, { id: 'b' }] as never, next_cursor: 'x' })
     const s = await stuckVods()
-    expect(list).toHaveBeenCalledWith({ uploaded: false, busy: false, synthetic: false, limit: 50 }, undefined)
+    expect(list).toHaveBeenCalledWith({ uploaded: false, busy: false, synthetic: false, fully_cut: false, limit: 50 }, undefined)
     expect(s).toEqual({ count: 2, more: true, ids: ['a', 'b'] })
     expect(stuckLine(s)).toMatchObject({ text: '2+ VODs', warn: true })
     expect(stuckLine({ count: 1, more: false }).text).toBe('1 VOD')

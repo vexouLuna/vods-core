@@ -43,9 +43,13 @@ export const STUCK_LIMIT = 50
 /** The /manage/vods filter for them. */
 export const STUCK_QUERY = { upload: 'stuck' } as const
 
-/** The Twitch VODs not on YouTube with no job queued, running or paused: `count`, and `more` past STUCK_LIMIT. */
+/** The vodList filter for them: Twitch VODs not on YouTube with no job queued, running or paused, and something left
+ * to upload (a VOD whose every chapter was cut never will be). */
+export const STUCK_FILTER = { uploaded: false, busy: false, synthetic: false, fully_cut: false } as const
+
+/** The stuck VODs (STUCK_FILTER): `count`, and `more` past STUCK_LIMIT. */
 export async function stuckVods(signal?: AbortSignal): Promise<{ count: number; more: boolean; ids: string[] }> {
-  const page = await admin.vodList({ uploaded: false, busy: false, synthetic: false, limit: STUCK_LIMIT }, signal)
+  const page = await admin.vodList({ ...STUCK_FILTER, limit: STUCK_LIMIT }, signal)
   return { count: page.items.length, more: !!page.next_cursor, ids: page.items.map((v) => v.id) }
 }
 
