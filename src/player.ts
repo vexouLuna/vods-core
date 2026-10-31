@@ -7,6 +7,14 @@ import type { PlayableTimeline, Position } from './timeline'
 
 /** A clip that stops inside its video moves on this close to its end (the tick is coarser than that anyway). */
 const CLIP_END_SLACK = 0.05
+/**
+ * After a seek, YouTube reports the old time (or 0 while a new part loads) for a moment. The seek's target stands in
+ * for it until YouTube reports a time this close to it (VOD seconds), or for HOLD_MS at most.
+ */
+const HOLD_NEAR = 3
+const HOLD_MS = 10_000
+/** YouTube's getters answer from what it last reported, so a mute or volume asked for here reads stale for a moment. */
+const VOLUME_HOLD_MS = 1000
 
 /** The subset of YT.Player used here. */
 export interface PlayerLike {
@@ -88,7 +96,11 @@ export class WatchPlayer {
   /** The speed asked for here, put back when a new part starts (YouTube may reset it on a new video). */
   private wantedRate = 1
   private lastVolume: [number, boolean] | null = null
+  private wantVolume: { v: [number, boolean]; until: number } | null = null
+  private volumeTimer: ReturnType<typeof setTimeout> | undefined
   private buffering = false
+  /** The last seek's VOD time, shown until YouTube catches up with it. */
+  private hold: { t: number; until: number } | null = null
 
   constructor(
     readonly timeline: PlayableTimeline,
@@ -113,6 +125,7 @@ export class WatchPlayer {
     this.player = player
     this.index = -1
     this.lastVolume = null
+    this.wantVolume = null
     this.go(start, autoplay)
     this.checkVolume()
   }
@@ -124,7 +137,10 @@ export class WatchPlayer {
   /** Current VOD time, or 0 before a part is loaded. */
   currentTime(): number {
     if (!this.player || this.index < 0) return 0
-    return this.timeline.toVod({ index: this.index, offset: this.player.getCurrentTime() || 0 })
+    const t = this.timeline.toVod({ index: this.index, offset: this.player.getCurrentTime() || 0 })
+    if (this.hold && Math.abs(t - this.hold.t) > HOLD_NEAR && Date.now() < this.hold.until) return this.hold.t
+    this.hold = null
+    return t
   }
 
   isPlaying(): boolean {
@@ -160,14 +176,42 @@ export class WatchPlayer {
 
   /** 0-100. */
   setVolume(volume: number): void {
-    this.player?.setVolume(Math.round(Math.min(100, Math.max(0, volume))))
-    this.checkVolume()
+    if (!this.player) return
+    const v = Math.round(Math.min(100, Math.max(0, volume)))
+    this.player.setVolume(v)
+    this.expectVolume([v, this.volumeNow()[1]])
   }
 
   setMuted(muted: boolean): void {
-    if (muted) this.player?.mute()
-    else this.player?.unMute()
+    if (!this.player) return
+    if (muted) this.player.mute()
+    else this.player.unMute()
+    this.expectVolume([this.volumeNow()[0], muted])
+  }
+
+  /** Mute or unmute, from what was last asked for (YouTube's own `isMuted()` lags a mute by a moment). */
+  toggleMuted(): void {
+    if (this.player) this.setMuted(!this.volumeNow()[1])
+  }
+
+  /** Report `v` now and keep to it until YouTube's player agrees (or a moment has passed), then check again. */
+  private expectVolume(v: [number, boolean]): void {
+    this.wantVolume = { v, until: Date.now() + VOLUME_HOLD_MS }
     this.checkVolume()
+    // Ticks don't run while paused, so look once more after the hold.
+    clearTimeout(this.volumeTimer)
+    this.volumeTimer = setTimeout(() => this.checkVolume(), VOLUME_HOLD_MS + 50)
+  }
+
+  private volumeNow(): [number, boolean] {
+    const real: [number, boolean] = [this.player!.getVolume(), this.player!.isMuted()]
+    const want = this.wantVolume
+    if (!want) return real
+    if ((real[0] === want.v[0] && real[1] === want.v[1]) || Date.now() >= want.until) {
+      this.wantVolume = null
+      return real
+    }
+    return want.v
   }
 
   /** Playback speed (1 = normal); YouTube rounds it to the speeds the video has. */
@@ -178,7 +222,7 @@ export class WatchPlayer {
 
   private checkVolume(): void {
     if (!this.player) return
-    const now: [number, boolean] = [this.player.getVolume(), this.player.isMuted()]
+    const now = this.volumeNow()
     if (this.lastVolume?.[0] === now[0] && this.lastVolume[1] === now[1]) return
     this.lastVolume = now
     this.emit('volume', ...now)
@@ -189,6 +233,7 @@ export class WatchPlayer {
     if (!player || pos.index < 0 || pos.index >= this.timeline.uploads.length) return
     const offset = Math.max(0, pos.offset)
     const id = this.timeline.uploads[pos.index]!.id
+    this.hold = { t: this.timeline.toVod({ index: pos.index, offset }), until: Date.now() + HOLD_MS }
     if (pos.index === this.index) {
       player.seekTo(offset, true)
     } else {
@@ -200,7 +245,7 @@ export class WatchPlayer {
       else player.cueVideoById(id, offset)
       this.emit('part', pos.index)
     }
-    this.emit('time', this.timeline.toVod({ index: pos.index, offset }))
+    this.emit('time', this.hold.t)
   }
 
   private nextPlayable(from: number): number {
@@ -272,6 +317,7 @@ export class WatchPlayer {
 
   destroy(): void {
     this.stopTicking()
+    clearTimeout(this.volumeTimer)
     this.player?.destroy()
     this.player = null
     for (const set of Object.values(this.listeners)) set.clear()
