@@ -71,7 +71,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     track: props.track !== false,
     onEnded: () => handoff.value === null && void openEnd(),
   })
-  const { el: ytEl, time, playing, buffering, rate, volume, muted, partIndex, status, error: playerError, setVolume, toggleMute, setRate, saved } = player
+  const { el: ytEl, time, playing, buffering, rate, volume, muted, partIndex, status, error: playerError, setVolume, toggleMute, setRate } = player
   const replay = player.chat!
 
   function seek(t: number) {
@@ -372,7 +372,6 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     // chat
     replay,
     chatError,
-    saved,
     shortcuts,
   }
 }

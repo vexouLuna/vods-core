@@ -56,6 +56,57 @@ describe('WatchPlayer', () => {
     expect(p.loadVideoById).toHaveBeenLastCalledWith(ids[6], 0)
   })
 
+  it("shows a seek's target until YouTube reports a time near it", () => {
+    const w = new WatchPlayer(new Timeline(vod))
+    const p = fakePlayer()
+    w.attach(p)
+    // A real load reports 0 until the video is there.
+    vi.mocked(p.loadVideoById).mockImplementation((id: string) => Object.assign(p.state, { id, t: 0 }))
+    const times: number[] = []
+    w.on('time', (t) => times.push(t))
+    w.seek(80000)
+    expect(w.currentTime()).toBe(80000)
+    w.handleState(YT_STATE.PLAYING)
+    vi.advanceTimersByTime(1000)
+    expect(times.every((t) => t === 80000)).toBe(true)
+    p.state.t = 80000 - 73091 + 1 // loaded, a second in
+    expect(w.currentTime()).toBe(80001)
+    p.state.t = 0 // from here YouTube is followed again
+    expect(w.currentTime()).toBe(73091)
+  })
+
+  it('lets go of a seek target YouTube never reaches', () => {
+    const w = new WatchPlayer(new Timeline(vod))
+    const p = fakePlayer()
+    w.attach(p)
+    w.seek(5000)
+    p.state.t = 100
+    expect(w.currentTime()).toBe(5000)
+    vi.advanceTimersByTime(10_000)
+    expect(w.currentTime()).toBe(100)
+  })
+
+  it('toggles mute from what was asked, while YouTube still reports the old state', () => {
+    const w = new WatchPlayer(new Timeline(vod))
+    const p = fakePlayer()
+    // YouTube's isMuted() answers from its last report, so right after mute() it still says false.
+    let reported = false
+    p.isMuted = () => reported
+    const seen: boolean[] = []
+    w.on('volume', (_v, m) => seen.push(m))
+    w.attach(p)
+    w.toggleMuted()
+    expect(p.mute).toHaveBeenCalledOnce()
+    expect(seen.at(-1)).toBe(true)
+    w.toggleMuted() // a second click unmutes, not mutes again
+    expect(p.unMute).toHaveBeenCalledOnce()
+    expect(seen.at(-1)).toBe(false)
+    w.toggleMuted()
+    reported = true
+    vi.advanceTimersByTime(2000)
+    expect(seen.at(-1)).toBe(true)
+  })
+
   it('moves on to the next part when one ends, then reports the end', () => {
     const w = new WatchPlayer(new Timeline(vod))
     const p = fakePlayer()
