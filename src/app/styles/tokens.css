@@ -26,6 +26,7 @@
   --vods-hover: rgb(255 255 255 / 0.06);
   --vods-radius: 8px;
   --vods-radius-sm: 5px;
+  --vods-radius-group: 999px; /* a frame around a group of chips, like the VOD list's states */
   --vods-font-mono: ui-monospace, monospace;
   --vods-hatch: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--vods-ink) 35%, transparent) 0 3px, transparent 3px 6px);
   --vods-hatch-dark: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--vods-bg) 55%, transparent) 0 2px, transparent 2px 5px);

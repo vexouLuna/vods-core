@@ -23,6 +23,7 @@
   --vods-hover: var(--vx-hover);
   --vods-radius: var(--vx-radius);
   --vods-radius-sm: var(--vx-radius-sm);
+  --vods-radius-group: 999px;
   --vods-font-mono: var(--vx-font-mono);
   --vods-hatch: var(--vx-hatch);
   --vods-hatch-dark: var(--vx-hatch-dark);
