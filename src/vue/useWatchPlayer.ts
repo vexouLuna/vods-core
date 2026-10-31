@@ -125,7 +125,7 @@ export function useWatchPlayer(opts: UseWatchPlayerOptions) {
     if (muted.value && v > 0) wp?.setMuted(false)
     wp?.setVolume(v)
   }
-  const toggleMute = () => wp?.setMuted(!muted.value)
+  const toggleMute = () => wp?.toggleMuted()
   const setRate = (r: number) => wp?.setRate(r)
 
   // The chats the VOD whose chat is showing has (on a synthetic VOD, the playing source's), once chat's first page
