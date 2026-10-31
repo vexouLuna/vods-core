@@ -44,7 +44,7 @@ const UPLOAD: Option<Upload>[] = [
   { value: 'all', label: 'All' },
   { value: 'uploaded', label: 'Archived', title: 'With parts on YouTube' },
   { value: 'details', label: 'Details only', title: 'Nothing on YouTube' },
-  { value: 'stuck', label: 'Stuck', title: 'Nothing on YouTube, and no job queued, running or paused' },
+  { value: 'stuck', label: 'Stuck', title: 'Nothing on YouTube, no job queued, running or paused, and not cut completely' },
 ]
 const UPLOAD_PARAM: Record<Exclude<Upload, 'all'>, string> = { uploaded: 'yes', details: 'no', stuck: 'stuck' }
 
@@ -92,8 +92,9 @@ async function load(more = false) {
     const synthetic = kind.value === 'all' ? (upload.value === 'all' ? undefined : false) : kind.value === 'synthetic'
     const uploaded = upload.value === 'all' ? undefined : upload.value === 'uploaded'
     const busy = upload.value === 'stuck' ? false : undefined
+    const fully_cut = upload.value === 'stuck' ? false : undefined
     const cursor = more ? next.value ?? undefined : undefined
-    const page = await admin.vodList({ q: query.value || undefined, hidden, synthetic, uploaded, busy, limit: PER_PAGE, cursor }, mine.signal)
+    const page = await admin.vodList({ q: query.value || undefined, hidden, synthetic, uploaded, busy, fully_cut, limit: PER_PAGE, cursor }, mine.signal)
     vods.value = more ? [...vods.value, ...page.items] : page.items
     next.value = page.next_cursor
   } catch (e) {
@@ -293,7 +294,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.states { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 1px 3px; margin-right: 2px; border: 1px dashed var(--vods-muted); border-radius: 999px; vertical-align: middle; }
+.states { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 1px 3px; margin-right: 2px; border: 1px dashed var(--vods-muted); border-radius: var(--vods-radius-group); vertical-align: middle; }
 a { color: inherit; }
 .search { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 .search { align-items: center; }

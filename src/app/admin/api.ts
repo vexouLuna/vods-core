@@ -808,7 +808,8 @@ export class AdminClient {
 
   // ---- /api/v2: the VOD list and synthetic VODs ----
   /** Newest first; `q` is an exact id or part of a title; `synthetic` keeps only those (or only real ones);
-   * `uploaded` is whether any part is on YouTube, `busy` whether a job is queued, running or paused for it. */
+   * `uploaded` is whether any part is on YouTube, `busy` whether a job is queued, running or paused for it, `fully_cut`
+   * whether every chapter is restricted (nothing left to upload; a server older than that filter ignores it). */
   vodList(
     q: {
       q?: string
@@ -817,6 +818,7 @@ export class AdminClient {
       tag?: string
       uploaded?: boolean
       busy?: boolean
+      fully_cut?: boolean
       cursor?: string
       limit?: number
     } = {},
