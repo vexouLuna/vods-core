@@ -359,7 +359,7 @@ async function youtubeCheckJson(api: string): Promise<Json> {
       best.held -= 754
       issues.push({ kind: 'shorter', severity: 'warn', detail: 'Cut on YouTube: 12:34 shorter than uploaded', type: best.type, part: last.part ?? 1, video: last.id })
     } else if (n === 2) {
-      issues.push({ kind: 'blocked', severity: 'warn', detail: 'Blocked in 2 countries', type: best.type, part: best.parts[0]!.part ?? 1, video: best.parts[0]!.id })
+      issues.push({ kind: 'blocked', severity: 'warn', detail: 'Blocked in 2 countries: DE, FR', type: best.type, part: best.parts[0]!.part ?? 1, video: best.parts[0]!.id })
     }
     const share = (held: number) => (seconds ? Math.min(1, Math.max(0, held) / seconds) : 0)
     return {
@@ -1793,7 +1793,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         const vodId = b.vodId ? String(b.vodId) : ''
         const start = (kind: string, msg: string) => ok(res, msg, add(kind, vodId || null, 'queued', 0, 0, { payload: { ...b } }))
         if (method === 'POST' || method === 'DELETE') {
-          const needsVod = ['/admin/bot-chat', '/admin/chapters', '/admin/emotes', '/admin/logs', '/admin/duration', '/admin/youtube/parts', '/admin/download', '/admin/reupload', '/admin/delete']
+          const needsVod = ['/admin/bot-chat', '/admin/chapters', '/admin/emotes', '/admin/logs', '/admin/duration', '/admin/youtube/parts', '/admin/download', '/admin/reupload', '/admin/part/dmca', '/admin/delete']
           if (needsVod.includes(path) && !(await vodOf(publicApi, vodId))) return fail(res, 404, 'No such VOD')
           // A merged or split VOD no longer matches Twitch's VOD of that id: the worker refuses to re-fetch it.
           const twitch = ['/admin/chapters', '/admin/emotes', '/admin/logs', '/admin/duration', '/admin/download', '/admin/reupload', '/admin/delete', '/admin/hls/download', '/admin/bot-chat']
@@ -1812,6 +1812,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             case '/admin/youtube/parts': return start('describe', `Updating YouTube descriptions for ${vodId}`)
             case '/admin/download': return start('download', 'Starting the download…')
             case '/admin/reupload': return start('reupload', `Re-uploading ${vodId} part ${b.part}…`)
+            case '/admin/part/dmca': return start('part_dmca', `Trimming the DMCA content from ${vodId} part ${b.part}…`)
             case '/admin/hls/download': return start('archive', `Downloading ${vodId} via HLS…`)
             case '/admin/generate/vod': return start('chapters', `Created vod ${vodId}`)
             case '/admin/duration': return send(res, 200, { error: false, msg: 'Saved duration!', duration: (await vodOf(publicApi, vodId))!.duration })
