@@ -1,5 +1,6 @@
-// The watch page's timeline bar without its look: one bar for the whole VOD (all parts), where each chapter, cut, part
-// tick, stream break and label goes on it, which part labels fit, and seeking by pointer and keyboard (VOD seconds).
+// The watch page's timeline bar without its look: one bar for the whole VOD (all parts), where each chapter, chapter
+// boundary, cut, part tick, stream break and mark goes on it, which marks fit, and seeking by pointer and keyboard (VOD
+// seconds).
 // WatchTimeline.vue draws it; a site with its own UI binds the same refs.
 import { computed, onScopeDispose, ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
 import { previewFrame, type PartStatus, type PlayableTimeline, type Span } from '../../index'
@@ -20,9 +21,8 @@ export interface TimelineProps {
    */
   time: number | (() => number)
   status: readonly PartStatus[]
-  partIndex: number
-  /** Label for part i (P1). */
-  partLabel?: (i: number) => string
+  /** The labels above the bar: each chapter (a game) or each stream of a playthrough. Parts get none, only a tick. */
+  marks?: readonly TimelineMark[]
   /**
    * Where a playthrough moves on to its next stream. Each gets a small break: it takes room on the bar but no time
    * (unlike a "stream down" gap inside a stream, which is time the stream was down).
@@ -37,6 +37,17 @@ export interface TimelineProps {
   rate?: number
 }
 
+export interface TimelineMark {
+  /** VOD seconds where it starts. */
+  t: number
+  label: string
+  /** Box art shown before the label; alone when the label doesn't fit. */
+  image?: string | null
+  title?: string
+  /** Can't be played here (a chapter cut from the uploads). */
+  bad?: boolean
+}
+
 export interface TimelineHover {
   /** Pointer position on the bar, px. */
   x: number
@@ -48,9 +59,12 @@ export interface TimelineHover {
 
 /** Width of a stream break, in px: a fixed size reads the same on a 2 h playthrough as on a 40 h one. */
 export const TIMELINE_BREAK = 10
+/** Width of a mark shown as its box art alone, and what the art adds to a full one, in px (WatchTimeline's CSS). */
+export const MARK_ICON = 26
+export const MARK_ART = 20
 
 /**
- * The bar's logic. Bind `root` to the bar's box, `track` to the slider, `tip` to the hover tip and each part label to
+ * The bar's logic. Bind `root` to the bar's box, `track` to the slider, `tip` to the hover tip and the text of each mark to
  * `labelEls[i]`; `seek` gets the VOD time to go to.
  */
 export function useTimeline(props: TimelineProps, options: { seek: (t: number) => void }) {
@@ -89,9 +103,7 @@ export function useTimeline(props: TimelineProps, options: { seek: (t: number) =
 
   const chapters = computed(() => props.timeline.chapters.filter((c) => c.end > props.range.start && c.start < props.range.end))
   const spans = computed(() => props.timeline.partSpans())
-  // Worked out once per timeline, not on every render (the bar renders on every tick, asking for each part's label).
-  const labels = computed(() => spans.value.map((_, i) => props.partLabel?.(i) ?? `P${i + 1}`))
-  const label = (i: number) => labels.value[i] ?? `P${i + 1}`
+  const marks = computed(() => (props.marks ?? []).filter((m) => m.t < props.range.end))
   const near = (t: number, list: readonly number[]) => list.some((x) => Math.abs(x - t) < 0.5)
   const jumpList = computed(() => (props.jumps ?? []).filter((j) => j.at > props.range.start && j.at < props.range.end))
   /** Part ticks, but not where a break or a jump already marks the spot. */
@@ -113,16 +125,23 @@ export function useTimeline(props: TimelineProps, options: { seek: (t: number) =
       .map((s) => ({ left: pct(s.start), width: width(s.start, s.end) })),
   )
   const tickLefts = computed(() => ticks.value.map((s) => pct(s.start)))
+  /** Where one chapter gives way to the next, but not where a break already marks the spot. */
+  const boundLefts = computed(() =>
+    chapters.value
+      .slice(1)
+      .filter((c) => c.start > props.range.start && !near(c.start, brks.value))
+      .map((c) => pct(c.start)),
+  )
   const jumpBars = computed(() => jumpList.value.map((j) => ({ at: j.at, left: pct(j.at) })))
-  const labelLefts = computed(() => spans.value.map((s) => pct(s.start)))
 
-  // Part labels can't all fit when parts are short or the bar is narrow. They're placed in px, the one playing first,
-  // and a label that would run into one already placed is hidden (its tick stays; the part menu still lists it). A
-  // part labelled as the one before it (more of the same video) gets no label of its own.
+  // Marks can't all fit when chapters are short or the bar is narrow. They're placed in px, the one playing first; a
+  // mark that would run into one already placed shows its box art alone, or if even that doesn't fit, is hidden (its
+  // boundary stays on the bar; the chapters menu still lists it). One running off the right end slides back in.
   const root = ref<HTMLElement | null>(null)
   const track = ref<HTMLElement | null>(null)
   const tip = ref<HTMLElement | null>(null)
   const trackWidth = ref(0)
+  /** Each mark's text, to measure. */
   const labelEls: (HTMLElement | null)[] = []
   const labelWidths = ref<number[]>([])
   watch(
@@ -136,8 +155,8 @@ export function useTimeline(props: TimelineProps, options: { seek: (t: number) =
     { immediate: true },
   )
   watch(
-    () => labels.value.join('|'),
-    () => (labelWidths.value = spans.value.map((_, i) => labelEls[i]?.offsetWidth ?? 0)),
+    () => marks.value.map((m) => m.label).join('|'),
+    () => (labelWidths.value = marks.value.map((_, i) => labelEls[i]?.offsetWidth ?? 0)),
     { flush: 'post', immediate: true },
   )
   /** Where time `t` sits on the bar, in px. */
@@ -145,26 +164,28 @@ export function useTimeline(props: TimelineProps, options: { seek: (t: number) =
     const p = at(t)
     return p.f * Math.max(1, trackWidth.value - brks.value.length * BREAK) + p.k * BREAK
   }
-  /** For each part, the first part of the run of same-labelled parts it belongs to. */
-  const runStarts = computed(() => {
-    const out: number[] = []
-    labels.value.forEach((l, i) => out.push(i > 0 && l === labels.value[i - 1] ? out[i - 1]! : i))
-    return out
-  })
-  const runStart = (i: number) => runStarts.value[i] ?? i
-  const shownLabels = computed(() => {
-    const out = new Set<number>()
-    if (!trackWidth.value) return out
-    const cur = runStart(props.partIndex)
-    const order = spans.value.map((_, i) => i).filter((i) => runStart(i) === i)
-    order.sort((a, b) => Number(b === cur) - Number(a === cur))
+  /** The mark the playhead is in. */
+  const curMark = computed(() => marks.value.findLastIndex((m) => m.t <= time.value + 0.5))
+  /** Each mark that fits: where it goes (px) and whether it shows in full or as its art alone. */
+  const placedMarks = computed(() => {
+    const out = new Map<number, { x: number; icon: boolean }>()
+    const room = trackWidth.value
+    if (!room) return out
+    const cur = curMark.value
+    const order = marks.value.map((_, i) => i).sort((a, b) => Number(b === cur) - Number(a === cur))
     const placed: [number, number][] = []
+    const free = (x: number, w: number) => !placed.some(([a, b]) => x < b + 3 && x + w > a - 3)
     for (const i of order) {
-      const x = px(spans.value[i]!.start) + 2
-      const w = labelWidths.value[i] || label(i).length * 6.5 + 6
-      if (placed.some(([a, b]) => x < b + 3 && x + w > a - 3)) continue
-      placed.push([x, x + w])
-      out.add(i)
+      const m = marks.value[i]!
+      const at = Math.max(0, px(m.t))
+      const full = (labelWidths.value[i] || m.label.length * 6.5) + 10 + (m.image ? MARK_ART : 0)
+      for (const [w, icon] of m.image ? ([[full, false], [MARK_ICON, true]] as const) : ([[full, false]] as const)) {
+        const x = Math.max(0, Math.min(at, room - w))
+        if (!free(x, w)) continue
+        placed.push([x, x + w])
+        out.set(i, { x, icon })
+        break
+      }
     }
     return out
   })
@@ -282,6 +303,7 @@ export function useTimeline(props: TimelineProps, options: { seek: (t: number) =
     time,
     root,
     track,
+    trackWidth,
     tip,
     labelEls,
     pct,
@@ -289,16 +311,16 @@ export function useTimeline(props: TimelineProps, options: { seek: (t: number) =
     px,
     pointAt,
     spans,
-    label,
-    runStart,
-    shownLabels,
+    marks,
+    curMark,
+    placedMarks,
     breakSpans,
     chapterBars,
     unplayableBars,
     missingBars,
     tickLefts,
+    boundLefts,
     jumpBars,
-    labelLefts,
     hover,
     dragging,
     tipShift,
