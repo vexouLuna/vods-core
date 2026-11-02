@@ -102,13 +102,27 @@ const other = computed(() => {
   return v.uploads.some((u) => u.type === alt) ? `/${alt === 'vod' ? 'vods' : 'live'}/${v.id}` : null
 })
 
-/** A playthrough's parts are numbered within their stream: S1-P1, S1-P2, S2-P1… (one stream, as a merge or split is, keeps P1, P2…). */
+/**
+ * A playthrough's parts by their stream, and the stream by its day: "Stream 1 · Aug 2", or "Stream 2 · Aug 9 · part 1
+ * of 2" when it took more than one video (one stream, as a merge or split is, keeps "Part 1", "Part 2"…).
+ */
 const partLabel = computed(() => {
   const seg = segments.value
-  if (!seg || seg.streams().length < 2) return undefined
+  const streams = seg?.streams() ?? []
+  if (!seg || streams.length < 2) return undefined
+  const day = new Map(sources.value.map((v) => [v.id, v.createdAt.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })]))
+  const videos = new Map<number, number>()
+  timeline.value?.partSpans().forEach((_, i) => {
+    const at = seg.clipInStream(i)
+    if (at) videos.set(at.stream, Math.max(videos.get(at.stream) ?? 0, at.part + 1))
+  })
   return (i: number) => {
     const at = seg.clipInStream(i)
-    return at ? `S${at.stream + 1}-P${at.part + 1}` : `P${i + 1}`
+    if (!at) return `Part ${i + 1}`
+    const date = day.get(streams.find((s) => s.stream === at.stream)?.vodId ?? '')
+    const name = `Stream ${at.stream + 1}${date ? ` · ${date}` : ''}`
+    const n = videos.get(at.stream) ?? 1
+    return n > 1 ? `${name} · part ${at.part + 1} of ${n}` : name
   }
 })
 
