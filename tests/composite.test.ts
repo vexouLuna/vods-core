@@ -228,10 +228,30 @@ describe('WatchPlayer on a SegmentTimeline', () => {
     p.state.t = 2400
     vi.advanceTimersByTime(250)
     expect(p.loadVideoById).toHaveBeenLastCalledWith('b-yt1', 0)
+    vi.advanceTimersByTime(250)
     p.state.t = 100
     vi.advanceTimersByTime(250)
     expect(ended).toHaveBeenCalledOnce()
     expect(p.pauseVideo).toHaveBeenCalled()
+  })
+
+  it('stays on an earlier clip of the same video after seeking back to it, while YouTube still reports the old time', () => {
+    const tl = new SegmentTimeline(synthetic([seg('a', 600, 1200, 0), seg('a', 2000, 2400, 600)]), [A])
+    const w = new WatchPlayer(tl, { tickMs: 250 })
+    const p = fakePlayer()
+    w.attach(p, { index: 1, offset: 2100 })
+    w.handleState(YT_STATE.PLAYING)
+    // Seek back into clip 0; YouTube keeps reporting clip 1's time for a moment.
+    p.seekTo = vi.fn()
+    w.seek(100)
+    expect(p.seekTo).toHaveBeenLastCalledWith(700, true)
+    vi.advanceTimersByTime(250)
+    expect(w.partIndex).toBe(0)
+    expect(p.seekTo).toHaveBeenCalledTimes(1)
+    // YouTube catches up: playback goes on in clip 0.
+    p.state.t = 700
+    vi.advanceTimersByTime(250)
+    expect([w.partIndex, w.currentTime()]).toEqual([0, 100])
   })
 
   it('starts a picked part where its clip starts', () => {

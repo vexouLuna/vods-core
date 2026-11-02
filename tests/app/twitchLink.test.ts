@@ -36,6 +36,22 @@ describe('linkTwitch', () => {
     expect(res).toEqual({ state: 'cancelled' })
     expect(c.twitchViewerPoll).not.toHaveBeenCalled()
   })
+
+  it('leaves no abort listener behind on the signal after each wait', async () => {
+    vi.useFakeTimers()
+    try {
+      const signal = new AbortController().signal
+      const add = vi.spyOn(signal, 'addEventListener')
+      const remove = vi.spyOn(signal, 'removeEventListener')
+      const done = linkTwitch(client([{ state: 'pending' }, { state: 'pending' }, { state: 'linked', status: LINKED }]), () => {}, signal)
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(await done).toMatchObject({ state: 'linked' })
+      expect(add).toHaveBeenCalledTimes(3)
+      expect(remove.mock.calls.map(([, fn]) => fn)).toEqual(add.mock.calls.map(([, fn]) => fn))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 const ago = (iso: string) => `at ${iso}`

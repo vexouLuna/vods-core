@@ -21,8 +21,10 @@ export type LinkOutcome = { state: 'linked'; status: TwitchViewerStatus | null }
 const wait = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
     if (signal.aborted) return resolve()
-    const t = setTimeout(resolve, ms)
-    signal.addEventListener('abort', () => (clearTimeout(t), resolve()), { once: true })
+    const onAbort = () => (clearTimeout(t), resolve())
+    // Polling reuses one signal, so a wait that ends normally takes its listener off again.
+    const t = setTimeout(() => (signal.removeEventListener('abort', onAbort), resolve()), ms)
+    signal.addEventListener('abort', onAbort, { once: true })
   })
 
 /**

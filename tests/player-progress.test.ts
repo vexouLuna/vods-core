@@ -182,13 +182,23 @@ describe('WatchPlayer', () => {
     expect(seen).toEqual([true, false, true, false])
   })
 
-  it('mountYouTube gives up when the player is never ready', async () => {
-    vi.stubGlobal('window', { YT: { Player: vi.fn() } }) // the API loads, but the player never calls onReady
+  it('mountYouTube gives up when the player is never ready, destroys it and ignores a late onReady', async () => {
+    const p = fakePlayer()
+    let onReady: ((e: { target: PlayerLike }) => void) | undefined
+    const Player = vi.fn(function (_el: unknown, o: { events: { onReady: typeof onReady } }) {
+      onReady = o.events.onReady
+      return p
+    })
+    vi.stubGlobal('window', { YT: { Player } })
     try {
-      const mounted = mountYouTube({} as HTMLElement, new WatchPlayer(new Timeline(vod)), { readyTimeoutMs: 1000 })
-      const failed = expect(mounted).rejects.toThrow("didn't start in time")
+      const w = new WatchPlayer(new Timeline(vod))
+      const failed = expect(mountYouTube({} as HTMLElement, w, { readyTimeoutMs: 1000 })).rejects.toThrow("didn't start in time")
       await vi.advanceTimersByTimeAsync(1000)
       await failed
+      expect(p.destroy).toHaveBeenCalledOnce()
+      onReady!({ target: p })
+      expect(p.loadVideoById).not.toHaveBeenCalled()
+      expect(w.partIndex).toBe(-1)
     } finally {
       vi.unstubAllGlobals()
     }
