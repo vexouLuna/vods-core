@@ -438,9 +438,10 @@ const marks = computed<TimelineMark[]>(() =>
   margin: 0; font-size: var(--vods-player-heading); line-height: 1.25; font-weight: 600; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
 }
-.head-meta { margin: 3px 0 0; font-size: var(--vods-player-text); display: flex; flex-wrap: wrap; min-width: 0; }
+.head-meta { margin: 3px 0 0; font-size: var(--vods-player-text); display: flex; min-width: 0; white-space: nowrap; }
 .head-meta > span + span::before { content: "·"; margin: 0 0.5em; }
-.head-games { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* One line: the games give way first. */
+.head-games { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .video { position: relative; flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; background: #000; }
 .video-box { position: relative; width: min(100cqw, 100cqh * 16 / 9); aspect-ratio: 16 / 9; }
 .yt, .yt :deep(iframe) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
@@ -517,9 +518,10 @@ const marks = computed<TimelineMark[]>(() =>
 .watch > :deep(.chat) { border-left: 1px solid var(--vods-line); }
 
 @container vods (max-width: 700px) {
-  .watch, .watch.nochat { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto minmax(320px, 1fr); overflow-y: auto; overflow-x: hidden; }
-  /* On a phone the heading goes under the player and its controls, so the video stays at the top. */
-  .head { order: 1; padding: 8px 12px; }
+  .watch, .watch.nochat { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content max-content minmax(320px, 1fr); overflow-y: auto; overflow-x: hidden; }
+  /* On a phone the heading goes under the player and its controls, so the video stays at the top (its row is empty
+     in theater mode). */
+  .head { grid-row: 3; padding: 8px 12px; }
   .stage { display: contents; }
   .video { flex: none; container-type: inline-size; }
   .video-box { width: 100%; }
@@ -533,6 +535,6 @@ const marks = computed<TimelineMark[]>(() =>
   .now { order: -1; flex-basis: 100%; margin-left: 0; }
   .partbtn { min-width: 0; }
   .hide-sm { display: none; }
-  .watch > :deep(.chat) { order: 2; border-left: none; border-top: 1px solid var(--vods-line); }
+  .watch > :deep(.chat) { grid-row: 4; border-left: none; border-top: 1px solid var(--vods-line); }
 }
 </style>
