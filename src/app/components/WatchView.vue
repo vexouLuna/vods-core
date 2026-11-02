@@ -1,13 +1,13 @@
 <script setup lang="ts">
-// The watch page body, shared by /vods/:id (and /live, /youtube): YouTube player, the timeline across
-// all parts, a controls row (chapters, part picker, copy link, download, theater, shortcuts) and the chat replay.
+// The watch page body, shared by /vods/:id (and /live, /youtube): a heading strip (title, day, length, games; gone in
+// theater mode), YouTube player, the timeline across all parts, a controls row (chapters, part picker, copy link, download, theater, shortcuts) and the chat replay.
 // On phones the same controls reflow under the video and chat goes below; nothing is dropped.
 // A synthetic VOD (a merge, split or playthrough) plays windows of other VODs: its timeline is a SegmentTimeline, chat
 // follows whichever source VOD is playing, and a "related" menu links a playthrough's streams and the playthroughs a VOD
 // is part of. When a playthrough plays on into its next stream, a card over the video says so and counts down to go on;
 // when any VOD plays to its end, a card like it suggests another one to watch.
 import { gamePalette, learnGameColors, useToast } from '@vex/ui/utils'
-import { boxArt, toClock, watchPath, type DriveFile, type PlayableTimeline, type Position, type SegmentTimeline, type Span, type Vod } from '../../index'
+import { boxArt, gamesOf, toClock, watchPath, type DriveFile, type PlayableTimeline, type Position, type SegmentTimeline, type Span, type Vod } from '../../index'
 import { computed, watchEffect } from 'vue'
 import ChatPanel from './ChatPanel.vue'
 import CountdownRing from './CountdownRing.vue'
@@ -15,6 +15,7 @@ import NextVodPreview from './NextVodPreview.vue'
 import TickText from './TickText.vue'
 import WatchTimeline from './WatchTimeline.vue'
 import { useWatchView } from '../composables/useWatchView'
+import type { TimelineMark } from '../composables/useTimeline'
 import { gamesWithArt } from '../lib/art'
 import { kindLabel } from '../lib/listQuery'
 import VodsShell from './VodsShell.vue'
@@ -116,6 +117,32 @@ const rateOpts = RATES.map((r) => ({ value: String(r), label: `${r}×` }))
 const palette = computed(() => gamePalette(props.timeline.chapters.map((c) => c.name)))
 const posterGames = computed(() => gamesWithArt(chapters.value).map((g) => ({ ...g, color: palette.value.get(g.name) })))
 watchEffect(() => learnGameColors(posterGames.value))
+
+// The heading: "Sat, Feb 21, 2026 · 6:56:40 · Just Chatting, MOONROT, +4"; a playthrough gives its streams' days.
+const day = (d: Date, year = true) => d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: year ? 'numeric' : undefined })
+const when = computed(() => {
+  if (madeOf.value.length < 2) return day(props.vod.createdAt)
+  const days = props.sources.map((s) => s.createdAt).sort((a, b) => a.getTime() - b.getTime())
+  const n = `${madeOf.value.length} streams`
+  if (!days.length) return n
+  const sameYear = days[0]!.getFullYear() === days.at(-1)!.getFullYear()
+  return `${n} · ${day(days[0]!, !sameYear)} – ${day(days.at(-1)!)}`
+})
+const games = computed(() => {
+  const all = gamesOf(props.vod)
+  return all.length > 3 ? `${all.slice(0, 3).join(', ')}, +${all.length - 3}` : all.join(', ')
+})
+/** "ch 2/3" says something only when the chapters aren't simply one per stream (or one in all). */
+const chapterCount = computed(() => chapters.value.length > 1 && chapters.value.length !== madeOf.value.length)
+
+// Above the bar: a playthrough's streams by their day, else each chapter's game. Parts get only a tick.
+const marks = computed<TimelineMark[]>(() =>
+  madeOf.value.length > 1
+    ? madeOf.value.map((m) => ({ t: m.at, label: m.sub || m.mark, title: `${m.mark} · ${m.title}` }))
+    : chapters.value
+        .filter((c) => c.kind !== 'gap')
+        .map((c) => ({ t: Math.max(c.start, range.value.start), label: c.name, image: boxArt(c.image, 48), bad: c.restricted })),
+)
 </script>
 
 <template>
@@ -123,6 +150,12 @@ watchEffect(() => learnGameColors(posterGames.value))
 
     <div class="watch" :class="{ nochat: !chat.open }" :style="{ '--chat-w': `${chat.width}px` }">
       <section class="stage">
+        <header v-if="!theater" class="head">
+          <h1 class="head-title" :title="vod.title">{{ vod.title || 'Untitled stream' }}</h1>
+          <p class="head-meta vods-muted">
+            <span>{{ when }}</span><span>{{ toClock(range.end - range.start) }}</span><span v-if="games" class="head-games" :title="gamesOf(vod).join(', ')">{{ games }}</span>
+          </p>
+        </header>
         <div class="video">
           <div class="video-box">
             <div class="yt"><div ref="ytEl"></div></div>
@@ -170,7 +203,7 @@ watchEffect(() => learnGameColors(posterGames.value))
               <div class="vods-panel vx-glass-rim un-card" role="status">
                 <b>This part can't play here <span class="vods-muted">({{ statusText[status[partIndex]!] }})</span></b>
                 <span class="un-sub vods-muted">
-                  {{ label(partIndex) }} of {{ spans.length }} · {{ toClock(spans[partIndex]!.start) }} – {{ toClock(spans[partIndex]!.end) }} of the VOD
+                  {{ partLabel ? label(partIndex) : `${label(partIndex)} of ${spans.length}` }} · {{ toClock(spans[partIndex]!.start) }} – {{ toClock(spans[partIndex]!.end) }} of the VOD
                 </span>
                 <div class="un-actions">
                   <UiButton v-if="prevOk >= 0" @click="seek(spans[prevOk]!.end - 30)">← {{ label(prevOk) }}</UiButton>
@@ -195,14 +228,13 @@ watchEffect(() => learnGameColors(posterGames.value))
           </button>
         </div>
 
-        <div v-show="showControls" class="controls">
+        <div v-show="showControls" class="controls vods-player-controls">
           <WatchTimeline
             :timeline="timeline"
             :range="range"
             :time="now"
             :status="status"
-            :part-index="partIndex"
-            :part-label="partLabel"
+            :marks="marks"
             :breaks="streamBreaks"
             :jumps="streamJumps"
             :palette="palette"
@@ -255,9 +287,12 @@ watchEffect(() => learnGameColors(posterGames.value))
                 </template>
               </UiPopover>
               <div class="now-text">
-                <div class="title" :title="vod.title">{{ vod.title }}</div>
+                <!-- The heading above has the title, except in theater mode. -->
+                <div v-if="theater" class="title" :title="vod.title">{{ vod.title }}</div>
                 <div class="sub vods-mono vods-muted">
-                  <template v-if="chapter">ch {{ chapterIdx + 1 }}/{{ chapters.length }} · {{ chapter.name }} · </template><TickText :text="offsetText" /> into {{ partLabel ? label(partIndex) : label(partIndex).toLowerCase() }}
+                  <template v-if="chapter"><template v-if="chapterCount">ch {{ chapterIdx + 1 }}/{{ chapters.length }} · </template>{{ chapter.name }} · </template>
+                  <template v-if="partLabel">{{ label(partIndex) }} · <TickText :text="offsetText" /></template>
+                  <template v-else><TickText :text="offsetText" /> into {{ label(partIndex).toLowerCase() }}</template>
                 </div>
               </div>
             </div>
@@ -279,7 +314,7 @@ watchEffect(() => learnGameColors(posterGames.value))
                     :sub="`${toClock(s.start)}–${toClock(s.end)}`"
                     @click="playPart(i); close()"
                   >
-                    <span class="vods-mono">{{ label(i) }}</span>
+                    <span :class="{ 'vods-mono': !partLabel }">{{ label(i) }}</span>
                     <template #trail>
                       <UiChip v-if="unplayable(status[i])" tone="bad">{{ statusText[status[i]!] }}</UiChip>
                       <UiChip v-else-if="status[i] === 'processing'" tone="warn">processing</UiChip>
@@ -332,7 +367,8 @@ watchEffect(() => learnGameColors(posterGames.value))
             >
               <UiIcon name="fullscreen" />
             </UiButton>
-            <UiPopover prefer="up" align="right" width="min(300px, calc(100vw - 24px))" role="dialog">
+            <!-- Wide enough for the six speeds in one row with any site's controls. -->
+            <UiPopover prefer="up" align="right" width="min(380px, calc(100vw - 24px))" role="dialog">
               <template #trigger="{ toggle, open }">
                 <UiButton icon label="Player settings" :pressed="open" @click="toggle"><UiIcon name="settings" /></UiButton>
               </template>
@@ -350,7 +386,7 @@ watchEffect(() => learnGameColors(posterGames.value))
                 </div>
                 <div class="set col">
                   <span>Speed</span>
-                  <UiSegmented :model-value="String(rate)" :options="rateOpts" label="Playback speed" @update:model-value="(v) => v && setRate(Number(v))" />
+                  <UiSegmented class="speeds" :model-value="String(rate)" :options="rateOpts" label="Playback speed" @update:model-value="(v) => v && setRate(Number(v))" />
                 </div>
                 <div class="set">
                   <label for="watch-yt-controls">YouTube controls <span class="vods-muted small">YouTube's own bar over the video</span></label>
@@ -397,6 +433,15 @@ watchEffect(() => learnGameColors(posterGames.value))
 .watch.nochat { grid-template-columns: minmax(0, 1fr); }
 
 .stage { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.head { padding: 10px 16px 8px; border-bottom: 1px solid var(--vods-line); min-width: 0; }
+.head-title {
+  margin: 0; font-size: var(--vods-player-heading); line-height: 1.25; font-weight: 600; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.head-meta { margin: 3px 0 0; font-size: var(--vods-player-text); display: flex; min-width: 0; white-space: nowrap; }
+.head-meta > span + span::before { content: "·"; margin: 0 0.5em; }
+/* One line: the games give way first. */
+.head-games { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .video { position: relative; flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; background: #000; }
 .video-box { position: relative; width: min(100cqw, 100cqh * 16 / 9); aspect-ratio: 16 / 9; }
 .yt, .yt :deep(iframe) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
@@ -438,13 +483,13 @@ watchEffect(() => learnGameColors(posterGames.value))
 .peek:hover, .peek:focus-visible { opacity: 1; color: var(--vods-ink); }
 .peek:focus-visible { outline: 2px solid var(--vods-accent); outline-offset: -2px; }
 .row { display: flex; align-items: center; gap: 8px; padding: 6px 12px 8px; min-width: 0; }
-.time { font-size: 12px; white-space: nowrap; }
+.time { font-size: var(--vods-player-time); white-space: nowrap; }
 .now { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; margin-left: 4px; }
 .poster-btn { background: none; border: none; padding: 0 4px; cursor: pointer; display: flex; height: 32px; align-items: center; color: inherit; border-radius: var(--vods-radius-sm); }
 .poster-btn:focus-visible { outline: 2px solid var(--vods-accent); }
 .now-text { min-width: 0; line-height: 1.3; }
 .title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sub { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sub { font-size: var(--vods-player-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .partbtn { min-width: 92px; }
 .menu-head { padding: 6px 8px; }
 .stream-row { display: flex; align-items: center; gap: 2px; }
@@ -454,6 +499,7 @@ watchEffect(() => learnGameColors(posterGames.value))
 .settings { display: flex; flex-direction: column; padding: 8px; gap: 2px; }
 .set { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
 .set.col { flex-direction: column; align-items: stretch; gap: 6px; }
+.speeds { align-self: flex-start; max-width: 100%; }
 .set-row { display: flex; align-items: center; gap: 6px; }
 .set label { display: flex; flex-direction: column; gap: 2px; }
 .grow { flex: 1; min-width: 0; }
@@ -472,7 +518,10 @@ watchEffect(() => learnGameColors(posterGames.value))
 .watch > :deep(.chat) { border-left: 1px solid var(--vods-line); }
 
 @container vods (max-width: 700px) {
-  .watch, .watch.nochat { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(320px, 1fr); overflow-y: auto; overflow-x: hidden; }
+  .watch, .watch.nochat { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content max-content minmax(320px, 1fr); overflow-y: auto; overflow-x: hidden; }
+  /* On a phone the heading goes under the player and its controls, so the video stays at the top (its row is empty
+     in theater mode). */
+  .head { grid-row: 3; padding: 8px 12px; }
   .stage { display: contents; }
   .video { flex: none; container-type: inline-size; }
   .video-box { width: 100%; }
@@ -486,6 +535,6 @@ watchEffect(() => learnGameColors(posterGames.value))
   .now { order: -1; flex-basis: 100%; margin-left: 0; }
   .partbtn { min-width: 0; }
   .hide-sm { display: none; }
-  .watch > :deep(.chat) { border-left: none; border-top: 1px solid var(--vods-line); }
+  .watch > :deep(.chat) { grid-row: 4; border-left: none; border-top: 1px solid var(--vods-line); }
 }
 </style>

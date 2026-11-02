@@ -25,6 +25,9 @@
   --vods-radius-sm: var(--vx-radius-sm);
   --vods-radius-group: 999px;
   --vods-font-mono: var(--vx-font-mono);
+  --vods-player-heading: 18px;
+  --vods-player-text: var(--vx-text-sm);
+  --vods-player-time: var(--vx-text-md);
   --vods-hatch: var(--vx-hatch);
   --vods-hatch-dark: var(--vx-hatch-dark);
   --vods-hatch-bad: var(--vx-hatch-bad);

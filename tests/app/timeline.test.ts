@@ -12,7 +12,6 @@ function setup(over: Partial<TimelineProps> = {}) {
     range: { start: 0, end: 25000 },
     time: () => t.value,
     status: [],
-    partIndex: 0,
     breaks: [10000],
     palette: new Map(),
     ...over,
@@ -76,9 +75,25 @@ describe('useTimeline', () => {
     vi.useRealTimers()
   })
 
-  it('gives a run of same-labelled parts one label', () => {
-    const { bar } = setup({ partLabel: (i) => (i < 2 ? 'Game A' : 'Game B') })
-    expect([0, 1, 2].map(bar.runStart)).toEqual([0, 0, 2])
-    expect(bar.label(1)).toBe('Game A')
+  it('places the marks that fit, the current one first; a crowded one shows its art alone, or nothing', async () => {
+    const { t, bar } = setup({
+      marks: [
+        { t: 0, label: 'Game A', image: 'a.jpg' },
+        { t: 1500, label: 'Game B', image: 'b.jpg' },
+        { t: 24000, label: 'Game C' },
+      ],
+    })
+    bar.trackWidth.value = 1010
+    // B (at 60px) is playing, so it goes first; A has room only for its art; C would run off the end, so slides back.
+    expect(Object.fromEntries(bar.placedMarks.value)).toEqual({
+      0: { x: 0, icon: true },
+      1: { x: 60, icon: false },
+      2: { x: 961, icon: false },
+    })
+    t.value = 100
+    await nextTick()
+    expect(bar.curMark.value).toBe(0)
+    expect(bar.placedMarks.value.get(0)).toEqual({ x: 0, icon: false })
+    expect(bar.placedMarks.value.has(1)).toBe(false)
   })
 })

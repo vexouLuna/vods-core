@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// One bar for the whole VOD (all parts): chapters in their game colour, restricted chapters hatched, parts that
-// can't play hatched red, part labels above. Click, drag or use the arrow keys to seek (VOD seconds). The logic is
+// One bar for the whole VOD (all parts): chapters in their game colour with a boundary between them, restricted
+// chapters hatched, parts that can't play hatched red, part ticks as a hairline below and marks above (each chapter's
+// game, or each stream of a playthrough). Click, drag or use the arrow keys to seek (VOD seconds). The logic is
 // useTimeline's; this draws it.
 import { toClock, type PartStatus, type PlayableTimeline, type Span } from '../../index'
-import { unplayable } from '../lib/cuts'
-import { useTimeline } from '../composables/useTimeline'
+import { useTimeline, type TimelineMark } from '../composables/useTimeline'
 import { art } from '../art'
 import SnailMarker from './SnailMarker.vue'
 
@@ -15,9 +15,8 @@ const props = defineProps<{
   /** VOD seconds, or a getter for them (so the page passing it doesn't re-render on every tick). */
   time: number | (() => number)
   status: readonly PartStatus[]
-  partIndex: number
-  /** Label for part i (P1). */
-  partLabel?: (i: number) => string
+  /** The labels above the bar: each chapter (a game) or each stream of a playthrough. */
+  marks?: readonly TimelineMark[]
   /**
    * Where a playthrough moves on to its next stream. Each gets a small hollow break with a jagged line: it takes room
    * on the bar but no time (unlike a "stream down" gap inside a stream, which is time the stream was down).
@@ -42,17 +41,16 @@ const {
   tip,
   labelEls,
   pct,
-  spans,
-  label,
-  runStart,
-  shownLabels,
+  marks,
+  curMark,
+  placedMarks,
   breakSpans,
   chapterBars,
   unplayableBars,
   missingBars,
   tickLefts,
+  boundLefts,
   jumpBars,
-  labelLefts,
   hover,
   tipShift,
   hoverChapter,
@@ -75,17 +73,19 @@ const {
   <div ref="root" class="timeline">
     <div class="labels" aria-hidden="true">
       <button
-        v-for="(s, i) in spans"
+        v-for="(m, i) in marks"
         :key="i"
-        :ref="(el) => (labelEls[i] = el as HTMLElement | null)"
         type="button"
         tabindex="-1"
-        class="plabel vods-mono"
-        :class="{ cur: i === runStart(partIndex), bad: unplayable(status[i]), hid: !shownLabels.has(i) }"
-        :style="{ left: labelLefts[i] }"
-        :title="`${label(i)} · ${toClock(s.start)}–${toClock(s.end)}${unplayable(status[i]) ? ' · unavailable' : ''}`"
-        @click="seekTo(s.start)"
-      >{{ label(i) }}</button>
+        class="mark"
+        :class="{ cur: i === curMark, bad: m.bad, hid: !placedMarks.has(i), icon: placedMarks.get(i)?.icon }"
+        :style="{ left: `${placedMarks.get(i)?.x ?? 0}px` }"
+        :title="`${m.title ?? m.label} · ${toClock(m.t)}${m.bad ? ' · cut' : ''}`"
+        @click="seekTo(m.t)"
+      >
+        <img v-if="m.image" :src="m.image" alt="" class="art" loading="lazy" />
+        <span :ref="(el) => (labelEls[i] = el as HTMLElement | null)" class="txt">{{ m.label }}</span>
+      </button>
     </div>
     <div
       ref="track"
@@ -113,6 +113,7 @@ const {
       <span v-for="(m, i) in missingBars" :key="'m' + i" class="miss" :style="m"></span>
       <span v-for="(u, i) in unplayableBars" :key="'u' + i" class="unseg" :style="u"></span>
       <span v-for="(left, i) in tickLefts" :key="'t' + i" class="tick" :style="{ left }"></span>
+      <span v-for="(left, i) in boundLefts" :key="'c' + i" class="bound" :style="{ left }"></span>
       <span v-for="j in jumpBars" :key="'j' + j.at" class="jump" :style="{ left: j.left }"></span>
       <span v-for="b in breakSpans" :key="'b' + b.t" class="brk" :style="{ left: b.left, width: `${BREAK}px` }">
         <svg viewBox="0 0 6 20" preserveAspectRatio="none"><polyline points="3,0 1,3 5,7 1,11 5,15 1,18 3,20" /></svg>
@@ -145,17 +146,21 @@ const {
 
 <style scoped>
 .timeline { padding: 2px 12px 0; }
-.labels { position: relative; height: 24px; }
-/* 24px tall to hit with a finger; the text stays small. */
-.plabel {
-  position: absolute; top: 0; height: 24px; display: flex; align-items: center; transform: translateX(-2px);
-  font-size: 10px; line-height: 1; padding: 0 5px; background: none; border: none; color: var(--vods-muted); cursor: pointer;
-  border-radius: 3px; white-space: nowrap; max-width: 14ch; overflow: hidden; text-overflow: ellipsis;
+.labels { position: relative; height: 26px; }
+/* 26px tall to hit with a finger. The art (16px + 4px gap) and the padding are MARK_ART and MARK_ICON in useTimeline. */
+.mark {
+  position: absolute; top: 0; height: 26px; display: flex; align-items: center; gap: 4px; padding: 0 5px;
+  font: inherit; font-size: var(--vods-player-text); line-height: 1; background: none; border: none; color: var(--vods-muted);
+  cursor: pointer; border-radius: 3px; white-space: nowrap;
 }
-.plabel.cur { color: var(--vods-accent); }
-.plabel.hid { visibility: hidden; }
-.plabel.bad { text-decoration: line-through; opacity: 0.6; }
-.plabel:hover { color: var(--vods-ink); }
+.mark .art { width: 16px; height: 21px; object-fit: cover; border-radius: 2px; flex: none; }
+.mark .txt { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+/* Art alone: the text leaves the flow but keeps its size, so it can still be measured. */
+.mark.icon .txt { position: absolute; visibility: hidden; }
+.mark.cur { color: var(--vods-ink); }
+.mark.hid { visibility: hidden; }
+.mark.bad .txt { text-decoration: line-through; opacity: 0.6; }
+.mark:hover { color: var(--vods-ink); }
 /* The bar stays thin; an invisible band 8px above and below makes it 24px to hit. */
 .track { position: relative; height: 8px; cursor: pointer; margin: 8px 0; touch-action: none; border-radius: 2px; outline-offset: 4px; }
 .track::before { content: ""; position: absolute; inset: -8px 0; }
@@ -167,7 +172,10 @@ const {
 /* Time this upload set skips (a live recording's ad breaks): the chapter colour shows through, hatched over. */
 .miss { position: absolute; top: 0; bottom: 0; pointer-events: none; background: var(--vods-hatch-dark); }
 .unseg { position: absolute; top: 0; bottom: 0; pointer-events: none; background: var(--vods-hatch-bad); }
-.tick { position: absolute; top: -9px; bottom: -2px; width: 1px; background: var(--vods-muted); pointer-events: none; }
+/* Parts are an upload detail: a short hairline under the bar, below the progress line. */
+.tick { position: absolute; top: calc(100% + 5px); height: 4px; width: 1px; background: var(--vods-muted); opacity: 0.7; pointer-events: none; }
+/* Where the game changes: a line through the bar, up to the mark above it. */
+.bound { position: absolute; top: -9px; bottom: 0; width: 2px; margin-left: -1px; z-index: 1; background: var(--vods-ink); opacity: 0.8; pointer-events: none; }
 /* Where a stream jumps within its VOD: a thin slit through the bar, with a notch above it. */
 .jump { position: absolute; top: -5px; bottom: 0; width: 3px; margin-left: -1.5px; z-index: 1; pointer-events: none; background: var(--vods-bg); }
 .jump::before { content: ""; position: absolute; left: -2px; right: -2px; top: 0; height: 3px; background: var(--vods-muted); clip-path: polygon(0 0, 100% 0, 50% 100%); }

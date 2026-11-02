@@ -6,7 +6,8 @@
  * Utility classes a theme styles: .vods-display (page titles), .vods-eyebrow (small caps labels), .vods-mono,
  * .vods-muted, .vods-panel (a card surface), .vods-pop (a floating surface), .vods-ring (hover ring on thumbnails),
  * .vods-overlay (base for panels teleported out of the shell), .vods-input (a raw text field), .vods-btn (+ .is-sm,
- * .is-primary: a raw button look, e.g. on a file <label>).
+ * .is-primary: a raw button look, e.g. on a file <label>), .vods-player-controls (the watch page's control bar: a theme
+ * can size its controls there, e.g. by setting its control-height token on it).
  */
 :where(:root) {
   --vods-bg: #111;
@@ -28,6 +29,11 @@
   --vods-radius-sm: 5px;
   --vods-radius-group: 999px; /* a frame around a group of chips, like the VOD list's states */
   --vods-font-mono: ui-monospace, monospace;
+  /* The watch page: its heading (the VOD's title), the small text by the player (chapter line, timeline marks, the
+     heading's day and games) and the clock. */
+  --vods-player-heading: 18px;
+  --vods-player-text: 12px;
+  --vods-player-time: 13px;
   --vods-hatch: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--vods-ink) 35%, transparent) 0 3px, transparent 3px 6px);
   --vods-hatch-dark: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--vods-bg) 55%, transparent) 0 2px, transparent 2px 5px);
   --vods-hatch-bad: repeating-linear-gradient(45deg, color-mix(in srgb, var(--vods-bad) 55%, transparent) 0 2px, color-mix(in srgb, var(--vods-bg) 65%, transparent) 2px 6px);
