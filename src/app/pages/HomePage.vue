@@ -25,8 +25,11 @@ const router = useRouter()
 
 const cards = computed(() => shownHomeCards(siteOptions.value.homeCards, tagConfig.value))
 
-const { vods: latestVods } = useVods(() => ({ ...toApiFilter(parseListQuery({}, 'vods')), page: 1, perPage: 1 }))
+// Only VODs with something to play (an archive without `$cut` sends cut ones too).
+const { vods: latestVods } = useVods(() => ({ ...toApiFilter(parseListQuery({}, 'vods')), hideCut: true, page: 1, perPage: 4 }))
 const latest = computed(() => latestVods.value[0] ?? null)
+// The ones before it, under its chapters.
+const earlier = computed(() => latestVods.value.slice(1))
 
 // Offline, or the status call failed: the latest VOD shows as usual.
 const live = shallowRef<LiveStatus | null>(null)
@@ -60,7 +63,7 @@ const resumeOf = (v: Vod) => resumeProgress(saved.value.get(v.id), v.duration)
       <template v-for="c in cards" :key="c.id">
         <template v-if="c.type === 'live'">
           <LiveNow v-if="live" :live="live" />
-          <LatestVod v-else-if="latest" :vod="latest" :progress="resumeOf(latest)" />
+          <LatestVod v-else-if="latest" :vod="latest" :progress="resumeOf(latest)" :earlier="earlier" />
         </template>
         <LatestOne v-else-if="c.type === 'vods' && c.count === 1" :tag="c.tag" :resume="resumeOf" />
         <LatestTagged v-else-if="c.type === 'vods'" :tag="c.tag" :resume="resumeOf" />

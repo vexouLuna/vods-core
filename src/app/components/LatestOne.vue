@@ -9,7 +9,7 @@ import { tagConfig } from '../lib/vodTags'
 
 const props = defineProps<{ tag: string; resume: (v: Vod) => Progress | null | undefined }>()
 
-const { vods } = useVods(() => ({ tag: props.tag, page: 1, perPage: 1 }))
+const { vods } = useVods(() => ({ tag: props.tag, page: 1, perPage: 4 }))
 const vod = computed(() => vods.value[0] ?? null)
 const all = computed(() => {
   const s = tagConfig.value[props.tag]
@@ -18,5 +18,5 @@ const all = computed(() => {
 </script>
 
 <template>
-  <LatestVod v-if="vod" :vod="vod" :progress="resume(vod)" :all="all" />
+  <LatestVod v-if="vod" :vod="vod" :progress="resume(vod)" :all="all" :earlier="vods.slice(1)" />
 </template>

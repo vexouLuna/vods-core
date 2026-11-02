@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // One list of VODs, by tag, each its own page (lib/listQuery, tabs()): /vods has the plain VODs (merges and splits
-// included), each tag with a page its own (/playthroughs: one game across streams, as one video). One filter bar (All resets, title
-// search, game dropdown with every game in the archive, tag, date range; all combinable and kept in the URL), a grid
-// of cards, and "load more". On phones the bar wraps. A tag on a card links here narrowed to it (ThumbTags).
+// included), each tag with a page its own (/playthroughs: one game across streams, as one video). One filter bar (All resets, a
+// search of titles and games, game dropdown with every game in the archive, tag, date range, hide the VODs cut in full;
+// all combinable and kept in the URL), the viewer's View menu (what cards are headlined with), a grid of cards, and
+// "load more". On phones the bar wraps. A tag on a card links here narrowed to it (ThumbTags).
 import { resumeProgress, type GamePlayed, type Progress, type Vod } from '../../index'
 import { useVods, useVodsContext } from '../../vue/index'
 import { computed, nextTick, ref, shallowRef, watch } from 'vue'
@@ -15,6 +16,7 @@ import { hasFilters, parseListQuery, tabs, toApiFilter, toListQuery, type ListSt
 import { site, vodsConfig } from '../site'
 import VodsShell from '../components/VodsShell.vue'
 import { watchDebounced } from '../composables/watchDebounced'
+import { setTitleMode, titleMode, type TitleMode } from '../lib/vodTitle'
 
 const props = defineProps<{ tab: Tab }>()
 
@@ -111,6 +113,14 @@ const dateLabel = computed(() => {
   return `${from || '…'} → ${to || 'now'}`
 })
 
+// ---- hide cut, and the viewer's title pick ----
+const hideCut = () => go({ hideCut: !state.value.hideCut })
+const TITLE_OPTIONS: { value: TitleMode; label: string }[] = [
+  { value: 'original', label: 'Stream title' },
+  { value: 'generated', label: 'Date & games' },
+]
+const titles = computed({ get: titleMode, set: setTitleMode })
+
 // ---- resume positions ----
 const saved = shallowRef(new Map<string, Progress>())
 progress
@@ -131,7 +141,7 @@ const countText = computed(() => `${(shownFrom.value + vods.value.length).toLoca
       <h1 class="vods-display">{{ tagPage ? tagPage.label : 'Past broadcasts' }}</h1>
       <div class="filters">
         <UiButton :pressed="!hasFilters(state)" label="Clear every filter" @click="resetAll">All</UiButton>
-        <UiInput v-model="titleDraft" class="search" type="search" placeholder="Search titles…" clearable>
+        <UiInput v-model="titleDraft" class="search" type="search" placeholder="Search VODs or games…" aria-label="Search titles and games" clearable>
           <template #icon>⌕</template>
         </UiInput>
         <GamePicker v-model="game" :games="games" :error="gamesError" @retry="fetchGames(true)" />
@@ -143,6 +153,16 @@ const countText = computed(() => `${(shownFrom.value + vods.value.length).toLoca
           <div class="date-pop">
             <div class="vods-eyebrow">Streamed between</div>
             <UiDateRange v-model:from="dateFrom" v-model:to="dateTo" :min="minDay" />
+          </div>
+        </UiPopover>
+        <UiButton :pressed="state.hideCut" title="Leave out the VODs with nothing left to play (every chapter cut from YouTube)" @click="hideCut">Hide cut</UiButton>
+        <UiPopover width="min(300px, calc(100vw - 32px))" role="dialog" class="view">
+          <template #trigger="{ toggle, open }">
+            <UiButton :pressed="open" @click="toggle">View ▾</UiButton>
+          </template>
+          <div class="date-pop">
+            <div class="vods-eyebrow">Card titles</div>
+            <UiSegmented v-model="titles" :options="TITLE_OPTIONS" label="Card titles" />
           </div>
         </UiPopover>
       </div>
@@ -192,6 +212,7 @@ const countText = computed(() => `${(shownFrom.value + vods.value.length).toLoca
   /* Search gets its own full-width line; All, game and dates share the next. */
   .search { order: -1; flex-basis: 100%; max-width: none; }
 }
+.view { margin-left: auto; }
 .date-pop { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 24px 18px; }
 .sk { display: flex; flex-direction: column; gap: 8px; }
