@@ -83,7 +83,7 @@
     "vue-tsc": "^3.3.11"
   },
   "dependencies": {
-    "@vex/platform-web": "github:vexouLuna/vex-platform-web#v0.14.1"
+    "@vex/platform-web": "github:vexouLuna/vex-platform-web#v0.14.2"
   },
   "engines": {
     "node": ">=22"
