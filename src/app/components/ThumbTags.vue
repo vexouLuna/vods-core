@@ -6,11 +6,12 @@ import type { Vod } from '../../index'
 import { computed } from 'vue'
 import TagMark from './TagMark.vue'
 import { tagLink } from '../lib/listQuery'
-import { splitTags, tagStyle } from '../lib/vodTags'
+import { DATE_TAGS, splitTags, tagStyle } from '../lib/vodTags'
 
-const props = defineProps<{ vod: Vod }>()
+// `noDates`: without `new` and `updated` (a VOD with nothing to play has nothing new to watch).
+const props = defineProps<{ vod: Vod; noDates?: boolean }>()
 const tags = computed(() =>
-  splitTags(props.vod).drawn.map((name) => ({ name, style: tagStyle(name), to: tagLink(props.vod, name) })),
+  splitTags(props.vod).drawn.filter((name) => !(props.noDates && DATE_TAGS.includes(name))).map((name) => ({ name, style: tagStyle(name), to: tagLink(props.vod, name) })),
 )
 </script>
 

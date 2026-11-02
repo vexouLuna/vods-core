@@ -36,6 +36,11 @@ export function toQueryString(query: QueryObject): string {
 export interface VodFilter {
   /** Case-insensitive title substring. */
   title?: string
+  /** Case-insensitive substring of the title or of a chapter's game name. */
+  search?: string
+  /** Leaves out the VODs cut in full (every chapter cut from the YouTube uploads). An archive older than the `$cut`
+   * parameter ignores it and lists them. */
+  hideCut?: boolean
   /** Exact game (chapter) name; `NO_CATEGORY` finds chapters without a Twitch category. */
   game?: string
   /** Created at or after. */
@@ -73,6 +78,10 @@ export function vodListQuery(opts: VodListOptions = {}): QueryObject {
   const q: QueryObject = {}
   const title = opts.title?.trim()
   if (title) q.title = { $iLike: `%${likeEscape(title)}%` }
+  const search = opts.search?.trim()
+  // `chapters[name]` is a substring match of its own (the archive escapes it).
+  if (search) q.$or = [{ title: { $iLike: `%${likeEscape(search)}%` } }, { chapters: { name: search } }]
+  if (opts.hideCut) q.$cut = 'false'
   const game = opts.game?.trim()
   // Exact match (plain `chapters[name]` is a substring match). Uncategorised chapters have no name, only a null id.
   if (game) q.chapters = game === NO_CATEGORY ? { gameId: 'null' } : { name: { $eq: game } }

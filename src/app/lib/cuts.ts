@@ -1,6 +1,6 @@
 // Chapters that can't be watched: cut from the YouTube uploads (DMCA), or a merge's gap, where the stream was down
 // between two Twitch VODs of one broadcast.
-import type { Chapter, PartStatus } from '../../index'
+import type { Chapter, PartStatus, Vod } from '../../index'
 
 export const isGap = (c: Pick<Chapter, 'kind'>) => c.kind === 'gap'
 
@@ -13,3 +13,6 @@ export function cutNote(c: Pick<Chapter, 'kind' | 'restricted'>): { label: strin
 
 /** A part the player can't play: not on YouTube, not embeddable, or failing. */
 export const unplayable = (s: PartStatus | undefined) => s === 'missing' || s === 'blocked' || s === 'error'
+
+/** Nothing left to play: every chapter was cut (or is a merge's gap). The archive's `$cut=false` leaves these out. */
+export const cutInFull = (vod: Pick<Vod, 'chapters'>) => vod.chapters.length > 0 && vod.chapters.every((c) => c.restricted)

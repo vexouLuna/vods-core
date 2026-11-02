@@ -80,6 +80,12 @@ export interface VodsSite {
    * row of framed posters with a plaque under each, like a cinema's wall.
    */
   mostPlayed: 'hand' | 'wall'
+  /**
+   * What a plain VOD is headlined with on its card and the home page, until the viewer picks for themselves (the VOD
+   * list's View menu): `original`, the stream's title (the default), or `generated`, its date and games, for a
+   * channel whose titles rarely change. A VOD with its own page (a playthrough) keeps its title either way.
+   */
+  vodTitle: 'original' | 'generated'
 }
 
 export const site: VodsSite = {
@@ -89,6 +95,7 @@ export const site: VodsSite = {
   perPage: 24,
   tags: DEFAULT_TAGS,
   mostPlayed: 'hand',
+  vodTitle: 'original',
 }
 
 /** The channel config (`createVods`'s), for code outside components. A placeholder until createVodsApp() sets it. */
@@ -97,5 +104,5 @@ export let vodsConfig: VodsConfig = defineVodsConfig({ channel: '-', twitchId: '
 /** Sets the site and its channel config. createVodsApp() calls it; tests can too. */
 export function configureSite(config: VodsConfig, s: Partial<VodsSite> & Pick<VodsSite, 'id' | 'name' | 'twitchUrl'>): void {
   vodsConfig = config
-  Object.assign(site, { perPage: 24, tags: DEFAULT_TAGS, mostPlayed: 'hand' }, s)
+  Object.assign(site, { perPage: 24, tags: DEFAULT_TAGS, mostPlayed: 'hand', vodTitle: 'original' }, s)
 }
