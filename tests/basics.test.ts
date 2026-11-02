@@ -77,6 +77,10 @@ describe('Feathers query strings', () => {
       '?createdAt[$gte]=2025-01-01T00%3A00%3A00.000Z&createdAt[$lte]=2025-02-01T00%3A00%3A00.000Z&$limit=20&$skip=0&$sort[createdAt]=-1',
     )
     expect(toQueryString(vodListQuery({ title: 'a', game: 'b' }))).toBe('?title[$iLike]=%25a%25&chapters[name][$eq]=b&$limit=20&$skip=0&$sort[createdAt]=-1')
+    expect(toQueryString(vodListQuery({ search: ' 100% ', game: 'b' }))).toBe(
+      '?$or[0][title][$iLike]=%25100%5C%25%25&$or[1][chapters][name]=100%25&chapters[name][$eq]=b&$limit=20&$skip=0&$sort[createdAt]=-1',
+    )
+    expect(toQueryString(vodListQuery({ hideCut: true }))).toBe('?$cut=false&$limit=20&$skip=0&$sort[createdAt]=-1')
   })
 
   it('escapes LIKE wildcards in title searches', () => {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // The newest VOD, above the list: a big thumbnail, when it was streamed and for how long, how many parts it was
 // uploaded in, and every chapter with its game, start and length (each a link to that point). Resumes where you
-// stopped, if you did. "See all VODs" goes to the VODs page.
+// stopped, if you did. "See all VODs" goes to the VODs page. Under three chapters or fewer, the few VODs before it
+// (`earlier`), so a short chapter list doesn't leave the side column empty; a longer one keeps the room.
 import { gamePalette, learnGameColors } from '@vex/ui/utils'
 import { boxArt, isFinished, toClock, watchPath, type Progress, type Vod } from '../../index'
 import { computed, watchEffect } from 'vue'
@@ -12,15 +13,21 @@ import { useThumbnail } from '../composables/useThumbnail'
 import NoThumbnail from './NoThumbnail.vue'
 import { gamesWithArt } from '../lib/art'
 import { relativeDay } from '../lib/dates'
+import { cutInFull } from '../lib/cuts'
+import { titleIsGenerated, vodGames, vodTitle } from '../lib/vodTitle'
 
 // `all`: where "See all" goes (a tag's page for a "Latest VOD" card); unset, the VODs page.
-const props = defineProps<{ vod: Vod; progress?: Progress | null; all?: { to: string; label: string } }>()
+const props = defineProps<{ vod: Vod; progress?: Progress | null; all?: { to: string; label: string }; earlier?: Vod[] }>()
 
 const palette = computed(() => gamePalette(props.vod.chapters.map((c) => c.name)))
 const games = computed(() => gamesWithArt(props.vod.chapters).map((g) => ({ ...g, color: palette.value.get(g.name) })))
 watchEffect(() => learnGameColors(games.value))
 
-const title = computed(() => props.vod.title || 'Untitled stream')
+const title = computed(() => vodTitle(props.vod))
+const day = (d: Date) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+const before = computed(() =>
+  (props.vod.chapters.length > 3 ? [] : (props.earlier ?? [])).slice(0, 3).map((v) => ({ vod: v, title: vodTitle(v), made: titleIsGenerated(v), games: vodGames(v), cut: cutInFull(v), to: watchPath(v) })),
+)
 const date = computed(() =>
   props.vod.createdAt.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }),
 )
@@ -73,6 +80,19 @@ const { src: thumb, srcset: thumbSet, onLoad: thumbLoaded, onError: thumbFailed 
           </span>
         </li>
       </ol>
+      <template v-if="before.length">
+        <div class="vods-eyebrow">Previously</div>
+        <ol class="earlier">
+          <li v-for="e in before" :key="e.vod.id">
+            <UiLink :to="e.to" class="prev" :class="{ 'is-cut': e.cut }">
+              <span class="prev-title">{{ e.title }}</span>
+              <span class="vods-mono vods-muted prev-meta">
+                <template v-if="!e.made">{{ day(e.vod.createdAt) }} · </template>{{ e.cut ? 'cut' : toClock(e.vod.duration) }}<template v-if="!e.made && e.games.length"> · {{ e.games.join(', ') }}</template>
+              </span>
+            </UiLink>
+          </li>
+        </ol>
+      </template>
       <div class="details">
         <div class="meta">
           <UiChip k="streamed">{{ date }}, {{ time }}</UiChip>
@@ -139,4 +159,14 @@ a.chapter:hover .name { color: var(--vods-accent); }
 .name { overflow-wrap: anywhere; line-height: 1.3; }
 .at, .len { font-size: 12px; white-space: nowrap; }
 .len::before { content: '· '; }
+.earlier { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; flex: none; }
+.prev {
+  display: flex; flex-direction: column; gap: 1px; padding: 5px 6px; border-radius: var(--vods-radius-sm);
+  color: var(--vods-ink); text-decoration: none; font-size: 13px; min-width: 0;
+}
+.prev:hover { background: var(--vods-surface); }
+.prev:hover .prev-title { color: var(--vods-accent); }
+.prev.is-cut { opacity: 0.6; }
+.prev-title, .prev-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prev-meta { font-size: 11px; }
 </style>

@@ -1,14 +1,16 @@
 <script setup lang="ts">
 // A homepage card of the newest VODs with a tag whose type has `homeCard` (playthroughs, highlights): each card with
 // what it is beside it (the games, how many streams it took and when they were, its length, whether it's complete,
-// how far you are), and a button to the tag's page. Hidden while there are none or they couldn't load.
+// how far you are), and a button to the tag's page. The card itself has no line under its title: the details say it.
+// A complete one says so once: by its drawn tag when the site draws `complete`, else by a chip. Hidden while there are
+// none or they couldn't load.
 import { gamePalette } from '@vex/ui/utils'
 import { boxArt, isFinished, toClock, watchPath, type Progress, type Vod } from '../../index'
 import { computed } from 'vue'
 import { useVods } from '../../vue/index'
 import SeeAllButton from './SeeAllButton.vue'
 import VodCard from './VodCard.vue'
-import { COMPLETE_TAG, tagConfig } from '../lib/vodTags'
+import { COMPLETE_TAG, tagConfig, tagStyle } from '../lib/vodTags'
 
 const props = defineProps<{ tag: string; resume: (v: Vod) => Progress | null | undefined }>()
 
@@ -67,7 +69,7 @@ const entries = computed(() => vods.value.map((vod) => ({ vod, progress: props.r
         </li>
       </template>
       <li v-for="d in entries" v-else :key="d.vod.id" class="item">
-        <VodCard :vod="d.vod" :progress="d.progress" />
+        <VodCard :vod="d.vod" :progress="d.progress" compact />
         <div class="info">
           <div v-if="d.games.length" class="games">
             <UiPosters :games="d.games" mode="row" :size="28" />
@@ -79,7 +81,7 @@ const entries = computed(() => vods.value.map((vod) => ({ vod, progress: props.r
             <div><dt>Played</dt><dd>{{ d.played }}</dd></div>
           </dl>
           <div class="status">
-            <UiChip v-if="d.complete" tone="ok">complete</UiChip>
+            <UiChip v-if="d.complete && !tagStyle(COMPLETE_TAG).drawn" tone="ok">complete</UiChip>
             <UiChip v-else tone="accent">ongoing</UiChip>
             <UiChip v-if="d.vod.drive.length" tone="ok">download</UiChip>
           </div>

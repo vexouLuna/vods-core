@@ -1,5 +1,5 @@
 // The list pages keep their filters in the URL so a link reproduces the view: /vods or a tag's page (the tab), then
-// ?tag=&title=&game=&from=&to=&page=
+// ?tag=&title=&game=&from=&to=&cut=hide&page=
 import type { Vod, VodListOptions } from '../../index'
 import type { TagStyle } from '../site'
 import { DATE_TAGS, RECENT_MS, TAG_NAME, tagConfig, tagStyle, VODS_TAG } from './vodTags'
@@ -58,11 +58,14 @@ export interface ListState {
   /** One tag the list is narrowed to (tagFilters), or ''. */
   tag: string
   page: number
+  /** The search box: titles and chapter games. */
   title: string
   game: string
   /** YYYY-MM-DD or '' (open-ended). */
   from: string
   to: string
+  /** Leave out the VODs cut in full. */
+  hideCut: boolean
 }
 
 type Query = Record<string, string | null | (string | null)[] | undefined>
@@ -84,6 +87,7 @@ export function parseListQuery(q: Query, tab: Tab = 'vods'): ListState {
     game: first(q.game).slice(0, 200),
     from: isDay(from) ? from : '',
     to: isDay(to) ? to : '',
+    hideCut: first(q.cut) === 'hide',
   }
 }
 
@@ -95,6 +99,7 @@ export function toListQuery(s: ListState): Record<string, string> {
   if (s.game) q.game = s.game
   if (s.from) q.from = s.from
   if (s.to) q.to = s.to
+  if (s.hideCut) q.cut = 'hide'
   if (s.page > 1) q.page = String(s.page)
   return q
 }
@@ -115,7 +120,8 @@ export function toApiFilter(s: ListState, now = Math.floor(Date.now() / 60_000) 
   return {
     tag: tabFor(s.tab)?.tag,
     ...tagFilter(s.tag, now),
-    title: s.title || undefined,
+    search: s.title || undefined,
+    hideCut: s.hideCut || undefined,
     game: s.game || undefined,
     from: s.from ? new Date(`${s.from}T00:00:00`) : undefined,
     to: s.to ? new Date(`${s.to}T23:59:59.999`) : undefined,
@@ -123,7 +129,7 @@ export function toApiFilter(s: ListState, now = Math.floor(Date.now() / 60_000) 
 }
 
 /** Any filter on (the tab is the page, not a filter: "All" keeps it). */
-export const hasFilters = (s: ListState) => !!(s.tag || s.title || s.game || s.from || s.to)
+export const hasFilters = (s: ListState) => !!(s.tag || s.title || s.game || s.from || s.to || s.hideCut)
 
 /** The list narrowed to `tag`, in the tab `vod` is listed in; null if that tab can't be. */
 export function tagLink(vod: Vod, tag: string): string | null {
