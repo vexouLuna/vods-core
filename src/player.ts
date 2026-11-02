@@ -390,13 +390,20 @@ export async function mountYouTube(
 ): Promise<PlayerLike> {
   const YT = await loadYouTubeApi()
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("The YouTube player didn't start in time.")), opts.readyTimeoutMs ?? READY_TIMEOUT)
-    new YT.Player(el, {
+    let timedOut = false
+    const timer = setTimeout(() => {
+      // Gone for good: a late onReady must not start playing under the error.
+      timedOut = true
+      player.destroy()
+      reject(new Error("The YouTube player didn't start in time."))
+    }, opts.readyTimeoutMs ?? READY_TIMEOUT)
+    const player = new YT.Player(el, {
       width: '100%',
       height: '100%',
       playerVars: { autoplay: opts.autoplay === false ? 0 : 1, playsinline: 1, rel: 0, controls: opts.controls === false ? 0 : 1 },
       events: {
         onReady: (e) => {
+          if (timedOut) return
           clearTimeout(timer)
           watch.attach(e.target, opts.start, opts.autoplay !== false)
           resolve(e.target)
