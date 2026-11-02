@@ -114,6 +114,14 @@ export function issueLink(i: YoutubeIssue): string | undefined {
   return i.video && i.kind !== 'removed' ? `https://www.youtube.com/watch?v=${encodeURIComponent(i.video)}` : undefined
 }
 
+/** The issue's video's Copyright page in YouTube Studio, when a claim may be behind it (blocked or rejected) and it has
+ * a part to fix. */
+export function claimLink(i: YoutubeIssue): string | undefined {
+  return i.video && i.part != null && (i.kind === 'blocked' || i.kind === 'rejected')
+    ? `https://studio.youtube.com/video/${encodeURIComponent(i.video)}/copyright`
+    : undefined
+}
+
 /** Bad ones first, then the least on YouTube. */
 export function sortedProblems(c: YoutubeCheck | null | undefined): YoutubeVodReport[] {
   const bad = (r: YoutubeVodReport) => (r.issues.some((i) => i.severity === 'bad') ? 0 : 1)

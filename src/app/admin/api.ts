@@ -875,6 +875,11 @@ export class AdminClient {
   reuploadPart(vodId: string, part: number, type: 'vod' | 'live' = 'vod'): Promise<ActionResult> {
     return this.request('POST', '/admin/reupload', { vodId, part, type })
   }
+  /** Mute (audio) or black out (video) one part's blocking claims, as YouTube Studio's `receivedClaims` for that part's
+   * video has them, and upload the part again. */
+  partDmca(vodId: string, part: number, type: 'vod' | 'live', receivedClaims: unknown[]): Promise<ActionResult> {
+    return this.request('POST', '/admin/part/dmca', { vodId, part, type, receivedClaims })
+  }
   updateDescriptions(vodId: string, type: RawUpload['type'] = 'vod'): Promise<ActionResult> {
     return this.request('POST', '/admin/youtube/parts', { vodId, type })
   }

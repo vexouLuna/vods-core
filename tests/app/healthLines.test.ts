@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   RECENT_PROBLEM_DAYS,
+  claimLink,
   diskLine,
   doomtpLine,
   issueLink,
@@ -79,6 +80,10 @@ describe('YouTube check lines', () => {
     expect(issueWhere({ ...i, type: 'live', part: undefined })).toBe('Live copy')
     expect(issueLink(i)).toBe('https://www.youtube.com/watch?v=abc')
     expect(issueLink({ ...i, kind: 'removed' })).toBeUndefined()
+    expect(claimLink({ ...i, kind: 'blocked' })).toBe('https://studio.youtube.com/video/abc/copyright')
+    expect(claimLink({ ...i, kind: 'rejected' })).toBe('https://studio.youtube.com/video/abc/copyright')
+    expect(claimLink({ ...i, kind: 'ageRestricted' })).toBeUndefined()
+    expect(claimLink({ ...i, kind: 'blocked', part: undefined })).toBeUndefined()
   })
 })
 
