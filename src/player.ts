@@ -304,9 +304,11 @@ export class WatchPlayer {
   }
 
   private tick(): void {
+    const t = this.currentTime()
     const end = this.timeline.partEnd(this.index)
-    if (end !== null && this.player && (this.player.getCurrentTime() || 0) >= end - CLIP_END_SLACK) return this.advance()
-    this.emit('time', this.currentTime())
+    // Until YouTube catches up with a seek (the hold), its time may still be past the end of the clip sought to.
+    if (!this.hold && end !== null && this.player && (this.player.getCurrentTime() || 0) >= end - CLIP_END_SLACK) return this.advance()
+    this.emit('time', t)
     this.checkVolume()
   }
 
