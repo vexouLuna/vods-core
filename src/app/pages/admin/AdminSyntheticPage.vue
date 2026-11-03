@@ -7,6 +7,7 @@
 // An existing one has the same header panel as /manage/vods/:id (title, visibility, tags, cut reason), its thumbnail,
 // and the Actions and Jobs panels; the segments' Save sends only the segments.
 import { useToast } from '@vex/ui/utils'
+import { GAP_LABEL } from '../../lib/cuts'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
 import { computed, ref, watch, watchEffect } from 'vue'
@@ -32,9 +33,9 @@ const router = useRouter()
 const toast = useToast()
 const isNew = computed(() => !props.id)
 
-interface Row { key: number; vod_id: string; start: number | null; end: number | null; at: number | null; label: string }
+interface Row { key: number; vod_id: string; start: number | null; end: number | null; at: number | null; label: string; gapLabel: string }
 let keys = 0
-const row = (s: Partial<Row> = {}): Row => ({ key: keys++, vod_id: '', start: null, end: null, at: null, label: '', ...s })
+const row = (s: Partial<Row> = {}): Row => ({ key: keys++, vod_id: '', start: null, end: null, at: null, label: '', gapLabel: '', ...s })
 
 const vod = ref<SyntheticVod | null>(null)
 const loadError = ref<string | null>(null)
@@ -60,7 +61,7 @@ function fill(v: SyntheticVod | null) {
   // down (an older archive's `supersedes` says the same).
   const keepAt = !!v && (v.tags.includes(VODS_TAG) || v.supersedes)
   segments.value = (v?.segments ?? []).map((s) =>
-    row({ vod_id: s.vod_id, start: s.start, end: s.end, at: keepAt ? s.at : null, label: s.label ?? '' }),
+    row({ vod_id: s.vod_id, start: s.start, end: s.end, at: keepAt ? s.at : null, label: s.label ?? '', gapLabel: s.gap_label ?? '' }),
   )
   if (!segments.value.length) segments.value = [row()]
   follows.value = followedGames(v?.auto ?? null).map((id) => ({ id, name: follows.value.find((g) => g.id === id)?.name ?? null }))
@@ -166,12 +167,13 @@ async function save() {
   saving.value = true
   saveError.value = null
   const body: SyntheticInput = {
-    segments: segments.value.map((s) => ({
+    segments: segments.value.map((s, i) => ({
       vod_id: s.vod_id.trim(),
       ...(s.start != null ? { start: s.start } : {}),
       ...(s.end != null ? { end: s.end } : {}),
       ...(s.at != null ? { at: s.at } : {}),
       ...(s.label.trim() ? { label: s.label.trim() } : {}),
+      ...(i > 0 && s.gapLabel.trim() ? { gap_label: s.gapLabel.trim() } : {}),
     })),
   }
   // Following games, the archive makes the segments (it ignores these); without, they are a hand edit, which stops it.
@@ -352,6 +354,9 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
               <UiField label="At"><template #default="{ id: fid }"><TimeInput :id="fid" v-model="s.at" optional placeholder="next" /></template></UiField>
               <UiField label="Label" class="grow">
                 <template #default="{ id: fid }"><UiInput :id="fid" v-model="s.label" placeholder="Part 1" /></template>
+              </UiField>
+              <UiField v-if="i > 0" label="Gap label" class="grow" help="Names the gap chapter before this segment.">
+                <template #default="{ id: fid }"><UiInput :id="fid" v-model="s.gapLabel" :placeholder="GAP_LABEL" maxlength="200" /></template>
               </UiField>
               <span class="acts">
                 <UiButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move segment ${i + 1} up`" @click="move(i, -1)">↑</UiButton>
