@@ -217,6 +217,28 @@ describe('WatchPlayer', () => {
     }
   })
 
+  it('mountYouTube resolves while YouTube has no volume to report yet, and reports it once it has', async () => {
+    const p = fakePlayer()
+    ;(p.state as { vol: number | undefined }).vol = undefined // getVolume() before the embed has one
+    const Player = vi.fn(function (_el: unknown, o: { events: { onReady: (e: { target: PlayerLike }) => void } }) {
+      queueMicrotask(() => o.events.onReady({ target: p }))
+      return p
+    })
+    vi.stubGlobal('window', { YT: { Player } })
+    try {
+      const w = new WatchPlayer(new Timeline(vod))
+      const volumes: number[] = []
+      w.on('volume', (v) => volumes.push(v))
+      await expect(mountYouTube({} as HTMLElement, w, { readyTimeoutMs: 1000 })).resolves.toBeDefined()
+      expect(volumes).toEqual([])
+      p.state.vol = 80
+      w.setVolume(80)
+      expect(volumes).toEqual([80])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('keeps the speed asked for when the next part starts', () => {
     const w = new WatchPlayer(new Timeline(vod))
     const p = fakePlayer()

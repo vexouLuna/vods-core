@@ -13,7 +13,8 @@ are a dotted line through the bar. The buttons over the video have no background
 pointer moving over the player. The next-stream and end-of-VOD cards put their buttons beside the countdown again.
 
 Fixes: a YouTube player that throws while being made no longer leaves its 15s timer running; a hand-edited saved
-emote setting that isn't a boolean is ignored.
+emote setting that isn't a boolean is ignored; the player no longer throws on load while YouTube has no volume to
+report yet, so `mountYouTube` resolves.
 
 New token `--vods-player-control` (32px): the control bar's button height, for a theme to put on its controls in
 `.vods-player-controls`, so every site's bar has the same sizes. A site's theme should map it (keeki-vods does).

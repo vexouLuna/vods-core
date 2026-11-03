@@ -223,7 +223,9 @@ export class WatchPlayer {
   private checkVolume(): void {
     if (!this.player) return
     const now = this.volumeNow()
-    if (this.lastVolume?.[0] === now[0] && this.lastVolume[1] === now[1]) return
+    // Right after onReady the embed may have no volume yet (getVolume() is undefined): report it on a later check.
+    if (typeof now[0] !== 'number') return
+    if (this.lastVolume && this.lastVolume[0] === now[0] && this.lastVolume[1] === now[1]) return
     this.lastVolume = now
     this.emit('volume', ...now)
   }
