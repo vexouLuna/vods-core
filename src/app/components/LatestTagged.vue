@@ -82,7 +82,6 @@ const entries = computed(() => vods.value.map((vod) => ({ vod, progress: props.r
           </dl>
           <div class="status">
             <UiChip v-if="d.complete && !tagStyle(COMPLETE_TAG).drawn" tone="ok">complete</UiChip>
-            <UiChip v-else tone="accent">ongoing</UiChip>
             <UiChip v-if="d.vod.drive.length" tone="ok">download</UiChip>
           </div>
           <p v-if="d.you.text" class="you vods-muted">{{ d.you.text }}</p>

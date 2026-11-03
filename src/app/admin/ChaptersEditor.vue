@@ -4,6 +4,7 @@
 // The logic is useChaptersDraft's; this draws it, with the game colours of the Deep Field palette.
 import { gamePalette, useToast } from '@vex/ui/utils'
 import { toClock } from '../../index'
+import { GAP_LABEL } from '../lib/cuts'
 import { computed, watch } from 'vue'
 import type { AdminVod } from './api'
 import EditorRows from './EditorRows.vue'
@@ -44,7 +45,16 @@ const segments = computed(() =>
     <TimeStrip :segments="segments" :total="total" :label="`${rows.length} chapters over ${toClock(total)}`" />
     <template #row="{ row: r, index: i }">
       <span class="n vods-mono vods-muted">{{ i + 1 }}</span>
-      <GameSearch class="g" :model-value="game(r)" :label="`chapter ${i + 1}`" @update:model-value="setGame(r, $event)" />
+      <UiInput
+        v-if="r.kind === 'gap'"
+        :model-value="r.name ?? ''"
+        @update:model-value="r.name = String($event)"
+                class="g"
+        :aria-label="`Chapter ${i + 1} label`"
+        :placeholder="GAP_LABEL"
+        maxlength="100"
+      />
+      <GameSearch v-else class="g" :model-value="game(r)" :label="`chapter ${i + 1}`" @update:model-value="setGame(r, $event)" />
       <div class="times">
         <TimeInput v-model="r.start" seekable :label="`Chapter ${i + 1} start`" :invalid="errors.has(r.key)" />
         <span class="vods-muted" aria-hidden="true">→</span>

@@ -2,6 +2,7 @@
 // next to the row before saving), and the request bodies. Pure functions; the pages hold the drafts.
 import { boxArt, normalizeVod, toClock, toSeconds, type RawChapter, type RawDrive, type RawUpload } from '../../index'
 import type { AdminVod, CensorCover, CensorRange, CensorRegion, ChapterEdit, VodPatch, YoutubeEdit } from './api'
+import { GAP_LABEL } from '../lib/cuts'
 import { isAutoTag, vodTags } from '../lib/vodTags'
 
 let nextKey = 1
@@ -97,7 +98,7 @@ export function chapterEdits(rows: readonly ChapterDraft[]): ChapterEdit[] {
   return [...rows]
     .sort((a, b) => a.start - b.start)
     .map((r) => ({
-      name: r.name,
+      name: r.kind === 'gap' ? r.name?.trim() || GAP_LABEL : r.name,
       gameId: r.gameId,
       imageTemplate: r.imageTemplate,
       start: r.start,
