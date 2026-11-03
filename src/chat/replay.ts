@@ -34,6 +34,8 @@ export class ChatReplay {
   private cursor: string | undefined
   private next: Promise<RawCommentPage | null> | null = null
   private last: number | null = null
+  /** Comments taken as due by a step whose page fetch then failed: the next step returns them first. */
+  private carry: RawComment[] = []
   private chain: Promise<unknown> = Promise.resolve()
   private ctrl = new AbortController()
   private readonly opts: Required<Omit<ReplayOptions, 'source'>> & Pick<ReplayOptions, 'source'>
@@ -64,6 +66,7 @@ export class ChatReplay {
     this.cursor = undefined
     this.next = null
     this.last = null
+    this.carry = []
   }
 
   /** Stop any fetches (unmount). */
@@ -83,7 +86,7 @@ export class ChatReplay {
   private async step(t: number): Promise<ReplayUpdate> {
     if (this.isSeek(t)) return this.seek(t)
     this.last = t
-    const due: RawComment[] = []
+    const due: RawComment[] = this.carry.splice(0)
     for (;;) {
       while (this.index < this.buffer.length && this.buffer[this.index]!.content_offset_seconds <= t) {
         due.push(this.buffer[this.index++]!)
@@ -91,7 +94,13 @@ export class ChatReplay {
       this.prefetch()
       if (this.index < this.buffer.length || !this.next) break
       // Ran off the end of the page: wait for the next one and keep going.
-      const page = await this.next
+      let page: RawCommentPage | null
+      try {
+        page = await this.next
+      } catch (e) {
+        this.carry = due
+        throw e
+      }
       this.next = null
       if (!page) break
       this.adopt(page, false)

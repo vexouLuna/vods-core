@@ -199,7 +199,12 @@ export function tagChanges(saved: RawTag[], drafts: TagDraft[]) {
   const was = saved.map((t) => JSON.stringify(inputOf(t)))
   const now = body.map((t) => JSON.stringify(t))
   const changed = now.join() !== was.join()
-  const count = changed ? Math.max(1, now.filter((t) => !was.includes(t)).length + Math.max(0, was.length - now.length)) : 0
+  // By name: a tag added, one removed and one edited each count once (a new order alone counts as one).
+  const savedJson = new Map(saved.map((t, i) => [t.name, was[i]!]))
+  const names = new Set(body.map((t) => t.name))
+  const count = changed
+    ? Math.max(1, body.filter((t, i) => savedJson.get(t.name) !== now[i]).length + saved.filter((t) => !names.has(t.name)).length)
+    : 0
   /** The drafts that differ from their saved tag (by name; a new one always does), for the rows' unsaved dot. */
   const savedByName = new Map(saved.map((t) => [t.name, JSON.stringify(inputOf(t))]))
   const dirty = new Set(drafts.filter((d, i) => !d.saved || savedByName.get(body[i]!.name) !== now[i]).map((d) => d.key))

@@ -18,6 +18,15 @@ watch(model, (v) => {
   bad.value = false
 })
 
+function fromPlayhead() {
+  if (!preview) return
+  const v = Math.round(preview.time.value * 1000) / 1000
+  model.value = v
+  // Equal to the model: its watch doesn't run, so drop unreadable text and the flag here.
+  text.value = formatTime(v)
+  bad.value = false
+}
+
 function commit() {
   if (props.optional && !text.value.trim()) {
     bad.value = false
@@ -46,7 +55,7 @@ function commit() {
       @blur="commit"
       @keydown.enter.prevent="commit"
     />
-    <UiButton size="sm" variant="ghost" icon :disabled="!ready" :label="`${label ?? 'Time'}: set from the preview's playhead`" :title="'Set from the playhead'" @click="model = Math.round(preview.time.value * 1000) / 1000">⤓</UiButton>
+    <UiButton size="sm" variant="ghost" icon :disabled="!ready" :label="`${label ?? 'Time'}: set from the preview's playhead`" :title="'Set from the playhead'" @click="fromPlayhead">⤓</UiButton>
     <UiButton size="sm" variant="ghost" icon :disabled="!ready || model == null" :label="`${label ?? 'Time'}: jump the preview here`" :title="'Jump the preview here'" @click="model != null && seekTo(preview, model)">▸</UiButton>
   </span>
   <UiInput

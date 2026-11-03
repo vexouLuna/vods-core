@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The emote sets saved with a VOD (what its chat replay shows): counts per set, a preview, and re-capture actions.
 import { useToast } from '@vex/ui/utils'
+import { useLatest } from '../lib/latest'
 import { timeAgo } from '../lib/time'
 import type { Option } from '@vex/ui'
 import { emoteImage, type RawThirdPartyEmote } from '../../index'
@@ -20,15 +21,19 @@ const data = ref<AdminEmotes | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 
+const begin = useLatest()
 async function load() {
+  const isLatest = begin()
   loading.value = true
   try {
-    data.value = await admin.vodEmotes(props.vodId)
+    const d = await admin.vodEmotes(props.vodId)
+    if (!isLatest()) return
+    data.value = d
     error.value = null
   } catch (e) {
-    error.value = errorText(e)
+    if (isLatest()) error.value = errorText(e)
   } finally {
-    loading.value = false
+    if (isLatest()) loading.value = false
   }
 }
 watch(() => props.vodId, load, { immediate: true })

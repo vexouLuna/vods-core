@@ -67,6 +67,21 @@ describe('ChatReplay', () => {
     expect((await r.update(79.5)).reset).toBe(false)
   })
 
+  it('returns the comments a step took when the next page fails', async () => {
+    const src = fakeSource(30)
+    let fail = true
+    src.commentsAfter = vi.fn(async (_v: string, cursor: string) => {
+      if (fail) throw new Error('boom')
+      return { comments: [comment(10, 10)], cursor: undefined, ...(cursor ? {} : {}) }
+    })
+    const r = new ChatReplay(src, 'v1', { backlog: 0, prefetchAt: 100, jumpTolerance: 100 })
+    await r.update(0)
+    await expect(r.update(12)).rejects.toThrow('boom')
+    fail = false
+    const ids = (await r.update(12)).comments.map((c) => c.id)
+    expect(ids).toEqual(expect.arrayContaining(['c1', 'c9']))
+  })
+
   it('asks for the chosen source and keeps the counts from the page', async () => {
     const src: CommentSource = {
       commentsAt: vi.fn(async () => ({ comments: [comment(0, 0)], sources: { replay: 1, bot: 0 } })),

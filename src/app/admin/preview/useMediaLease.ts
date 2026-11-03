@@ -22,6 +22,8 @@ export function useMediaLease(vodId: () => string) {
   const holder = ref<MediaHolder | null>(null)
   const error = ref<string | null>(null)
   let timer: ReturnType<typeof setInterval> | undefined
+  /** Bumped by release(), so a claim still in flight when the tab lets go knows not to keep what it gets. */
+  let released = 0
 
   function stopBeat() {
     clearInterval(timer)
@@ -45,13 +47,20 @@ export function useMediaLease(vodId: () => string) {
   async function claim(file: MediaName | null, takeOver = false): Promise<boolean> {
     state.value = 'claiming'
     error.value = null
+    const mine = released
     try {
-      holder.value = await admin.claimMedia({ lease_id: TAB_LEASE, vod_id: vodId(), file, take_over: takeOver })
+      const h = await admin.claimMedia({ lease_id: TAB_LEASE, vod_id: vodId(), file, take_over: takeOver })
+      if (mine !== released) {
+        void admin.releaseMedia(TAB_LEASE, true).catch(() => undefined)
+        return false
+      }
+      holder.value = h
       state.value = 'held'
       stopBeat()
       timer = setInterval(beat, HEARTBEAT_MS)
       return true
     } catch (e) {
+      if (mine !== released) return false
       if (e instanceof ProblemError && e.status === 409) {
         holder.value = holderOf(e)
         state.value = 'in_use'
@@ -64,6 +73,7 @@ export function useMediaLease(vodId: () => string) {
   }
 
   async function release(keepalive = false) {
+    released++
     const held = state.value === 'held'
     stopBeat()
     state.value = 'idle'

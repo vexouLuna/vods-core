@@ -95,7 +95,8 @@ export function homeCardsOf(raw: unknown): HomeCard[] {
     const card = cardOf(c)
     if (!card) continue
     const given = typeof c?.id === 'string' && c.id.trim() ? c.id : null
-    const id = given && !out.some((o) => o.id === given) ? given : `c${i}`
+    let id = given && !out.some((o) => o.id === given) ? given : `c${i}`
+    for (let n = i; out.some((o) => o.id === id); ) id = `c${++n}`
     out.push({ id, ...card })
   }
   return out

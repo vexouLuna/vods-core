@@ -6,6 +6,7 @@
 // joins its windows into one file and uploads it as type `compiled` (the archive's compile_youtube_upload must be on).
 // An existing one has the same header panel as /manage/vods/:id (title, visibility, tags, cut reason), its thumbnail,
 // and the Actions and Jobs panels; the segments' Save sends only the segments.
+import { useLatest } from '../../lib/latest'
 import { useToast } from '@vex/ui/utils'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
@@ -66,7 +67,9 @@ function fill(v: SyntheticVod | null) {
   follows.value = followedGames(v?.auto ?? null).map((id) => ({ id, name: follows.value.find((g) => g.id === id)?.name ?? null }))
   keepUp.value = !!v?.auto
 }
+const begin = useLatest()
 async function load() {
+  const isLatest = begin()
   loadError.value = null
   notFound.value = false
   if (!props.id) return fill(null)
@@ -74,9 +77,11 @@ async function load() {
   full.value = null
   try {
     const [v, f] = await Promise.all([admin.synthetic(props.id), admin.vod(props.id)])
+    if (!isLatest()) return
     fill(v)
     full.value = f
   } catch (e) {
+    if (!isLatest()) return
     if ((e as { status?: number }).status === 404) notFound.value = true
     else loadError.value = errorText(e)
   }
