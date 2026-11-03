@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// The watch page body, shared by /vods/:id (and /live, /youtube): a heading strip (title, day, length, games; gone in
-// theater mode), YouTube player, the timeline across all parts, a controls row (chapters, part picker, copy link, download, theater, shortcuts) and the chat replay.
+// The watch page body, shared by /vods/:id (and /live, /youtube): no site header (a back button over the player
+// instead), the YouTube player, the timeline across all parts, a controls row (play, volume, time, chapters with the
+// title and day, part picker (on phones with the related VODs in it), fullscreen, and a settings menu that also holds
+// copy link, download and the shortcuts) and the chat replay. An arrow on the controls' top edge collapses them; the same arrow over the video brings them back.
 // On phones the same controls reflow under the video and chat goes below; nothing is dropped.
 // A synthetic VOD (a merge, split or playthrough) plays windows of other VODs: its timeline is a SegmentTimeline, chat
 // follows whichever source VOD is playing, and a "related" menu links a playthrough's streams and the playthroughs a VOD
@@ -8,16 +10,20 @@
 // when any VOD plays to its end, a card like it suggests another one to watch.
 import { gamePalette, learnGameColors, useToast } from '@vex/ui/utils'
 import { boxArt, gamesOf, toClock, watchPath, type DriveFile, type PlayableTimeline, type Position, type SegmentTimeline, type Span, type Vod } from '../../index'
-import { computed, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { useRouter } from 'vue-router'
+import VolumeControl from './VolumeControl.vue'
+import WatchIcon from './WatchIcon.vue'
+import RelatedMenu from './RelatedMenu.vue'
 import ChatPanel from './ChatPanel.vue'
 import CountdownRing from './CountdownRing.vue'
 import NextVodPreview from './NextVodPreview.vue'
 import TickText from './TickText.vue'
 import WatchTimeline from './WatchTimeline.vue'
 import { useWatchView } from '../composables/useWatchView'
+import { WIDTH_DEFAULT, WIDTH_MIN } from '../composables/useChatSettings'
 import type { TimelineMark } from '../composables/useTimeline'
 import { gamesWithArt } from '../lib/art'
-import { kindLabel } from '../lib/listQuery'
 import VodsShell from './VodsShell.vue'
 import ManageVodButton from './ManageVodButton.vue'
 
@@ -46,6 +52,12 @@ const props = withDefaults(
 )
 
 const toast = useToast()
+const router = useRouter()
+/** The page has no site header, so a back button over the player: to the page before, or home when there's none. */
+function goBack() {
+  if (window.history.state?.back) router.back()
+  else void router.push('/')
+}
 // The page's logic is useWatchView's. Its `time` changes on every tick and is never read here: the clock, the
 // time into the part and the timeline bar read it through getters, so this template doesn't re-render each tick.
 const {
@@ -84,9 +96,7 @@ const {
   streamBreaks,
   streamJumps,
   chapterStream,
-  theater,
   controlsOpen,
-  showControls,
   fullscreen,
   toggleFullscreen,
   fullscreenLabel,
@@ -109,6 +119,46 @@ const {
   chatError,
   shortcuts,
 } = useWatchView(props, { notify: (message, options) => toast.show(message, options) })
+
+// A phone's row has no room for the related VODs' button: there they're in the part picker's menu (the same 700px as
+// the layout's container query below).
+const narrow = ref(false)
+let phone: MediaQueryList | undefined
+const measure = () => (narrow.value = !!phone?.matches)
+onMounted(() => {
+  phone = matchMedia('(max-width: 700px)')
+  measure()
+  phone.addEventListener('change', measure)
+})
+onBeforeUnmount(() => phone?.removeEventListener('change', measure))
+// Chat's "largest video" width: what's left beside a 16:9 video as tall as its box, never under WIDTH_MIN.
+const watchEl = ref<HTMLElement>()
+const videoEl = ref<HTMLElement>()
+const fitWidth = ref(WIDTH_DEFAULT)
+let sizes: ResizeObserver | undefined
+onMounted(() => {
+  sizes = new ResizeObserver(() => {
+    if (watchEl.value && videoEl.value) fitWidth.value = Math.max(WIDTH_MIN, Math.floor(watchEl.value.clientWidth - (videoEl.value.clientHeight * 16) / 9))
+  })
+  sizes.observe(watchEl.value!)
+  sizes.observe(videoEl.value!)
+})
+onBeforeUnmount(() => sizes?.disconnect())
+const chatWidth = computed(() => (chat.autoWidth ? fitWidth.value : chat.width))
+// The buttons over the video (back, show chat, manage, the controls' arrow) fade after 2s without the pointer moving
+// over the player; moving, a touch, hover or focus brings them back. Over YouTube's iframe the page sees no
+// movement, so there they fade even while the pointer moves, until it reaches a button.
+const idle = ref(false)
+let idleTimer: ReturnType<typeof setTimeout> | undefined
+function wake() {
+  idle.value = false
+  clearTimeout(idleTimer)
+  idleTimer = setTimeout(() => (idle.value = true), 2000)
+}
+onMounted(wake)
+onBeforeUnmount(() => clearTimeout(idleTimer))
+/** The shortcut list, folded away in the settings menu. */
+const showKeys = ref(false)
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const rateOpts = RATES.map((r) => ({ value: String(r), label: `${r}×` }))
@@ -135,28 +185,17 @@ const games = computed(() => {
 /** "ch 2/3" says something only when the chapters aren't simply one per stream (or one in all). */
 const chapterCount = computed(() => chapters.value.length > 1 && chapters.value.length !== madeOf.value.length)
 
-// Above the bar: a playthrough's streams by their day, else each chapter's game. Parts get only a tick.
+// Above the bar: a playthrough's streams by their day. A plain VOD's games are only on the bar (and the chapters menu).
 const marks = computed<TimelineMark[]>(() =>
-  madeOf.value.length > 1
-    ? madeOf.value.map((m) => ({ t: m.at, label: m.sub || m.mark, title: `${m.mark} · ${m.title}` }))
-    : chapters.value
-        .filter((c) => c.kind !== 'gap')
-        .map((c) => ({ t: Math.max(c.start, range.value.start), label: c.name, image: boxArt(c.image, 48), bad: c.restricted })),
+  madeOf.value.length > 1 ? madeOf.value.map((m) => ({ t: m.at, label: m.sub || m.mark, title: `${m.mark} · ${m.title}` })) : [],
 )
 </script>
 
 <template>
-  <VodsShell fill :header="!theater" sky="dim">
-
-    <div class="watch" :class="{ nochat: !chat.open }" :style="{ '--chat-w': `${chat.width}px` }">
+  <VodsShell fill :header="false" sky="dim">
+    <div ref="watchEl" class="watch" :class="{ nochat: !chat.open }" :style="{ '--chat-w': `${chatWidth}px` }">
       <section class="stage">
-        <header v-if="!theater" class="head">
-          <h1 class="head-title" :title="vod.title">{{ vod.title || 'Untitled stream' }}</h1>
-          <p class="head-meta vods-muted">
-            <span>{{ when }}</span><span>{{ toClock(range.end - range.start) }}</span><span v-if="games" class="head-games" :title="gamesOf(vod).join(', ')">{{ games }}</span>
-          </p>
-        </header>
-        <div class="video">
+        <div ref="videoEl" class="video" :class="{ idle }" @pointermove="wake" @pointerdown="wake">
           <div class="video-box">
             <div class="yt"><div ref="ytEl"></div></div>
             <div v-if="buffering && !playerError" class="buffering"><UiSpinner :size="40" label="Loading video" /></div>
@@ -212,12 +251,13 @@ const marks = computed<TimelineMark[]>(() =>
               </div>
             </div>
           </div>
-          <UiButton v-if="!chat.open" class="chat-reopen" icon label="Show chat" @click="chat.open = true"><UiIcon name="chat" /></UiButton>
-          <ManageVodButton :id="vod.id" class="manage" :class="{ 'by-reopen': !chat.open }" />
+          <!-- shortcut: drawn here until vex-ui's icon set has "back"; then <UiIcon name="back" />. -->
+          <UiButton class="back over" variant="ghost" icon label="Back" @click="goBack"><WatchIcon name="back" /></UiButton>
+          <UiButton v-if="!chat.open" class="chat-reopen over" variant="ghost" icon label="Show chat" @click="chat.open = true"><UiIcon name="chat" /></UiButton>
+          <ManageVodButton :id="vod.id" class="manage over" :class="{ 'by-reopen': !chat.open }" />
           <button
-            v-if="theater"
             type="button"
-            class="peek"
+            class="peek over"
             :class="{ open: controlsOpen }"
             :aria-label="controlsOpen ? 'Hide controls' : 'Show controls'"
             :title="controlsOpen ? 'Hide controls (h)' : 'Show controls (h)'"
@@ -228,7 +268,7 @@ const marks = computed<TimelineMark[]>(() =>
           </button>
         </div>
 
-        <div v-show="showControls" class="controls vods-player-controls">
+        <div v-show="controlsOpen" class="controls vods-player-controls">
           <WatchTimeline
             :timeline="timeline"
             :range="range"
@@ -244,21 +284,7 @@ const marks = computed<TimelineMark[]>(() =>
           />
           <div class="row">
             <UiButton icon :label="playing ? 'Pause (k)' : 'Play (k)'" @click="togglePlay"><UiIcon :name="playing ? 'pause' : 'play'" /></UiButton>
-            <!-- Volume: a vertical slider above the button, with the percentage and mute. -->
-            <UiPopover prefer="up" width="64px" role="dialog">
-              <template #trigger="{ toggle, open }">
-                <UiButton icon :label="muted ? 'Volume: muted' : `Volume: ${volume}%`" :pressed="open" @click="toggle"><UiIcon :name="muted ? 'mute' : 'volume'" /></UiButton>
-              </template>
-              <div class="vol">
-                <span class="vods-mono small">{{ muted ? 'muted' : `${volume}%` }}</span>
-                <div class="vol-track">
-                  <UiSlider :model-value="muted ? 0 : volume" :min="0" :max="100" :step="5" label="Volume" class="vol-slider" @update:model-value="setVolume" />
-                </div>
-                <UiButton icon size="sm" variant="ghost" :label="muted ? 'Unmute (m)' : 'Mute (m)'" :pressed="muted" @click="toggleMute">
-                  <UiIcon :name="muted ? 'mute' : 'volume'" />
-                </UiButton>
-              </div>
-            </UiPopover>
+            <VolumeControl :volume="volume" :muted="muted" @volume="setVolume" @mute="toggleMute" />
             <span class="time vods-mono"><TickText :text="clockText" /> <span class="vods-muted">/ {{ toClock(range.end) }}</span></span>
 
             <div class="now">
@@ -287,9 +313,9 @@ const marks = computed<TimelineMark[]>(() =>
                 </template>
               </UiPopover>
               <div class="now-text">
-                <!-- The heading above has the title, except in theater mode. -->
-                <div v-if="theater" class="title" :title="vod.title">{{ vod.title }}</div>
+                <h1 class="title" :title="vod.title">{{ vod.title || 'Untitled stream' }}</h1>
                 <div class="sub vods-mono vods-muted">
+                  <span :title="games ? gamesOf(vod).join(', ') : undefined">{{ when }}</span> ·
                   <template v-if="chapter"><template v-if="chapterCount">ch {{ chapterIdx + 1 }}/{{ chapters.length }} · </template>{{ chapter.name }} · </template>
                   <template v-if="partLabel">{{ label(partIndex) }} · <TickText :text="offsetText" /></template>
                   <template v-else><TickText :text="offsetText" /> into {{ label(partIndex).toLowerCase() }}</template>
@@ -320,44 +346,19 @@ const marks = computed<TimelineMark[]>(() =>
                       <UiChip v-else-if="status[i] === 'processing'" tone="warn">processing</UiChip>
                     </template>
                   </UiMenuItem>
+                  <RelatedMenu v-if="narrow && relatedCount" :made-of="madeOf" :current-stream="currentStream" :appears-in="appearsIn" @seek="seek" @close="close" />
                 </template>
               </UiPopover>
             </slot>
 
-            <UiButton icon label="Copy link at this time" @click="copyLink"><UiIcon name="copy" /></UiButton>
-            <UiPopover v-if="relatedCount" prefer="up" align="right" width="min(320px, calc(100vw - 24px))" :cap="380">
+            <UiPopover v-if="relatedCount && !narrow" prefer="up" align="right" width="min(320px, calc(100vw - 24px))" :cap="380">
               <template #trigger="{ toggle, open }">
                 <UiButton icon :label="madeOf.length ? 'Streams in this playthrough' : 'Playthroughs with this VOD'" :pressed="open" @click="toggle"><UiIcon name="list" /></UiButton>
               </template>
               <template #default="{ close }">
-                <template v-if="madeOf.length">
-                  <div class="vods-eyebrow menu-head">Streams · {{ madeOf.length }}</div>
-                  <div v-for="(m, i) in madeOf" :key="m.key" class="stream-row">
-                    <UiMenuItem :current="i === currentStream" :sub="m.sub" :title="`${m.title} · ${m.range}`" @click="seek(m.at); close()">
-                      <template #lead><span class="smark vods-mono" :class="{ 'is-current': i === currentStream }">{{ m.mark }}</span></template>
-                      {{ m.title }}
-                    </UiMenuItem>
-                    <UiButton icon size="sm" variant="ghost" :to="m.original" label="Open the original VOD" @click="close()"><UiIcon name="external" /></UiButton>
-                  </div>
-                </template>
-                <template v-if="appearsIn.length">
-                  <div class="vods-eyebrow menu-head">Also in</div>
-                  <UiMenuItem
-                    v-for="a in appearsIn"
-                    :key="a.id"
-                    :to="watchPath({ id: a.id, uploads: [] })"
-                    :sub="kindLabel(a.tags)"
-                    @click="close()"
-                  >
-                    {{ a.title || a.id }}
-                  </UiMenuItem>
-                </template>
+                <RelatedMenu :made-of="madeOf" :current-stream="currentStream" :appears-in="appearsIn" @seek="seek" @close="close" />
               </template>
             </UiPopover>
-            <UiButton v-if="downloadUrl" icon label="Download VOD" :href="downloadUrl" external><UiIcon name="download" /></UiButton>
-            <UiButton icon :label="theater ? 'Leave theater mode' : 'Theater mode'" :pressed="theater" @click="theater = !theater">
-              <UiIcon :name="theater ? 'theater-off' : 'theater'" />
-            </UiButton>
             <UiButton
               icon
               :label="fullscreenLabel"
@@ -372,40 +373,36 @@ const marks = computed<TimelineMark[]>(() =>
               <template #trigger="{ toggle, open }">
                 <UiButton icon label="Player settings" :pressed="open" @click="toggle"><UiIcon name="settings" /></UiButton>
               </template>
+              <template #default="{ close }">
               <div class="settings">
                 <div class="vods-eyebrow">Player settings</div>
-                <div class="set col">
-                  <span>Volume</span>
-                  <span class="set-row">
-                    <UiButton icon size="sm" variant="ghost" :label="muted ? 'Unmute' : 'Mute'" :pressed="muted" @click="toggleMute">
-                      <UiIcon :name="muted ? 'mute' : 'volume'" />
-                    </UiButton>
-                    <UiSlider :model-value="muted ? 0 : volume" :min="0" :max="100" :step="5" label="Volume" class="grow" @update:model-value="setVolume" />
-                    <span class="vods-mono small pct">{{ muted ? 'muted' : `${volume}%` }}</span>
-                  </span>
-                </div>
                 <div class="set col">
                   <span>Speed</span>
                   <UiSegmented class="speeds" :model-value="String(rate)" :options="rateOpts" label="Playback speed" @update:model-value="(v) => v && setRate(Number(v))" />
                 </div>
                 <div class="set">
+                  <label for="watch-captions">Captions <span class="vods-muted small">YouTube's, when the video has them</span></label>
+                  <UiSwitch id="watch-captions" v-model="settings.captions" />
+                </div>
+                <div class="set">
                   <label for="watch-yt-controls">YouTube controls <span class="vods-muted small">YouTube's own bar over the video</span></label>
                   <UiSwitch id="watch-yt-controls" v-model="settings.youtubeControls" />
                 </div>
+                <hr class="sep" />
+                <UiMenuItem @click="copyLink(); close()"><template #lead><UiIcon name="copy" /></template>Copy link at this time</UiMenuItem>
+                <UiMenuItem v-if="downloadUrl" :href="downloadUrl" external @click="close()"><template #lead><UiIcon name="download" /></template>Download VOD</UiMenuItem>
+                <!-- Keyboard shortcuts mean nothing on a touch screen. -->
+                <span class="shortcuts">
+                  <UiMenuItem :aria-expanded="showKeys" @click="showKeys = !showKeys"><template #lead><UiIcon name="keyboard" /></template>Keyboard shortcuts</UiMenuItem>
+                  <template v-if="showKeys">
+                    <div v-for="s in shortcuts" :key="s.label" class="kv">
+                      <UiKbd>{{ s.display }}</UiKbd><span class="vods-muted">{{ s.label }}</span>
+                    </div>
+                  </template>
+                </span>
               </div>
+              </template>
             </UiPopover>
-            <!-- Keyboard shortcuts mean nothing on a touch screen. -->
-            <span class="shortcuts">
-              <UiPopover prefer="up" align="right" width="min(260px, calc(100vw - 24px))" role="dialog">
-                <template #trigger="{ toggle, open }">
-                  <UiButton icon label="Keyboard shortcuts" :pressed="open" @click="toggle"><UiIcon name="keyboard" /></UiButton>
-                </template>
-                <div class="vods-eyebrow menu-head">Shortcuts</div>
-                <div v-for="s in shortcuts" :key="s.label" class="kv">
-                  <UiKbd>{{ s.display }}</UiKbd><span class="vods-muted">{{ s.label }}</span>
-                </div>
-              </UiPopover>
-            </span>
           </div>
         </div>
       </section>
@@ -433,28 +430,26 @@ const marks = computed<TimelineMark[]>(() =>
 .watch.nochat { grid-template-columns: minmax(0, 1fr); }
 
 .stage { position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.head { padding: 10px 16px 8px; border-bottom: 1px solid var(--vods-line); min-width: 0; }
-.head-title {
-  margin: 0; font-size: var(--vods-player-heading); line-height: 1.25; font-weight: 600; overflow-wrap: anywhere;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
-}
-.head-meta { margin: 3px 0 0; font-size: var(--vods-player-text); display: flex; min-width: 0; white-space: nowrap; }
-.head-meta > span + span::before { content: "·"; margin: 0 0.5em; }
-/* One line: the games give way first. */
-.head-games { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .video { position: relative; flex: 1; min-height: 0; container-type: size; display: grid; place-items: center; background: #000; }
 .video-box { position: relative; width: min(100cqw, 100cqh * 16 / 9); aspect-ratio: 16 / 9; }
 .yt, .yt :deep(iframe) { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .buffering { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 .chat-reopen { position: absolute; right: 8px; top: 8px; }
+.back { position: absolute; left: 8px; top: 8px; }
 /* Over the black above the player's own top-right icons; beside "show chat" when that's there. */
-.manage { right: 8px; top: 8px; opacity: 0.7; }
-.manage:hover, .manage:focus-visible { opacity: 1; }
+.manage { right: 8px; top: 8px; }
+/* No background over the video, only a shadow to keep them readable on a bright frame. */
+.over { transition: opacity 0.3s; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.9)); }
+.video.idle .over:not(:hover, :focus-visible) { opacity: 0.3; }
 .manage.by-reopen { right: 48px; }
 
 .unavail { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; background: rgb(0 0 0 / 0.75); }
 /* The player's own cards (next stream, end of the VOD) sit straight on the black where the video was, no panel. */
 .unavail.bare { background: #000; }
+.un-card { max-width: 400px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.un-card p { font-size: 13px; line-height: 1.5; margin: 0; }
+/* The countdown beside its buttons; when the card is too narrow they wrap under it, both centred. */
+.un-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 /* A part YouTube won't play: a small box in the corner. The embed stays visible and clickable under it (YouTube's
    own error or "sign in to confirm you're not a bot" button lives in the iframe), so only the box takes clicks. */
 .unavail.corner { inset: auto 0 8px; display: flex; justify-content: center; padding: 0 8px; background: none; pointer-events: none; }
@@ -465,22 +460,20 @@ const marks = computed<TimelineMark[]>(() =>
 .unavail.corner .un-sub { grid-column: 1; font-size: 11px; }
 .unavail.corner .un-actions { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; gap: 6px; }
 .smark-next { color: var(--vods-accent); margin-right: 4px; }
-.handoff-actions { align-items: center; justify-content: center; gap: 16px; flex-wrap: nowrap; }
+.handoff-actions { align-items: center; justify-content: center; gap: 16px; }
 .handoff-btns { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .go { min-width: 12ch; justify-content: center; }
 .go.stop { background: var(--vods-warn); border-color: var(--vods-warn); color: var(--vods-bg); font-weight: 600; box-shadow: none; backdrop-filter: none; }
 .go.stop:hover { filter: brightness(1.08); color: var(--vods-bg); }
 
 .controls { border-top: 1px solid var(--vods-line); background: rgb(0 0 0 / 0.7); }
-/* Over the video's bottom edge, out of the layout, so the video keeps the whole height. */
+/* On the video's bottom edge, right above the controls (or where they were), out of the layout. */
 .peek {
   position: absolute; left: 50%; bottom: 0; z-index: 1; transform: translateX(-50%);
   display: grid; place-items: center; width: 48px; height: 20px; padding: 0; border: none; border-radius: 6px 6px 0 0;
-  background: rgb(0 0 0 / 0.75); color: var(--vods-ink); font-size: 10px; line-height: 1; cursor: pointer; opacity: 0.8;
-  transition: opacity 0.15s, color 0.15s;
+  background: none; color: var(--vods-ink); font-size: 10px; line-height: 1; cursor: pointer;
 }
 .peek .watch-icon { width: 14px; height: 14px; }
-.peek:hover, .peek:focus-visible { opacity: 1; color: var(--vods-ink); }
 .peek:focus-visible { outline: 2px solid var(--vods-accent); outline-offset: -2px; }
 .row { display: flex; align-items: center; gap: 8px; padding: 6px 12px 8px; min-width: 0; }
 .time { font-size: var(--vods-player-time); white-space: nowrap; }
@@ -488,53 +481,42 @@ const marks = computed<TimelineMark[]>(() =>
 .poster-btn { background: none; border: none; padding: 0 4px; cursor: pointer; display: flex; height: 32px; align-items: center; color: inherit; border-radius: var(--vods-radius-sm); }
 .poster-btn:focus-visible { outline: 2px solid var(--vods-accent); }
 .now-text { min-width: 0; line-height: 1.3; }
-.title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title { margin: 0; font-size: var(--vods-player-heading); line-height: 1.3; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sub { font-size: var(--vods-player-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .partbtn { min-width: 92px; }
 .menu-head { padding: 6px 8px; }
-.stream-row { display: flex; align-items: center; gap: 2px; }
-.stream-row > :first-child { flex: 1; min-width: 0; }
-.smark { font-size: 11px; color: var(--vods-muted); min-width: 2.5ch; }
-.smark.is-current { color: var(--vods-accent); }
 .settings { display: flex; flex-direction: column; padding: 8px; gap: 2px; }
 .set { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
 .set.col { flex-direction: column; align-items: stretch; gap: 6px; }
 .speeds { align-self: flex-start; max-width: 100%; }
-.set-row { display: flex; align-items: center; gap: 6px; }
 .set label { display: flex; flex-direction: column; gap: 2px; }
-.grow { flex: 1; min-width: 0; }
 .small { font-size: 11px; }
-.pct { width: 6ch; text-align: right; }
-.vol { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0 4px; }
-/* UiSlider has no vertical form: a horizontal one turned a quarter, in a box its turned size. */
-.vol-track { position: relative; width: 28px; height: 120px; }
-.vol-slider { position: absolute; left: 50%; top: 50%; width: 120px; transform: translate(-50%, -50%) rotate(-90deg); }
 .shortcuts { display: contents; }
 @media (pointer: coarse) {
   .shortcuts { display: none; }
 }
+.sep { border: 0; border-top: 1px solid var(--vods-line); margin: 6px 0; width: 100%; }
 .kv { display: flex; justify-content: space-between; gap: 10px; padding: 4px 8px; font-size: 12px; }
 
 .watch > :deep(.chat) { border-left: 1px solid var(--vods-line); }
 
 @container vods (max-width: 700px) {
-  .watch, .watch.nochat { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content max-content minmax(320px, 1fr); overflow-y: auto; overflow-x: hidden; }
-  /* On a phone the heading goes under the player and its controls, so the video stays at the top (its row is empty
-     in theater mode). */
-  .head { grid-row: 3; padding: 8px 12px; }
+  .watch, .watch.nochat { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content minmax(320px, 1fr); overflow-y: auto; overflow-x: hidden; }
   .stage { display: contents; }
   .video { flex: none; container-type: inline-size; }
   .video-box { width: 100%; }
   .video:has(.unavail:not(.corner)) .video-box { aspect-ratio: auto; min-height: 56.25cqw; display: grid; }
   .unavail:not(.corner) { position: relative; }
+  /* Clear of the back button over the top-left corner. */
+  .unavail.bare { padding-top: 44px; }
   .unavail.corner .un-sub { display: none; }
   .video:has(.unavail:not(.corner)) .yt { visibility: hidden; }
   /* Same controls as desktop, reflowed: title on its own line, everything else wraps below it */
-  .row { flex-wrap: wrap; gap: 6px; }
+  .row { flex-wrap: wrap; gap: 4px; padding-inline: 8px; }
   .time { margin-right: auto; }
   .now { order: -1; flex-basis: 100%; margin-left: 0; }
   .partbtn { min-width: 0; }
   .hide-sm { display: none; }
-  .watch > :deep(.chat) { grid-row: 4; border-left: none; border-top: 1px solid var(--vods-line); }
+  .watch > :deep(.chat) { grid-row: 3; border-left: none; border-top: 1px solid var(--vods-line); }
 }
 </style>

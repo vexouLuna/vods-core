@@ -1,5 +1,5 @@
 // The watch page without its look: the player, chat and progress (useWatchPlayer, from the vue entry) plus what the
-// app adds: the part and chapter state, theater and fullscreen, copy link, the related VODs, a playthrough's handoff to
+// app adds: the part and chapter state, hiding the controls, fullscreen, copy link, the related VODs, a playthrough's handoff to
 // its next stream (with its countdown), the end-of-VOD suggestion, the player settings and the keyboard shortcuts.
 // WatchView.vue draws it. Call it from a component's setup: it mounts the player once the component is.
 import { computed, onScopeDispose, ref, shallowRef, toRef, watch } from 'vue'
@@ -66,6 +66,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     timeline: () => props.timeline,
     start: props.start,
     controls: () => settings.youtubeControls,
+    captions: () => settings.captions,
     segments: () => props.segments,
     chat: { source: () => chat.source, offset: toRef(chat, 'delay') },
     track: props.track !== false,
@@ -135,11 +136,8 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
   }
 
   // ---- actions ----
-  const theater = ref(false)
-  /** In theater mode the controls tuck away; a faint strip under the video brings them back. */
+  /** The controls bar; an arrow on its top edge collapses it, and the same arrow over the video brings it back. */
   const controlsOpen = ref(true)
-  watch(theater, (on) => (controlsOpen.value = !on))
-  const showControls = computed(() => !theater.value || controlsOpen.value)
   const fullscreen = useFullscreen()
   async function toggleFullscreen() {
     if (!(await fullscreen.toggle())) notify("The browser didn't allow fullscreen", { kind: 'error' })
@@ -294,8 +292,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     { keys: ['['], display: '[', label: 'Previous part', run: () => partIndex.value > 0 && playPart(partIndex.value - 1) },
     { keys: [']'], display: ']', label: 'Next part', run: () => partIndex.value < spans.value.length - 1 && playPart(partIndex.value + 1) },
     { keys: ['c'], display: 'c', label: 'Show / hide chat', run: () => (chat.open = !chat.open) },
-    { keys: ['t'], display: 't', label: 'Theater mode', run: () => (theater.value = !theater.value) },
-    { keys: ['h'], display: 'h', label: 'Show / hide controls (theater)', run: () => theater.value && (controlsOpen.value = !controlsOpen.value) },
+    { keys: ['h'], display: 'h', label: 'Show / hide controls', run: () => (controlsOpen.value = !controlsOpen.value) },
     { keys: ['f'], display: 'f', label: 'Fullscreen', run: () => fullscreen.supported && toggleFullscreen() },
     { keys: ['y'], display: 'y', label: 'Copy link at this time', run: copyLink },
   ])
@@ -344,9 +341,7 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     chapterStream,
     stepChapter,
     // actions
-    theater,
     controlsOpen,
-    showControls,
     fullscreen,
     toggleFullscreen,
     fullscreenLabel,

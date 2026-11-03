@@ -16,6 +16,8 @@ export interface ChatSettings {
   size: 's' | 'm' | 'l'
   /** Chat's width beside the video, in pixels (wide layouts; on phones chat sits below). */
   width: number
+  /** Chat takes whatever the video leaves at its largest (never under WIDTH_MIN) instead of `width`. */
+  autoWidth: boolean
   open: boolean
   /** Which chat to replay: doomtp-bot's live recording, or Twitch's VOD recording (less detail). */
   source: ChatSource
@@ -44,6 +46,7 @@ export const defaultChatSettings = (): ChatSettings => ({
   emotes: { '7tv': true, bttv: true, ffz: true },
   size: 'm',
   width: WIDTH_DEFAULT,
+  autoWidth: false,
   open: true,
   source: 'bot',
   names: 'display',
@@ -69,12 +72,13 @@ export function readSaved(get: (key: string) => string | null): ChatSettings {
       timestamps: typeof saved.timestamps === 'boolean' ? saved.timestamps : base.timestamps,
       badges: typeof saved.badges === 'boolean' ? saved.badges : base.badges,
       colors: saved.colors === 'raw' ? 'raw' : 'readable',
-      emotes: { ...base.emotes, ...(saved.emotes && typeof saved.emotes === 'object' ? saved.emotes : {}) },
+      emotes: emotesOf(saved.emotes, base.emotes),
       size: saved.size === 's' || saved.size === 'l' ? saved.size : 'm',
       width:
         typeof saved.width === 'number' && Number.isFinite(saved.width)
           ? clamp(Math.round(saved.width), WIDTH_MIN, WIDTH_MAX)
           : base.width,
+      autoWidth: typeof saved.autoWidth === 'boolean' ? saved.autoWidth : base.autoWidth,
       open: typeof saved.open === 'boolean' ? saved.open : base.open,
       source: saved.source === 'replay' || saved.source === 'bot' ? saved.source : base.source,
       names: saved.names === 'login' || saved.names === 'both' ? saved.names : base.names,
@@ -82,6 +86,13 @@ export function readSaved(get: (key: string) => string | null): ChatSettings {
   } catch {
     return base
   }
+}
+
+/** Each emote set's saved on/off; anything but a boolean (a hand-edited save) is the default. */
+function emotesOf(saved: unknown, base: ChatSettings['emotes']): ChatSettings['emotes'] {
+  const s = (saved && typeof saved === 'object' ? saved : {}) as Record<string, unknown>
+  const pick = (k: keyof ChatSettings['emotes']) => (typeof s[k] === 'boolean' ? (s[k] as boolean) : base[k])
+  return { '7tv': pick('7tv'), bttv: pick('bttv'), ffz: pick('ffz') }
 }
 
 function load(): ChatSettings {

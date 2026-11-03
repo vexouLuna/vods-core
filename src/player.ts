@@ -386,32 +386,45 @@ export const READY_TIMEOUT = 15_000
 export async function mountYouTube(
   el: HTMLElement,
   watch: WatchPlayer,
-  opts: { start?: Position; autoplay?: boolean; controls?: boolean; readyTimeoutMs?: number } = {},
+  opts: { start?: Position; autoplay?: boolean; controls?: boolean; captions?: boolean; readyTimeoutMs?: number } = {},
 ): Promise<PlayerLike> {
   const YT = await loadYouTubeApi()
   return new Promise((resolve, reject) => {
     let timedOut = false
+    let player: PlayerLike | undefined
     const timer = setTimeout(() => {
       // Gone for good: a late onReady must not start playing under the error.
       timedOut = true
-      player.destroy()
+      player?.destroy()
       reject(new Error("The YouTube player didn't start in time."))
     }, opts.readyTimeoutMs ?? READY_TIMEOUT)
-    const player = new YT.Player(el, {
-      width: '100%',
-      height: '100%',
-      playerVars: { autoplay: opts.autoplay === false ? 0 : 1, playsinline: 1, rel: 0, controls: opts.controls === false ? 0 : 1 },
-      events: {
-        onReady: (e) => {
-          if (timedOut) return
-          clearTimeout(timer)
-          watch.attach(e.target, opts.start, opts.autoplay !== false)
-          resolve(e.target)
+    try {
+      player = new YT.Player(el, {
+        width: '100%',
+        height: '100%',
+        playerVars: {
+          autoplay: opts.autoplay === false ? 0 : 1,
+          playsinline: 1,
+          rel: 0,
+          controls: opts.controls === false ? 0 : 1,
+          cc_load_policy: opts.captions ? 1 : 0,
         },
-        onStateChange: (e) => watch.handleState(e.data),
-        onError: (e) => watch.handleError(e.data),
-        onPlaybackRateChange: (e) => watch.handleRate(e.data),
-      },
-    })
+        events: {
+          onReady: (e) => {
+            if (timedOut) return
+            clearTimeout(timer)
+            watch.attach(e.target, opts.start, opts.autoplay !== false)
+            resolve(e.target)
+          },
+          onStateChange: (e) => watch.handleState(e.data),
+          onError: (e) => watch.handleError(e.data),
+          onPlaybackRateChange: (e) => watch.handleRate(e.data),
+        },
+      })
+    } catch (e) {
+      // No player to wait for: stop the timer, or it fires later on nothing.
+      clearTimeout(timer)
+      reject(e instanceof Error ? e : new Error('The YouTube player could not load.'))
+    }
   })
 }

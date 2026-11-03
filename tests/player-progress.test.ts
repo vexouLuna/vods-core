@@ -204,6 +204,19 @@ describe('WatchPlayer', () => {
     }
   })
 
+  it('mountYouTube rejects at once and leaves no timer when the player throws while being made', async () => {
+    const Player = vi.fn(function () {
+      throw new Error('no element')
+    })
+    vi.stubGlobal('window', { YT: { Player } })
+    try {
+      await expect(mountYouTube({} as HTMLElement, new WatchPlayer(new Timeline(vod)), { readyTimeoutMs: 1000 })).rejects.toThrow('no element')
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('keeps the speed asked for when the next part starts', () => {
     const w = new WatchPlayer(new Timeline(vod))
     const p = fakePlayer()

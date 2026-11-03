@@ -28,6 +28,7 @@
   --vods-player-heading: 18px;
   --vods-player-text: var(--vx-text-sm);
   --vods-player-time: var(--vx-text-md);
+  --vods-player-control: 32px; /* VxButton's one height */
   --vods-hatch: var(--vx-hatch);
   --vods-hatch-dark: var(--vx-hatch-dark);
   --vods-hatch-bad: var(--vx-hatch-bad);
