@@ -32,6 +32,7 @@ interface Job {
   pauseBefore: string[] | null; pauseNext: boolean; createdAt: string; updatedAt: string
   ticks: number; cancelRequested: boolean; actor: { kind: string; id: string | null; login: string | null; via: string }
   parentId?: number | null
+  dismissedAt?: string | null
 }
 interface Event { seq: number; at: string; level: 'info' | 'warning' | 'error'; step: string | null; message: string; progress: { done: number; total: number; unit: string } | null }
 
@@ -64,6 +65,7 @@ function add(kind: string, vodId: string | null, state: State, stepIndex: number
 for (let i = 0; i < 70; i++) add(i % 3 ? 'archive' : 'chapters', String(2300000000 + i * 7919), 'done', 99, 60 * 24 * (70 - i))
 add('dmca', '2301234567', 'cancelled', 1, 60 * 30)
 add('reupload', '2309876543', 'failed', 1, 60 * 5, { lastError: 'YouTube quota exceeded (403 quotaExceeded); retry after midnight Pacific.' })
+add('chat', '2304444444', 'failed', 0, 60 * 50, { lastError: 'Twitch GQL 500 (internal error)', dismissedAt: iso(60_000 * 20) })
 add('download', '2311111111', 'paused', 2, 90, { pauseBefore: ['upload'] })
 // Paused by the censor check (POST /api/v2/jobs/{id}/censor-review answers it).
 add('download', '2309876543', 'paused', 3, 70, {
@@ -143,11 +145,12 @@ const v2Job = (j: Job) => {
     state: j.state === 'done' ? 'succeeded' : j.state, step: j.step, steps: KINDS[j.kind]!.steps, payload: j.payload,
     attempts: j.attempts, last_error: j.lastError, not_before: j.notBefore, pause_before: j.pauseBefore, pause_next: j.pauseNext,
     cancel_requested: j.cancelRequested, actor: j.actor, created_at: j.createdAt, updated_at: j.updatedAt,
+    dismissed_at: j.dismissedAt ?? null,
     started_at: j.state === 'queued' && j.attempts <= 1 ? null : j.createdAt, finished_at: finished ? j.updatedAt : null,
   }
 }
 const v2State = (s: string): State => (s === 'succeeded' ? 'done' : (s as State))
-const counts = () => Object.fromEntries(STATES.map((s) => [s, jobs.filter((j) => j.state === s).length]))
+const counts = () => Object.fromEntries(STATES.map((s) => [s, jobs.filter((j) => j.state === s && !j.dismissedAt).length]))
 
 // ---- sessions ----
 type User = { id: string; login: string; displayName: string; avatar: null; color: string }
@@ -1454,8 +1457,9 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           const kind = url.searchParams.get('kind')
           const parent = Number(url.searchParams.get('parent')) || null
           const before = Number(url.searchParams.get('cursor')) || Infinity
+          const dismissed = url.searchParams.get('dismissed')
           const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 200)
-          const rows = jobs.filter((j) => j.id < before && (!wanted.length || wanted.includes(j.state)) && (!subject || (j.vodId && `vod:${j.vodId}` === subject)) && (!kind || j.kind === kind) && (!parent || j.parentId === parent))
+          const rows = jobs.filter((j) => j.id < before && (!wanted.length || wanted.includes(j.state)) && (!subject || (j.vodId && `vod:${j.vodId}` === subject)) && (!kind || j.kind === kind) && (!parent || j.parentId === parent) && (dismissed == null || !!j.dismissedAt === (dismissed === 'true')))
           const items = rows.slice(0, limit)
           return send(res, 200, { items: items.map(v2Job), next_cursor: rows.length > limit ? String(items[items.length - 1]!.id) : null })
         }
@@ -1463,7 +1467,8 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           const kind = url.searchParams.get('kind')
           const subject = url.searchParams.get('subject')
           const since = Date.parse(url.searchParams.get('since') ?? '') || 0
-          const rows = jobs.filter((j) => (!kind || j.kind === kind) && (!subject || `vod:${j.vodId}` === subject))
+          const withDismissed = url.searchParams.get('include_dismissed') === 'true'
+          const rows = jobs.filter((j) => (withDismissed || !j.dismissedAt) && (!kind || j.kind === kind) && (!subject || `vod:${j.vodId}` === subject))
             .filter((j) => isActive(j) || !since || Date.parse(v2Job(j).finished_at ?? '') >= since)
           const n = Object.fromEntries(['queued', 'running', 'paused', 'succeeded', 'failed', 'cancelled'].map((s) => [s, rows.filter((j) => j.state === v2State(s)).length]))
           return send(res, 200, { counts: n, total: rows.length })
@@ -1546,7 +1551,14 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             job.state = 'queued'
             job.attempts++
             job.lastError = null
+            job.dismissedAt = null
             log(job, `Retried from ${job.step}`)
+            return done()
+          }
+          if (action === 'dismiss') {
+            if (!['failed', 'cancelled'].includes(job.state)) return conflict('only failed or cancelled jobs can be dismissed')
+            job.dismissedAt ??= iso()
+            log(job, 'Dismissed')
             return done()
           }
           if (action === 'cancel') {
