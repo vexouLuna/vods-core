@@ -1,5 +1,18 @@
 # @vex/vods-core
 
+## 0.49.0
+
+### Minor Changes
+
+- 014a478: Manage: a Schedules page (/manage/schedules) for the worker's recurring jobs: pause, resume, run now, and create, edit and delete them (UTC cron). Needs vex-platform 0.10 on the worker and a platform-web with SchedulesBrowser.
+- 22e5e71: VOD lists leave out the VODs cut in full by default (nothing is playable in them); the "Hide cut" filter becomes a "Show cut VODs" toggle (`?cut=show`). An archive older than `$cut` still lists them.
+- 42a8eed: Watch page: a VOD with both a live recording and Twitch's VOD gets a Track switch (Unmuted | Muted) in the player settings, at the same moment. The track picked there is remembered in the browser and used for the following parts and videos; with no pick it's Unmuted. When a part can't play, a big centred card (like the next-stream handoff) counts down (stoppable, 8 s) to the same moment on the other track, for that part only: the next part goes back to the picked track. When no track has it (a track that already failed there is never picked again), it counts down twice as long (16 s) to the next part. Every centred card (next stream, end of the VOD, a part that can't play) has a minimize button that folds it small at the bottom, leaving the player visible and clickable.
+
+### Patch Changes
+
+- 427724b: Admin overview: failed runs that were dismissed no longer show under recent failures (they stay in a VOD's job history).
+- 708cc99: The account menu says so when signing out of the account fails, and no longer leaves the manage pages then.
+
 ## 0.48.0
 
 ### Minor Changes
