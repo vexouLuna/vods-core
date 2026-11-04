@@ -168,6 +168,9 @@ onBeforeUnmount(() => clearTimeout(idleTimer))
 /** The shortcut list, folded away in the settings menu. */
 const showKeys = ref(false)
 
+/** The centred cards (next stream, end of the VOD, a part that can't play) folded small at the bottom, off the player. */
+const mini = ref(false)
+
 // Switching tracks opens this page on the other one at the same moment, and is the track from then on.
 const trackOpts = computed(() => props.tracks.map((k) => ({ value: k.type, label: k.label })))
 function pickTrack(type: string | null | undefined) {
@@ -222,8 +225,11 @@ const marks = computed<TimelineMark[]>(() =>
                 <p class="vods-muted">{{ playerError }} An ad or content blocker may be blocking youtube.com: allow it for this site, then reload the page.</p>
               </div>
             </div>
-            <div v-else-if="handoffCard" class="unavail bare" role="dialog" aria-label="Next stream">
+            <div v-else-if="handoffCard" class="unavail bare" :class="{ mini }" role="dialog" aria-label="Next stream">
               <div class="un-card handoff">
+                <UiButton class="un-mini" variant="ghost" icon :label="mini ? 'Maximize' : 'Minimize'" :title="mini ? 'Maximize' : 'Minimize'" @click="mini = !mini">
+                  <WatchIcon :name="mini ? 'up' : 'down'" />
+                </UiButton>
                 <div class="vods-eyebrow">End of {{ handoffCard.from.mark }} · {{ handoffCard.from.sub }}</div>
                 <b><span class="vods-mono smark-next">{{ handoffCard.to.mark }}</span> {{ handoffCard.to.title }}</b>
                 <p class="vods-muted">Next stream, from {{ handoffCard.to.sub }}.</p>
@@ -240,8 +246,11 @@ const marks = computed<TimelineMark[]>(() =>
                 </div>
               </div>
             </div>
-            <div v-else-if="ending" class="unavail bare" role="dialog" :aria-label="ending.t != null ? 'Pick up where you left off' : 'Something else to watch?'">
+            <div v-else-if="ending" class="unavail bare" :class="{ mini }" role="dialog" :aria-label="ending.t != null ? 'Pick up where you left off' : 'Something else to watch?'">
               <div class="un-card handoff">
+                <UiButton class="un-mini" variant="ghost" icon :label="mini ? 'Maximize' : 'Minimize'" :title="mini ? 'Maximize' : 'Minimize'" @click="mini = !mini">
+                  <WatchIcon :name="mini ? 'up' : 'down'" />
+                </UiButton>
                 <div class="vods-eyebrow">End of the VOD</div>
                 <b>{{ ending.t != null ? 'Pick up where you left off' : 'Something else to watch?' }}</b>
                 <NextVodPreview :vod="ending.vod" :t="ending.t" />
@@ -257,8 +266,11 @@ const marks = computed<TimelineMark[]>(() =>
             </div>
             <!-- Like the handoff card, but over the embed (dimmed, still clickable round the card: YouTube's own error or
                  "sign in to confirm you're not a bot" button lives in the iframe). -->
-            <div v-else-if="curBad" class="unavail bad" role="status">
+            <div v-else-if="curBad" class="unavail bad" :class="{ mini }" role="status">
               <div class="un-card handoff">
+                <UiButton class="un-mini" variant="ghost" icon :label="mini ? 'Maximize' : 'Minimize'" :title="mini ? 'Maximize' : 'Minimize'" @click="mini = !mini">
+                  <WatchIcon :name="mini ? 'up' : 'down'" />
+                </UiButton>
                 <div class="vods-eyebrow">
                   {{ partLabel ? label(partIndex) : `${label(partIndex)} of ${spans.length}` }} · {{ toClock(spans[partIndex]!.start) }} – {{ toClock(spans[partIndex]!.end) }}
                 </div>
@@ -483,6 +495,21 @@ const marks = computed<TimelineMark[]>(() =>
 /* A part YouTube won't play: the embed stays visible (dimmed) and clickable around the card. */
 .unavail.bad { pointer-events: none; }
 .unavail.bad .un-card { pointer-events: auto; }
+.un-card.handoff { position: relative; }
+.un-mini { position: absolute; top: 4px; right: 4px; }
+/* Minimized: a small box at the bottom, the player visible and clickable everywhere else. */
+.unavail.mini { inset: auto 0 8px; display: flex; justify-content: center; padding: 0 8px; background: none; pointer-events: none; }
+.unavail.mini .un-card {
+  pointer-events: auto; max-width: 100%; padding: 6px 40px 6px 10px; font-size: 12px; line-height: 1.3;
+  flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+}
+.unavail.mini .un-card > p, .unavail.mini .un-card > .vods-eyebrow, .unavail.mini .un-card > .next { display: none; }
+.unavail.mini .un-mini { top: 50%; transform: translateY(-50%); }
+.unavail.mini .un-actions { margin-top: 0; gap: 6px; flex-wrap: nowrap; }
+.unavail.mini .handoff-btns { flex-direction: row; }
+.unavail.mini .un-actions :deep(.ring) { width: 34px; height: 34px; }
+.unavail.mini .un-actions :deep(.ring-n) { font-size: 14px; }
+.unavail.mini .go { min-width: 0; }
 .smark-next { color: var(--vods-accent); margin-right: 4px; }
 .handoff-actions { align-items: center; justify-content: center; gap: 16px; }
 .handoff-btns { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -529,11 +556,11 @@ const marks = computed<TimelineMark[]>(() =>
   .stage { display: contents; }
   .video { flex: none; container-type: inline-size; }
   .video-box { width: 100%; }
-  .video:has(.unavail) .video-box { aspect-ratio: auto; min-height: 56.25cqw; display: grid; }
-  .unavail { position: relative; }
+  .video:has(.unavail:not(.mini)) .video-box { aspect-ratio: auto; min-height: 56.25cqw; display: grid; }
+  .unavail:not(.mini) { position: relative; }
   /* Clear of the back button over the top-left corner. */
-  .unavail.bare, .unavail.bad { padding-top: 44px; }
-  .video:has(.unavail) .yt { visibility: hidden; }
+  .unavail.bare:not(.mini), .unavail.bad:not(.mini) { padding-top: 44px; }
+  .video:has(.unavail:not(.mini)) .yt { visibility: hidden; }
   /* Same controls as desktop, reflowed: title on its own line, everything else wraps below it */
   .row { flex-wrap: wrap; gap: 4px; padding-inline: 8px; }
   .time { margin-right: auto; }
