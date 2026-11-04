@@ -32,7 +32,7 @@ const { data: health, error, loading, refresh } = usePoll((signal) => admin.heal
 const toast = useToast()
 // v2 runs, as the jobs page lists them: per state, and the latest failures.
 const { data: jobCounts } = usePoll((signal) => platform.jobCounts({}, signal), 15_000)
-const { data: failures } = usePoll((signal) => platform.jobs({ state: ['failed'], limit: 10 }, signal), 15_000)
+const { data: failures } = usePoll((signal) => platform.jobs({ state: ['failed'], dismissed: false, limit: 10 }, signal), 15_000)
 // The captures running now (a live recording, a VOD being archived), for the Stream row's links.
 const CAPTURE_KINDS: Record<string, string> = { live: 'Live capture', archive: 'Archive capture' }
 const { data: running } = usePoll((signal) => platform.jobs({ state: ['running'], limit: 50 }, signal), 15_000)
