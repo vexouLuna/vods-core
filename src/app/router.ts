@@ -27,6 +27,8 @@ export interface VodsPages {
    * (the homepage cards) is optional: a site without it has no /manage/home. */
   manage: Record<'login' | 'overview' | 'jobs' | 'job' | 'vods' | 'vod' | 'synthetic' | 'storage' | 'youtube' | 'settings' | 'tags' | 'audit', VodsPage> & {
     home?: VodsPage
+    /** Recurring jobs (needs vex-platform 0.10 on the worker). */
+    schedules?: VodsPage
   }
 }
 
@@ -63,6 +65,7 @@ export function vodsRoutes(pages: VodsPages): RouteRecordRaw[] {
     { path: '/manage', component: m.overview },
     { path: '/manage/jobs', component: m.jobs },
     { path: '/manage/jobs/:id(\\d+)', component: m.job, props: true },
+    ...(m.schedules ? [{ path: '/manage/schedules', component: m.schedules }] : []),
     { path: '/manage/vods', component: m.vods },
     { path: '/manage/vods/:id', component: m.vod, props: true },
     { path: '/manage/synthetic/new', component: m.synthetic },

@@ -26,6 +26,21 @@ const KINDS: Record<string, { steps: string[]; manualSteps: string[]; descriptio
   bot_chat_backfill: { steps: ['bot_chat_backfill'], manualSteps: [] },
 }
 
+interface Schedule {
+  id: number; name: string; kind: string; subject: string | null; payload: Record<string, unknown>; cron: string
+  pausedAt: string | null; lastRunAt: string | null; nextRunAt: string; createdAt: string
+}
+const SCHEDULABLE = ['global_emotes_backfill', 'bot_chat_backfill']
+const schedules: Schedule[] = []
+let nextScheduleId = 1
+const addSchedule = (name: string, kind: string, cron: string, extra: Partial<Schedule> = {}) =>
+  schedules.push({ id: nextScheduleId++, name, kind, subject: null, payload: {}, cron, pausedAt: null, lastRunAt: null, nextRunAt: iso(-3_600_000 * 5), createdAt: iso(86_400_000 * 9), ...extra })
+const v2Schedule = (s: Schedule) => ({
+  id: s.id, name: s.name, kind: s.kind, subject: s.subject, payload: s.payload, cron: s.cron, paused_at: s.pausedAt,
+  last_run_at: s.lastRunAt, next_run_at: s.nextRunAt, actor: { kind: 'system', id: 'scheduler', login: null, via: 'system' },
+  created_at: s.createdAt, updated_at: s.createdAt,
+})
+
 interface Job {
   id: number; kind: string; vodId: string | null; state: State; step: string | null; attempts: number
   lastError: string | null; payload: Record<string, unknown>; notBefore: string | null
@@ -62,6 +77,8 @@ function add(kind: string, vodId: string | null, state: State, stepIndex: number
 }
 
 // Seed: a history of finished work plus a few in flight.
+addSchedule('Bot chat backfill', 'bot_chat_backfill', '0 4 * * 0', { lastRunAt: iso(86_400_000 * 3), nextRunAt: iso(-86_400_000 * 4) })
+addSchedule('Global emotes', 'global_emotes_backfill', '30 2 * * *', { pausedAt: iso(3_600_000 * 20), lastRunAt: iso(86_400_000 * 2) })
 for (let i = 0; i < 70; i++) add(i % 3 ? 'archive' : 'chapters', String(2300000000 + i * 7919), 'done', 99, 60 * 24 * (70 - i))
 add('dmca', '2301234567', 'cancelled', 1, 60 * 30)
 add('reupload', '2309876543', 'failed', 1, 60 * 5, { lastError: 'YouTube quota exceeded (403 quotaExceeded); retry after midnight Pacific.' })
@@ -1448,6 +1465,51 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           if (active.length) return fail(res, 409, `Job ${active[0]!.id} (${active[0]!.kind}) is ${active[0]!.state} for ${area}/${name}`)
           folders.splice(folders.indexOf(f), 1)
           return send(res, 200, { path: `${area}/${name}`, bytes: f.bytes, files: f.files })
+        }
+
+        // ---- schedules: vex-platform's /api/v2/schedules ----
+        if (path === '/api/v2/schedules' && method === 'GET') return send(res, 200, { items: schedules.map(v2Schedule), kinds: SCHEDULABLE })
+        if (path === '/api/v2/schedules' && method === 'POST') {
+          const { name, kind, cron } = b as { name?: string; kind?: string; cron?: string }
+          if (!name || !kind || !cron) return problem(res, 422, 'invalid', 'name, kind and cron are required')
+          if (!SCHEDULABLE.includes(kind)) return problem(res, 422, 'invalid', `'${kind}' cannot be scheduled; schedulable kinds: ${SCHEDULABLE.join(', ')}`)
+          if (cron.trim().split(/\s+/).length !== 5) return problem(res, 422, 'invalid', `'${cron}' is not a five-field cron expression`)
+          if (schedules.some((s) => s.name === name)) return problem(res, 409, 'job_conflict', `a schedule named '${name}' exists`)
+          addSchedule(name, kind, cron.trim(), { subject: (b.subject as string | null) ?? null, payload: (b.payload as Record<string, unknown>) ?? {} })
+          return send(res, 201, v2Schedule(schedules[schedules.length - 1]!))
+        }
+        const schm = /^\/api\/v2\/schedules\/(\d+)(?:\/(pause|resume|run-now))?$/.exec(path)
+        if (schm) {
+          const sched = schedules.find((s) => s.id === Number(schm[1]))
+          if (!sched) return problem(res, 404, 'schedule_not_found', `No schedule ${schm[1]}`)
+          const action = schm[2]
+          if (!action && method === 'DELETE') {
+            schedules.splice(schedules.indexOf(sched), 1)
+            res.statusCode = 204
+            return res.end()
+          }
+          if (!action && method === 'PATCH') {
+            if (typeof b.cron === 'string') {
+              if (b.cron.trim().split(/\s+/).length !== 5) return problem(res, 422, 'invalid', `'${b.cron}' is not a five-field cron expression`)
+              sched.cron = b.cron.trim()
+            }
+            if ('subject' in b) sched.subject = (b.subject as string | null) ?? null
+            if (b.payload) sched.payload = b.payload as Record<string, unknown>
+            return send(res, 200, v2Schedule(sched))
+          }
+          if (action === 'pause' && method === 'POST') {
+            sched.pausedAt ??= iso()
+            return send(res, 200, v2Schedule(sched))
+          }
+          if (action === 'resume' && method === 'POST') {
+            sched.pausedAt = null
+            sched.nextRunAt = iso(-3_600_000 * 3)
+            return send(res, 200, v2Schedule(sched))
+          }
+          if (action === 'run-now' && method === 'POST') {
+            sched.lastRunAt = iso()
+            return send(res, 201, v2Job(add(sched.kind, null, 'queued', 0, 0, { payload: sched.payload })))
+          }
         }
 
         // ---- jobs: vex-platform's /api/v2/jobs ----

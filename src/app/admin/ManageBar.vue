@@ -10,6 +10,7 @@ const route = useRoute()
 const LINKS = [
   { label: 'Overview', to: '/manage', exact: true },
   { label: 'Jobs', to: '/manage/jobs' },
+  { label: 'Schedules', to: '/manage/schedules' },
   { label: 'VODs', to: '/manage/vods' },
   { label: 'Storage', to: '/manage/storage' },
   { label: 'YouTube', to: '/manage/youtube' },

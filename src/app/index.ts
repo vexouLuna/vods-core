@@ -82,6 +82,7 @@ export function createVodsApp(options: VodsAppOptions): VodsApp {
         overview: () => import('./pages/admin/AdminOverviewPage.vue'),
         jobs: () => import('./pages/admin/AdminJobsPage.vue'),
         job: () => import('./pages/admin/AdminJobPage.vue'),
+        schedules: () => import('./pages/admin/AdminSchedulesPage.vue'),
         vods: () => import('./pages/admin/AdminVodsPage.vue'),
         vod: () => import('./pages/admin/AdminVodPage.vue'),
         synthetic: () => import('./pages/admin/AdminSyntheticPage.vue'),
