@@ -8,6 +8,7 @@ import { toClock } from '../../index'
 import { stamp } from '@vex/platform-web'
 import type { AdminVod } from './api'
 import { useSplice } from '../composables/useSplice'
+import { GAP_LABEL } from '../lib/cuts'
 
 const props = defineProps<{ vod: AdminVod }>()
 const toast = useToast()
@@ -31,6 +32,7 @@ const {
   gapDrafts,
   gapBad,
   gapsBad,
+  gapLabels,
   mergeIdDraft,
   mergeId,
   canMerge,
@@ -106,6 +108,9 @@ const {
                 :help="joins[i - 1]!.gap < 0 ? `They overlap by ${span(joins[i - 1]!.gap)}: empty starts it where it started, cutting the end of the one before.` : `From the start times: ${toClock(joins[i - 1]!.gap)}. Empty: where it started.`"
               >
                 <template #default="{ id }"><UiInput :id="id" v-model="gapDrafts[joins[i - 1]!.key]" mono placeholder="where it started" class="gapin" /></template>
+              </UiField>
+              <UiField :label="`Gap chapter label before ${v.id}`">
+                <template #default="{ id }"><UiInput :id="id" v-model="gapLabels[joins[i - 1]!.key]" :placeholder="GAP_LABEL" maxlength="200" /></template>
               </UiField>
             </li>
             <li class="row">

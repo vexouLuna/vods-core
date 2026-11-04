@@ -128,6 +128,8 @@ export function useSplice(props: { vod: AdminVod }, options: SpliceOptions) {
     },
     { immediate: true },
   )
+  /** One label per join for its gap chapter (empty: the default). */
+  const gapLabels = ref<Record<string, string>>({})
   const gapBad = (key: string) => badGap(gapDrafts.value[key] ?? '')
   const gapsBad = computed(() => joins.value.some((j) => gapBad(j.key)))
   const mergeIdDraft = ref('')
@@ -142,7 +144,13 @@ export function useSplice(props: { vod: AdminVod }, options: SpliceOptions) {
         const d = (gapDrafts.value[j.key] ?? '').trim()
         return d ? toSeconds(d) : null
       })
-      const made: SyntheticVod = await admin.merge(props.vod.id, { sources: picked.value.map((v) => v.id), gaps, id: mergeIdDraft.value.trim() || undefined })
+      const labels = joins.value.map((j) => gapLabels.value[j.key]?.trim() || null)
+      const made: SyntheticVod = await admin.merge(props.vod.id, {
+        sources: picked.value.map((v) => v.id),
+        gaps,
+        ...(labels.some(Boolean) ? { gapLabels: labels } : {}),
+        id: mergeIdDraft.value.trim() || undefined,
+      })
       notify(`Merged into ${made.id}; ${order.value.map((v) => v.id).join(', ')} are hidden now`, { duration: 4000 })
       picked.value = []
       mergeIdDraft.value = ''
@@ -215,6 +223,7 @@ export function useSplice(props: { vod: AdminVod }, options: SpliceOptions) {
     gapDrafts,
     gapBad,
     gapsBad,
+    gapLabels,
     mergeIdDraft,
     mergeId,
     canMerge,

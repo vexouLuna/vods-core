@@ -222,3 +222,14 @@ describe('settings drafts', () => {
     expect(showValue(items[2]!, [])).toBe('none')
   })
 })
+
+describe('gap chapter labels', () => {
+  const gap = (name: string | null) => chapterDrafts([{ name, start: 0, length: 60, restricted: true, kind: 'gap' } as RawChapter])
+  it('keeps an admin label and the kind', () => {
+    const [e] = chapterEdits(gap('Back in five'))
+    expect(e).toMatchObject({ name: 'Back in five', kind: 'gap' })
+  })
+  it('falls back to the default when blank', () => {
+    expect(chapterEdits(gap('  '))[0]!.name).toBe('Technical difficulties')
+  })
+})
