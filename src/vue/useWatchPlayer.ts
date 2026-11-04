@@ -18,6 +18,8 @@ export interface UseWatchPlayerOptions {
   autoplay?: boolean
   /** YouTube's own controls over the video (default off). Changing it makes a new YouTube player at the same time. */
   controls?: MaybeRefOrGetter<boolean>
+  /** Turn YouTube's captions on when the video has them (default off). Changing it also makes a new player. */
+  captions?: MaybeRefOrGetter<boolean>
   /** A synthetic VOD's timeline, so chat follows the source VOD playing. */
   segments?: MaybeRefOrGetter<SegmentTimeline | null | undefined>
   /**
@@ -82,7 +84,7 @@ export function useWatchPlayer(opts: UseWatchPlayerOptions) {
     const host = document.createElement('div')
     el.value!.replaceChildren(host)
     buffering.value = true
-    mountYouTube(host, p, { start: at, autoplay, controls: toValue(opts.controls) ?? false })
+    mountYouTube(host, p, { start: at, autoplay, controls: toValue(opts.controls) ?? false, captions: toValue(opts.captions) ?? false })
       .then(() => {
         if (wp !== p) return
         buffering.value = false
@@ -96,7 +98,7 @@ export function useWatchPlayer(opts: UseWatchPlayerOptions) {
   }
   onMounted(() => mount(start, opts.autoplay !== false))
   watch(
-    () => toValue(opts.controls),
+    () => [toValue(opts.controls), toValue(opts.captions)],
     () => wp && mount(timeline().locate(time.value), playing.value),
   )
   onScopeDispose(() => {

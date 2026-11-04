@@ -97,6 +97,16 @@ const names = computed<ChatSettings['names']>({
   },
 })
 
+const widthOpts = [
+  { value: 'fixed', label: 'Fixed' },
+  { value: 'auto', label: 'Largest video' },
+]
+const widthMode = computed({
+  get: () => (props.settings.autoWidth ? 'auto' : 'fixed'),
+  set: (v: string | undefined) => {
+    if (v) props.settings.autoWidth = v === 'auto'
+  },
+})
 const sizeOpts = [
   { value: 's' as const, label: 'S' },
   { value: 'm' as const, label: 'M' },
@@ -115,7 +125,7 @@ const sizeOpts = [
       </UiChip>
       <UiPopover align="right" width="min(300px, calc(100vw - 24px))" role="dialog">
         <template #trigger="{ toggle, open }">
-          <UiButton size="sm" variant="ghost" icon label="Chat settings" class="cog" :pressed="open" @click="toggle">⚙</UiButton>
+          <UiButton size="sm" variant="ghost" icon label="Chat settings" class="cog" :pressed="open" @click="toggle"><UiIcon name="settings" /></UiButton>
         </template>
         <div class="settings">
           <div class="vods-eyebrow">Chat settings</div>
@@ -153,7 +163,8 @@ const sizeOpts = [
           <div class="set"><span>Text size</span><UiSegmented v-model="settings.size" :options="sizeOpts" label="Text size" /></div>
           <div class="set col">
             <span>Chat width <span class="vods-muted small">on phones chat sits below</span></span>
-            <span class="row wide">
+            <UiSegmented v-model="widthMode" :options="widthOpts" label="Chat width" />
+            <span v-if="!settings.autoWidth" class="row wide">
               <UiSlider v-model="settings.width" :min="WIDTH_MIN" :max="WIDTH_MAX" :step="10" label="Chat width in pixels" class="grow" />
               <span class="vods-mono small pct">{{ settings.width }}px</span>
               <UiButton size="sm" variant="ghost" :disabled="settings.width === WIDTH_DEFAULT" @click="settings.width = WIDTH_DEFAULT">reset</UiButton>

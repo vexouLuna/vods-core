@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // One bar for the whole VOD (all parts): chapters in their game colour with a boundary between them, restricted
-// chapters hatched, parts that can't play hatched red, part ticks as a hairline below and marks above (each chapter's
-// game, or each stream of a playthrough). Click, drag or use the arrow keys to seek (VOD seconds). The logic is
+// chapters hatched, parts that can't play hatched red, a dotted line through the bar where a part changes, and marks
+// above (a playthrough's streams; none for a plain VOD). Click, drag or use the arrow keys to seek (VOD seconds). The logic is
 // useTimeline's; this draws it.
 import { toClock, type PartStatus, type PlayableTimeline, type Span } from '../../index'
 import { useTimeline, type TimelineMark } from '../composables/useTimeline'
@@ -71,7 +71,7 @@ const {
 
 <template>
   <div ref="root" class="timeline">
-    <div class="labels" aria-hidden="true">
+    <div v-if="marks?.length" class="labels" aria-hidden="true">
       <button
         v-for="(m, i) in marks"
         :key="i"
@@ -172,10 +172,10 @@ const {
 /* Time this upload set skips (a live recording's ad breaks): the chapter colour shows through, hatched over. */
 .miss { position: absolute; top: 0; bottom: 0; pointer-events: none; background: var(--vods-hatch-dark); }
 .unseg { position: absolute; top: 0; bottom: 0; pointer-events: none; background: var(--vods-hatch-bad); }
-/* Parts are an upload detail: a short hairline under the bar, below the progress line. */
-.tick { position: absolute; top: calc(100% + 5px); height: 4px; width: 1px; background: var(--vods-muted); opacity: 0.7; pointer-events: none; }
-/* Where the game changes: a line through the bar, up to the mark above it. */
-.bound { position: absolute; top: -9px; bottom: 0; width: 2px; margin-left: -1px; z-index: 1; background: var(--vods-ink); opacity: 0.8; pointer-events: none; }
+/* Where a part changes: a dotted line through the whole bar. */
+.tick { position: absolute; top: -2px; bottom: -2px; width: 0; margin-left: -1px; z-index: 1; border-left: 2px dotted var(--vods-ink); pointer-events: none; }
+/* Where the game changes: a solid line through the bar. */
+.bound { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; z-index: 1; background: var(--vods-ink); opacity: 0.8; pointer-events: none; }
 /* Where a stream jumps within its VOD: a thin slit through the bar, with a notch above it. */
 .jump { position: absolute; top: -5px; bottom: 0; width: 3px; margin-left: -1.5px; z-index: 1; pointer-events: none; background: var(--vods-bg); }
 .jump::before { content: ""; position: absolute; left: -2px; right: -2px; top: 0; height: 3px; background: var(--vods-muted); clip-path: polygon(0 0, 100% 0, 50% 100%); }

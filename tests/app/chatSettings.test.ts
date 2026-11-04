@@ -46,6 +46,16 @@ describe('readSaved', () => {
     expect(readSaved(from({ 'vods.chat.v2': { source: 'auto' } })).source).toBe('bot')
   })
 
+  it('keeps only boolean emote choices', () => {
+    expect(readSaved(from({ 'vods.chat.v3': { emotes: { '7tv': 'x', bttv: false, junk: true } } })).emotes).toEqual({ '7tv': true, bttv: false, ffz: true })
+  })
+
+  it('keeps the automatic width choice, off by default', () => {
+    expect(readSaved(from({})).autoWidth).toBe(false)
+    expect(readSaved(from({ 'vods.chat.v3': { autoWidth: true } })).autoWidth).toBe(true)
+    expect(readSaved(from({ 'vods.chat.v3': { autoWidth: 'yes' } })).autoWidth).toBe(false)
+  })
+
   it('keeps and clamps a pixel width', () => {
     expect(readSaved(from({ 'vods.chat.v3': { width: 500 } })).width).toBe(500)
     expect(readSaved(from({ 'vods.chat.v3': { width: 5000 } })).width).toBe(720)

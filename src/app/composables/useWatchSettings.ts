@@ -5,18 +5,23 @@ import { reactive, watch } from 'vue'
 export interface WatchSettings {
   /** YouTube's own controls over the video, on by default (beside the page's timeline and controls). */
   youtubeControls: boolean
+  /** YouTube's captions, when the video has them; off by default. */
+  captions: boolean
 }
 
 const KEY = 'vods.watch.v1'
 
-export const defaultWatchSettings = (): WatchSettings => ({ youtubeControls: true })
+export const defaultWatchSettings = (): WatchSettings => ({ youtubeControls: true, captions: false })
 
 /** The saved settings (from `get`, e.g. localStorage's), with anything missing or odd set to the default. */
 export function readWatchSettings(get: (key: string) => string | null): WatchSettings {
   const base = defaultWatchSettings()
   try {
     const saved = JSON.parse(get(KEY) ?? '{}') as Partial<WatchSettings>
-    return { youtubeControls: typeof saved.youtubeControls === 'boolean' ? saved.youtubeControls : base.youtubeControls }
+    return {
+      youtubeControls: typeof saved.youtubeControls === 'boolean' ? saved.youtubeControls : base.youtubeControls,
+      captions: typeof saved.captions === 'boolean' ? saved.captions : base.captions,
+    }
   } catch {
     return base
   }
