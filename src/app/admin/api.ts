@@ -434,6 +434,8 @@ export interface MergeCandidate {
 export interface MergeInput {
   sources: string[]
   gaps?: (number | null)[]
+  /** One per join: the gap chapter's name (null: "Technical difficulties"). */
+  gapLabels?: (string | null)[]
   id?: string
 }
 
@@ -486,6 +488,8 @@ export interface SyntheticSegment {
   /** Null on the way in: right after the segment before. */
   at: number | null
   label: string | null
+  /** The name of the gap chapter before this segment (a merge's join); null: "Technical difficulties". */
+  gap_label?: string | null
   stream?: string
 }
 

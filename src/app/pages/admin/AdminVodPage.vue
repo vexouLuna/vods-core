@@ -3,6 +3,7 @@
 // YouTube and Drive lists, censor ranges, emotes) and run its jobs. The Timeline workbench keeps the preview (its server
 // file or its uploads) in view beside the chapters, games and censor editors, which set times from it and draw censor
 // boxes on it.
+import { useLatest } from '../../lib/latest'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -37,12 +38,16 @@ const vod = ref<AdminVod | null>(null)
 const loadError = ref<string | null>(null)
 const notFound = ref(false)
 
+const begin = useLatest()
 async function load() {
+  const isLatest = begin()
   loadError.value = null
   notFound.value = false
   try {
-    vod.value = await admin.vod(props.id)
+    const v = await admin.vod(props.id)
+    if (isLatest()) vod.value = v
   } catch (e) {
+    if (!isLatest()) return
     const status = (e as { status?: number }).status
     if (status === 404) notFound.value = true
     else loadError.value = errorText(e)

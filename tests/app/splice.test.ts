@@ -62,6 +62,7 @@ describe('useSplice', () => {
     // Filled from the start times: before ends an hour before this one starts.
     expect(sp.gapDrafts.value['before>' + vod.id]).toBe('1:00:00')
     sp.gapDrafts.value['before>' + vod.id] = ''
+    sp.gapLabels.value['before>' + vod.id] = ' Intermission '
     sp.mergeIdDraft.value = 'mine'
 
     await sp.merge()
@@ -69,6 +70,7 @@ describe('useSplice', () => {
     expect(body.sources).toEqual(['before', 'later'])
     expect(body.id).toBe('mine')
     expect(body.gaps![0]).toBeNull()
+    expect(body.gapLabels).toEqual(['Intermission', null]) // trimmed; an unlabelled join is null
     expect(typeof body.gaps![1]).toBe('number')
     expect(made).toHaveBeenCalledWith('before-m')
     scope.stop()

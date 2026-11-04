@@ -2,6 +2,9 @@
 // between two Twitch VODs of one broadcast.
 import type { Chapter, PartStatus, Vod } from '../../index'
 
+/** What a merge's gap chapter is called until an admin sets a label (the archive's default). */
+export const GAP_LABEL = 'Technical difficulties'
+
 export const isGap = (c: Pick<Chapter, 'kind'>) => c.kind === 'gap'
 
 /** The chip for an unwatchable chapter (label and tooltip), or null for a normal one. */

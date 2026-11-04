@@ -45,6 +45,10 @@ describe('gap chapters', () => {
     expect(cutNote(ch('Game', { restricted: true }))?.label).toBe('cut')
     expect(cutNote(ch('Technical difficulties', { restricted: true, kind: 'gap' }))?.label).toBe('stream down')
   })
+  it('key on kind, not on the name', () => {
+    expect(cutNote(ch('Technical difficulties', { restricted: true }))?.label).toBe('cut')
+    expect(cutNote(ch('Back in five', { restricted: true, kind: 'gap' }))?.label).toBe('stream down')
+  })
   it("aren't games", () => {
     expect(gamesWithArt([ch('A'), ch('Technical difficulties', { restricted: true, kind: 'gap' }), ch('A')]).map((g) => g.name)).toEqual(['A'])
   })
