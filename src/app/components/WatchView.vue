@@ -10,7 +10,7 @@
 // when any VOD plays to its end, a card like it suggests another one to watch.
 import { gamePalette, learnGameColors, useToast } from '@vex/ui/utils'
 import { boxArt, gamesOf, toClock, watchPath, type DriveFile, type PlayableTimeline, type Position, type SegmentTimeline, type Span, type Vod } from '../../index'
-import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import VolumeControl from './VolumeControl.vue'
 import WatchIcon from './WatchIcon.vue'
@@ -170,6 +170,11 @@ const showKeys = ref(false)
 
 /** The centred cards (next stream, end of the VOD, a part that can't play) folded small at the bottom, off the player. */
 const mini = ref(false)
+// Each new card opens big.
+watch(
+  () => (handoffCard.value ? `h:${handoffCard.value.to.mark}` : ending.value ? `e:${ending.value.vod.id}` : curBad.value ? `b:${partIndex.value}` : ''),
+  () => (mini.value = false),
+)
 
 // Switching tracks opens this page on the other one at the same moment, and is the track from then on.
 const trackOpts = computed(() => props.tracks.map((k) => ({ value: k.type, label: k.label })))
