@@ -12,3 +12,6 @@ export function timeAgo(when: string | number | null | undefined, now = Date.now
   if (s < 86400) return `${span(s)} ago`
   return new Date(t).toISOString().slice(0, 10)
 }
+
+/** The tenths digit of a time in seconds, with a little slack so 2.3 reads .3 and not .2. */
+export const tenthsOf = (t: number): number => Math.floor((t % 1) * 10 + 1e-9)

@@ -135,6 +135,7 @@ describe('tagChanges', () => {
     expect(tagChanges(saved, [...edited, Object.assign(blankDraft(), { name: 'x', label: 'x' })]).count).toBe(2)
     expect(tagChanges(saved, drafts().slice(1)).count).toBe(1)
     expect(tagChanges(saved, drafts().reverse()).count).toBe(1)
+    expect(tagChanges(saved, [...drafts().slice(1), Object.assign(blankDraft(), { name: 'x', label: 'x' })]).count).toBe(2)
   })
   it('marks the rows that differ from their saved tag, and every new one', () => {
     const drafts = saved.map((t) => draftOf(t))

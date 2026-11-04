@@ -10,7 +10,7 @@ import { errorText, stamp } from '@vex/platform-web'
 import type { Option } from '@vex/ui'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { mountYouTube, normalizeVod, Timeline, toClock, WatchPlayer } from '../../../index'
-import { timeAgo } from '../../lib/time'
+import { tenthsOf, timeAgo } from '../../lib/time'
 import type { AdminVod, MediaHolder, MediaList, MediaName } from '../api'
 import { admin } from '../session'
 import RegionLayer from './RegionLayer.vue'
@@ -325,7 +325,7 @@ function setEnd(end: 'start' | 'end') {
       <UiButton size="sm" variant="primary" :disabled="!preview.ready.value" @click="toggle">{{ playing ? 'Pause' : 'Play' }}</UiButton>
       <UiButton size="sm" :disabled="!preview.ready.value" label="Forward 1 frame" @click="step(FRAME)">+1 f</UiButton>
       <UiButton size="sm" :disabled="!preview.ready.value" label="Forward 1 second" @click="step(1)">+1 s</UiButton>
-      <span class="vods-mono clock">{{ toClock(preview.time.value) }}.{{ String(Math.floor((preview.time.value % 1) * 10)) }} / {{ toClock(duration) }}</span>
+      <span class="vods-mono clock">{{ toClock(preview.time.value) }}.{{ tenthsOf(preview.time.value) }} / {{ toClock(duration) }}</span>
       <span class="spacer" />
       <template v-if="selectedRow">
         <UiButton size="sm" @click="setEnd('start')">Set start here</UiButton>
