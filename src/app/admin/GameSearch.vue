@@ -35,6 +35,7 @@ let ctrl: AbortController | null = null
 watch(query, (q) => {
   clearTimeout(timer)
   ctrl?.abort()
+  ctrl = null
   active.value = 0
   if (!q.trim()) {
     results.value = []
@@ -52,7 +53,7 @@ watch(query, (q) => {
       error.value = errorText(e)
       results.value = []
     } finally {
-      if (ctrl === mine) loading.value = false
+      if (!mine.signal.aborted) loading.value = false
     }
   }, 250)
 })
@@ -71,6 +72,7 @@ function pick(g: GameValue) {
 
 function close() {
   open.value = false
+  clearTimeout(timer)
   ctrl?.abort()
 }
 
@@ -79,7 +81,7 @@ function onKey(e: KeyboardEvent) {
   else if (e.key === 'ArrowUp') active.value = Math.max(active.value - 1, 0)
   else if (e.key === 'Enter') {
     const g = options.value[active.value]
-    if (g && (props.freeText ? !loading.value : results.value.length || !typed.value)) pick(g)
+    if (g && !loading.value && (props.freeText || results.value.length || !typed.value)) pick(g)
   } else if (e.key === 'Escape') {
     e.stopPropagation()
     close()

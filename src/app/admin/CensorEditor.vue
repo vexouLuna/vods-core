@@ -44,6 +44,11 @@ watch([() => rows.value.length, dirty], ([n, d]) => emit('draft', n, d), { immed
 const preview = usePreview()
 watchEffect(() => preview && (preview.censor.value = rows.value))
 onBeforeUnmount(() => preview && ((preview.censor.value = null), (preview.selected.value = null)))
+// A selected range that was removed (or an add undone) leaves no row to show it on.
+watch(
+  () => rows.value.map((r) => r.key),
+  (keys) => preview && preview.selected.value != null && !keys.includes(preview.selected.value) && (preview.selected.value = null),
+)
 function edit(r: CensorDraft) {
   if (!preview) return
   preview.selected.value = preview.selected.value === r.key ? null : r.key

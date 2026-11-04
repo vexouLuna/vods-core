@@ -12,6 +12,13 @@ import {
   type HomeCard,
 } from '../../src/app/lib/siteOptions'
 
+describe('homeCardsOf ids', () => {
+  it('never gives two cards the same id', () => {
+    const ids = homeCardsOf([{ id: 'c1', type: 'live' }, { type: 'games' }]).map((c) => c.id)
+    expect(new Set(ids).size).toBe(2)
+  })
+})
+
 describe('homeCardsOf', () => {
   it('maps the old shape, in order, and drops what it can’t read', () => {
     expect(
