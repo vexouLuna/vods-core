@@ -6,13 +6,14 @@
 // what was cut. A synthetic VOD with a compiled upload plays the version `?play=` names (segments or compiled), else
 // the site's default.
 import { useToast } from '@vex/ui/utils'
-import { boxArt, isFinished, isResumable, parseTimestamp, redirectTarget, resumeProgress, toClock, toHMS, type Position, type UploadType } from '../../index'
+import { boxArt, isFinished, isResumable, parseTimestamp, redirectTarget, resumeProgress, SegmentTimeline, Timeline, toClock, toHMS, type Position, type UploadType } from '../../index'
 import { useVodsContext, useWatch } from '../../vue/index'
 import { computed, shallowRef, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WatchView from '../components/WatchView.vue'
 import { site } from '../site'
 import { cutNote } from '../lib/cuts'
+import { timelineHas, trackLabel, type Track } from '../lib/tracks'
 import { kindLabel } from '../lib/listQuery'
 import VodsShell from '../components/VodsShell.vue'
 import ManageVodButton from '../components/ManageVodButton.vue'
@@ -22,7 +23,7 @@ const props = defineProps<{ id: string; type: UploadType | null }>()
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const { progress } = useVodsContext()
+const { progress, config } = useVodsContext()
 const play = computed<PlayDefault>(() =>
   route.query.play === 'compiled' || route.query.play === 'segments' ? route.query.play : siteOptions.value.playDefault,
 )
@@ -38,6 +39,27 @@ const switchTo = computed(() =>
       : { label: 'Play the compiled file', to: `${route.path}?play=compiled` }
     : null,
 )
+
+// Its tracks (Unmuted: the live recording; Muted: Twitch's VOD), when it has both: switching opens /live or /vods at the same moment.
+// Not while a compiled file plays (that's one upload of its own).
+const tracks = computed<Track[]>(() => {
+  const v = vod.value
+  if (!v || !timeline.value || uploadType.value === 'compiled') return []
+  const from = v.synthetic ? sources.value : [v]
+  const opts = { defaultPartDuration: config.defaultPartDuration }
+  const list = (['live', 'vod'] as const)
+    .filter((type) => from.some((s) => s.uploads.some((u) => u.type === type)))
+    .map((type): Track => {
+      const tl = type === uploadType.value ? timeline.value! : v.synthetic ? new SegmentTimeline(v, sources.value, type, opts) : new Timeline(v, type, opts)
+      return {
+        type,
+        label: trackLabel(type),
+        to: (t) => `/${type === 'vod' ? 'vods' : 'live'}/${encodeURIComponent(v.id)}?t=${toHMS(t)}`,
+        has: (t) => timelineHas(tl, type, t),
+      }
+    })
+  return list.length > 1 ? list : []
+})
 
 // Old links to a VOD that now plays inside another one: the later half of a merged broadcast, or an original a
 // synthetic VOD replaces (merge or split). Same route type, same moment, and this browser's progress on the old id
@@ -146,6 +168,7 @@ watchEffect(() => {
     :download="download"
     :share-url="shareUrl"
     :switch-to="switchTo"
+    :tracks="tracks"
   />
   <VodsShell v-else>
     <UiCallout v-if="error" tone="error" title="Couldn't load this VOD">
@@ -190,7 +213,7 @@ watchEffect(() => {
     <UiEmptyState
       v-else-if="vod && timeline?.isEmpty && !moved"
       title="Not on YouTube yet"
-      :text="`“${vod.title}” has no ${uploadType === 'live' ? 'live' : 'VOD'} uploads yet. Chat replay needs a video to follow.`"
+      :text="`“${vod.title}” has no ${uploadType === 'live' ? 'unmuted' : 'muted'} uploads yet. Chat replay needs a video to follow.`"
     >
       <template #actions>
         <UiButton v-if="other" :to="other" variant="primary">Watch the other upload</UiButton>

@@ -23,6 +23,7 @@ import WatchTimeline from './WatchTimeline.vue'
 import { useWatchView } from '../composables/useWatchView'
 import { WIDTH_DEFAULT, WIDTH_MIN } from '../composables/useChatSettings'
 import type { TimelineMark } from '../composables/useTimeline'
+import { setPreferredTrack, type Track } from '../lib/tracks'
 import { gamesWithArt } from '../lib/art'
 import VodsShell from './VodsShell.vue'
 import ManageVodButton from './ManageVodButton.vue'
@@ -47,8 +48,10 @@ const props = withDefaults(
     track?: boolean
     /** The other version of a synthetic VOD with a compiled upload (its segments, or that one file). */
     switchTo?: { label: string; to: string } | null
+    /** Its tracks (live recording, Twitch's VOD) when it has more than one: a switch in the settings menu. */
+    tracks?: readonly Track[]
   }>(),
-  { download: null, track: true, segments: null, sources: () => [], switchTo: null },
+  { download: null, track: true, segments: null, sources: () => [], switchTo: null, tracks: () => [] },
 )
 
 const toast = useToast()
@@ -112,6 +115,11 @@ const {
   grace,
   stopCountdown,
   closeHandoff,
+  badStep,
+  badLeft,
+  stopBad,
+  runBad,
+  time,
   ending,
   rolling,
   another,
@@ -159,6 +167,15 @@ onMounted(wake)
 onBeforeUnmount(() => clearTimeout(idleTimer))
 /** The shortcut list, folded away in the settings menu. */
 const showKeys = ref(false)
+
+// Switching tracks opens this page on the other one at the same moment, and is the track from then on.
+const trackOpts = computed(() => props.tracks.map((k) => ({ value: k.type, label: k.label })))
+function pickTrack(type: string | null | undefined) {
+  const k = props.tracks.find((x) => x.type === type)
+  if (!k) return
+  setPreferredTrack(k.type)
+  if (k.type !== props.timeline.type) void router.push(k.to(time.value))
+}
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 const rateOpts = RATES.map((r) => ({ value: String(r), label: `${r}×` }))
@@ -238,15 +255,24 @@ const marks = computed<TimelineMark[]>(() =>
                 </div>
               </div>
             </div>
-            <div v-else-if="curBad" class="unavail corner">
-              <div class="vods-panel vx-glass-rim un-card" role="status">
+            <!-- Like the handoff card, but over the embed (dimmed, still clickable round the card: YouTube's own error or
+                 "sign in to confirm you're not a bot" button lives in the iframe). -->
+            <div v-else-if="curBad" class="unavail bad" role="status">
+              <div class="un-card handoff">
+                <div class="vods-eyebrow">
+                  {{ partLabel ? label(partIndex) : `${label(partIndex)} of ${spans.length}` }} · {{ toClock(spans[partIndex]!.start) }} – {{ toClock(spans[partIndex]!.end) }}
+                </div>
                 <b>This part can't play here <span class="vods-muted">({{ statusText[status[partIndex]!] }})</span></b>
-                <span class="un-sub vods-muted">
-                  {{ partLabel ? label(partIndex) : `${label(partIndex)} of ${spans.length}` }} · {{ toClock(spans[partIndex]!.start) }} – {{ toClock(spans[partIndex]!.end) }} of the VOD
-                </span>
-                <div class="un-actions">
-                  <UiButton v-if="prevOk >= 0" @click="seek(spans[prevOk]!.end - 30)">← {{ label(prevOk) }}</UiButton>
-                  <UiButton v-if="nextOk >= 0" variant="primary" @click="playPart(nextOk)">Skip to {{ label(nextOk) }} →</UiButton>
+                <p v-if="badStep?.kind === 'switch'" class="vods-muted">The {{ badStep.track.label }} track has it: same moment, this part only.</p>
+                <p v-else-if="badStep" class="vods-muted">No track has it. Next: {{ label(badStep.part) }}.</p>
+                <div class="un-actions handoff-actions">
+                  <CountdownRing v-if="badStep" :left="badLeft" :total="badStep.seconds" :label="badStep.kind === 'switch' ? 'Switching' : 'Skipping'" />
+                  <div class="handoff-btns">
+                    <UiButton v-if="prevOk >= 0" @click="seek(spans[prevOk]!.end - 30)">← {{ label(prevOk) }}</UiButton>
+                    <UiButton v-if="badStep && badLeft !== null" class="go stop" @click="stopBad">Stop timer</UiButton>
+                    <UiButton v-else-if="badStep?.kind === 'switch'" variant="primary" class="go" @click="runBad">{{ badStep.track.label }} track →</UiButton>
+                    <UiButton v-else-if="nextOk >= 0" variant="primary" class="go" @click="playPart(nextOk)">Skip to {{ label(nextOk) }} →</UiButton>
+                  </div>
                 </div>
               </div>
             </div>
@@ -380,6 +406,10 @@ const marks = computed<TimelineMark[]>(() =>
                   <span>Speed</span>
                   <UiSegmented class="speeds" :model-value="String(rate)" :options="rateOpts" label="Playback speed" @update:model-value="(v) => v && setRate(Number(v))" />
                 </div>
+                <div v-if="tracks.length > 1" class="set col">
+                  <span>Track <span class="vods-muted small">the live recording, or Twitch's muted VOD</span></span>
+                  <UiSegmented :model-value="timeline.type" :options="trackOpts" label="Track" @update:model-value="(v) => { pickTrack(v); close() }" />
+                </div>
                 <div class="set">
                   <label for="watch-captions">Captions <span class="vods-muted small">YouTube's, when the video has them</span></label>
                   <UiSwitch id="watch-captions" v-model="settings.captions" />
@@ -450,15 +480,9 @@ const marks = computed<TimelineMark[]>(() =>
 .un-card p { font-size: 13px; line-height: 1.5; margin: 0; }
 /* The countdown beside its buttons; when the card is too narrow they wrap under it, both centred. */
 .un-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
-/* A part YouTube won't play: a small box in the corner. The embed stays visible and clickable under it (YouTube's
-   own error or "sign in to confirm you're not a bot" button lives in the iframe), so only the box takes clicks. */
-.unavail.corner { inset: auto 0 8px; display: flex; justify-content: center; padding: 0 8px; background: none; pointer-events: none; }
-.unavail.corner .un-card {
-  pointer-events: auto; max-width: 100%; padding: 6px 8px 6px 10px; font-size: 12px; line-height: 1.3;
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; row-gap: 0;
-}
-.unavail.corner .un-sub { grid-column: 1; font-size: 11px; }
-.unavail.corner .un-actions { grid-column: 2; grid-row: 1 / span 2; margin-top: 0; gap: 6px; }
+/* A part YouTube won't play: the embed stays visible (dimmed) and clickable around the card. */
+.unavail.bad { pointer-events: none; }
+.unavail.bad .un-card { pointer-events: auto; }
 .smark-next { color: var(--vods-accent); margin-right: 4px; }
 .handoff-actions { align-items: center; justify-content: center; gap: 16px; }
 .handoff-btns { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -505,12 +529,11 @@ const marks = computed<TimelineMark[]>(() =>
   .stage { display: contents; }
   .video { flex: none; container-type: inline-size; }
   .video-box { width: 100%; }
-  .video:has(.unavail:not(.corner)) .video-box { aspect-ratio: auto; min-height: 56.25cqw; display: grid; }
-  .unavail:not(.corner) { position: relative; }
+  .video:has(.unavail) .video-box { aspect-ratio: auto; min-height: 56.25cqw; display: grid; }
+  .unavail { position: relative; }
   /* Clear of the back button over the top-left corner. */
-  .unavail.bare { padding-top: 44px; }
-  .unavail.corner .un-sub { display: none; }
-  .video:has(.unavail:not(.corner)) .yt { visibility: hidden; }
+  .unavail.bare, .unavail.bad { padding-top: 44px; }
+  .video:has(.unavail) .yt { visibility: hidden; }
   /* Same controls as desktop, reflowed: title on its own line, everything else wraps below it */
   .row { flex-wrap: wrap; gap: 4px; padding-inline: 8px; }
   .time { margin-right: auto; }
