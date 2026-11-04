@@ -37,6 +37,7 @@ describe('createVodsApp', () => {
     expect(app.config.globalProperties.$router).toBe(router)
     expect(router.resolve('/vods?tab=playthroughs').matched).toHaveLength(1)
     expect(router.resolve('/manage/jobs/12').matched[0]?.path).toBe('/manage/jobs/:id(\\d+)')
+    expect(router.resolve('/manage/schedules').matched[0]?.path).toBe('/manage/schedules')
   })
 
   it("puts the site's name back in the tab when a page without a title of its own opens", async () => {
