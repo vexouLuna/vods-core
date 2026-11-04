@@ -15,4 +15,9 @@ describe('Manage lives only in the account menu', () => {
     expect(menu).toMatch(/<UiMenuItem v-if="session\.authenticated" to="\/manage" @click="close\(\)"><TwitchMark \/> Manage</)
     expect(menu).toMatch(/session\.authenticated \? \{ name: session\.user\?\.displayName \?\? 'admin' \}/)
   })
+
+  it('keeps the user on the page and says so when signing out fails', () => {
+    const menu = read('AccountMenu.vue')
+    expect(menu).toMatch(/!\(await account\.signOut\(\{ everywhere: true \}\)\)\) \{\s+toast\.show\([^)]*kind: 'error'[^)]*\)\s+return\s+\}/)
+  })
 })
