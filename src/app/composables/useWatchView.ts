@@ -3,11 +3,13 @@
 // its next stream (with its countdown), the end-of-VOD suggestion, the player settings and the keyboard shortcuts.
 // WatchView.vue draws it. Call it from a component's setup: it mounts the player once the component is.
 import { computed, onScopeDispose, ref, shallowRef, toRef, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { toClock, watchPath, type DriveFile, type PartStatus, type PlayableTimeline, type Position, type SegmentTimeline, type Span, type Vod } from '../../index'
 import { useWatchPlayer } from '../../vue/index'
 import { cutNote, unplayable } from '../lib/cuts'
 import type { Notify } from '../lib/notify'
 import { clamp } from '../lib/place'
+import { backToPreferred, markFailed, trackStep, type Track } from '../lib/tracks'
 import { partOffset, streamEntered } from '../lib/watch'
 import { useChatSettings } from './useChatSettings'
 import { useFullscreen } from './useFullscreen'
@@ -32,6 +34,8 @@ export interface WatchViewProps {
   download?: DriveFile | null
   /** Save the watch position in this browser. */
   track?: boolean
+  /** Its tracks (Unmuted, Muted) when it has more than one; the one playing is `timeline.type`. */
+  tracks?: readonly Track[]
 }
 
 /** Seconds a playthrough's handoff card counts down before it plays on into the next stream. */
@@ -244,6 +248,61 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     return from && to ? { from, to } : null
   })
 
+  // ---- a part that can't play ----
+  // Counts down (stoppable, like the handoff) to the same moment on another track that has it, else, twice as long, to
+  // the next part that plays. The track that failed is remembered (markFailed), so the countdown never comes back to it.
+  const router = useRouter()
+  const badStep = computed(() => {
+    if (!curBad.value || handoff.value !== null) return null
+    const span = spans.value[partIndex.value]
+    if (!span) return null
+    const t = clamp(time.value, span.start, span.end - 0.001)
+    markFailed(props.vod.id, props.timeline.type, span)
+    return trackStep(props.vod.id, props.tracks ?? [], props.timeline.type, t, nextOk.value, AUTO_CONTINUE)
+  })
+  /** Seconds left before badStep happens by itself; null once stopped (or when there's nothing to do). */
+  const badLeft = ref<number | null>(null)
+  let badTimer: ReturnType<typeof setInterval> | undefined
+  function stopBad() {
+    clearInterval(badTimer)
+    badLeft.value = null
+  }
+  function runBad() {
+    const step = badStep.value
+    stopBad()
+    if (step?.kind === 'switch') void router.replace(step.track.to(time.value))
+    else if (step) playPart(step.part)
+  }
+  // Keyed by what it'd do, so a tick doesn't restart it and a stopped timer stays stopped for that part.
+  watch(
+    () => (badStep.value ? `${partIndex.value}:${badStep.value.kind === 'switch' ? badStep.value.track.type : badStep.value.part}` : null),
+    (key) => {
+      stopBad()
+      const step = badStep.value
+      if (!key || !step) return
+      badLeft.value = step.seconds
+      const until = Date.now() + step.seconds * 1000
+      badTimer = setInterval(() => {
+        badLeft.value = Math.max(0, (until - Date.now()) / 1000)
+        if (badLeft.value <= 0) runBad()
+      }, 100)
+    },
+  )
+  onScopeDispose(() => clearInterval(badTimer))
+  // On a part that isn't on the viewer's track (a fallback, or a link to the other one), back to their track when it
+  // has that part. Not where it already failed, so a fallback holds for its part.
+  watch(
+    partIndex,
+    (_, was) => {
+      const t = Math.max(time.value, spans.value[partIndex.value]?.start ?? 0)
+      const track = backToPreferred(props.vod.id, props.tracks ?? [], props.timeline.type, t)
+      if (!track) return
+      void router.replace(track.to(t))
+      if (was !== undefined) notify(`Back on the ${track.label} track`, { kind: 'info' })
+    },
+    { immediate: true },
+  )
+
   // ---- end of the VOD ----
   // Played to the end, a card like the handoff one suggests a random VOD that isn't finished: one to pick up where it
   // was left, or one never opened (useNextVod). Its timer is stopped from the start for now, so nothing goes on by
@@ -360,6 +419,11 @@ export function useWatchView(props: WatchViewProps, options: { notify: Notify })
     grace,
     stopCountdown,
     closeHandoff,
+    // a part that can't play
+    badStep,
+    badLeft,
+    stopBad,
+    runBad,
     // end of the VOD
     ending,
     rolling,

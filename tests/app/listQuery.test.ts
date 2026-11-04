@@ -5,7 +5,7 @@ import { RECENT_MS } from '../../src/app/lib/vodTags'
 
 describe('parseListQuery', () => {
   it('defaults an empty query', () => {
-    expect(parseListQuery({})).toEqual({ tab: 'vods', tag: '', page: 1, title: '', game: '', from: '', to: '', hideCut: false })
+    expect(parseListQuery({})).toEqual({ tab: 'vods', tag: '', page: 1, title: '', game: '', from: '', to: '', showCut: false })
   })
 
   it('reads every filter and trims', () => {
@@ -17,7 +17,7 @@ describe('parseListQuery', () => {
       game: 'Minecraft',
       from: '2025-01-02',
       to: '2025-02-03',
-      hideCut: false,
+      showCut: false,
     })
   })
 
@@ -41,7 +41,7 @@ describe('toListQuery', () => {
   })
 
   it('round-trips', () => {
-    const q = { title: 'x', game: 'Y', from: '2025-01-01', to: '2025-01-31', cut: 'hide', page: '2' }
+    const q = { title: 'x', game: 'Y', from: '2025-01-01', to: '2025-01-31', cut: 'show', page: '2' }
     expect(toListQuery(parseListQuery(q))).toEqual(q)
   })
 
@@ -88,9 +88,10 @@ describe('the tag filter', () => {
 
 describe('toApiFilter', () => {
   it('searches titles and games, and hides cut VODs only when asked', () => {
-    expect(toApiFilter(parseListQuery({ title: 'timberborn', cut: 'hide' }))).toMatchObject({ search: 'timberborn', hideCut: true })
-    expect(parseListQuery({ cut: 'yes' }).hideCut).toBe(false)
-    expect(hasFilters(parseListQuery({ cut: 'hide' }))).toBe(true)
+    expect(toApiFilter(parseListQuery({ title: 'timberborn' }))).toMatchObject({ search: 'timberborn', hideCut: true })
+    expect(toApiFilter(parseListQuery({ cut: 'show' })).hideCut).toBeUndefined()
+    expect(parseListQuery({ cut: 'yes' }).showCut).toBe(false)
+    expect(hasFilters(parseListQuery({ cut: 'show' }))).toBe(true)
   })
 
   it('covers whole local days', () => {
@@ -101,7 +102,7 @@ describe('toApiFilter', () => {
 
   it('omits empty filters', () => {
     expect(toApiFilter(parseListQuery({}, 'playthroughs')).tag).toBe('playthroughs')
-    expect(toApiFilter(parseListQuery({}))).toEqual({ tag: undefined, search: undefined, hideCut: undefined, game: undefined, from: undefined, to: undefined })
+    expect(toApiFilter(parseListQuery({}))).toEqual({ tag: undefined, search: undefined, hideCut: true, game: undefined, from: undefined, to: undefined })
   })
 })
 
