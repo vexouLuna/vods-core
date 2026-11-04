@@ -113,8 +113,8 @@ const dateLabel = computed(() => {
   return `${from || '…'} → ${to || 'now'}`
 })
 
-// ---- hide cut, and the viewer's title pick ----
-const hideCut = () => go({ hideCut: !state.value.hideCut })
+// ---- show cut, and the viewer's title pick ----
+const showCut = () => go({ showCut: !state.value.showCut })
 const TITLE_OPTIONS: { value: TitleMode; label: string }[] = [
   { value: 'original', label: 'Stream title' },
   { value: 'generated', label: 'Date & games' },
@@ -155,7 +155,7 @@ const countText = computed(() => `${(shownFrom.value + vods.value.length).toLoca
             <UiDateRange v-model:from="dateFrom" v-model:to="dateTo" :min="minDay" />
           </div>
         </UiPopover>
-        <UiButton :pressed="state.hideCut" title="Leave out the VODs with nothing left to play (every chapter cut from YouTube)" @click="hideCut">Hide cut</UiButton>
+        <UiButton :pressed="state.showCut" title="Also list the VODs with nothing left to play (every chapter cut from YouTube)" @click="showCut">Show cut VODs</UiButton>
         <UiPopover width="min(300px, calc(100vw - 32px))" role="dialog" class="view">
           <template #trigger="{ toggle, open }">
             <UiButton :pressed="open" @click="toggle">View ▾</UiButton>
