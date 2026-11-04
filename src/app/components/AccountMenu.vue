@@ -4,12 +4,14 @@
 // waits for the account check; signing out ends both, and every account session.
 import type { AccountUser } from '@vex/ui'
 import { useAccount } from '@vex/ui/account'
+import { useToast } from '@vex/ui/utils'
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { logout, session } from '../admin/session'
 import TwitchMark from './TwitchMark.vue'
 
 const account = useAccount()
+const toast = useToast()
 const route = useRoute()
 const router = useRouter()
 
@@ -25,7 +27,10 @@ async function signOut() {
   } catch {
     // the session is dropped here either way
   }
-  if (account.user.value) await account.signOut({ everywhere: true })
+  if (account.user.value && !(await account.signOut({ everywhere: true }))) {
+    toast.show("Couldn't sign you out of your account. Try again.", { kind: 'error', duration: 5000 })
+    return
+  }
   if (route.path.startsWith('/manage')) router.push('/')
 }
 </script>
