@@ -1,5 +1,11 @@
 # vods-core
 
+<!-- conventions:begin: synced from vexouLuna/conventions; edit it there, then run `conventions sync` -->
+[![CI](https://github.com/vexouLuna/vods-core/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/vexouLuna/vods-core/actions/workflows/ci.yml?query=branch%3Amain)
+[![version](https://img.shields.io/github/v/tag/vexouLuna/vods-core?sort=semver&label=version)](https://github.com/vexouLuna/vods-core/tags)
+[![conventions v4.0.0](https://img.shields.io/badge/conventions-v4.0.0-blue)](https://github.com/vexouLuna/conventions/tree/v4.0.0)
+<!-- conventions:end -->
+
 The engine and the app behind the vods sites: [vods.vexoul.net](https://github.com/vexouLuna/vex-vods) and
 [keekivods.vexoul.net](https://github.com/vexouLuna/keeki-vods). Four parts:
 
