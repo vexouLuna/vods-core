@@ -44,15 +44,17 @@ export class AccountProgressStore implements ProgressStore {
   }
 
   async get(vodId: string): Promise<Progress | null> {
-    if (!this.account.signedIn()) return this.local.get(vodId)
+    const local = await this.local.get(vodId)
+    if (!this.account.signedIn()) return local
     try {
       const res = await this.account.request(this.path(vodId))
-      if (res.status === 204 || res.status === 404) return null
-      if (res.ok) return toProgress(await res.json())
+      // A save the account missed (set() kept it here) stays here until merged: newest wins, as merge() does.
+      if (res.status === 204 || res.status === 404) return local
+      if (res.ok) return newest(toProgress(await res.json()), local)
     } catch {
       // fall through to what this browser has
     }
-    return this.local.get(vodId)
+    return local
   }
 
   async set(p: Omit<Progress, 'updatedAt'> & { updatedAt?: number }): Promise<SaveStatus> {
@@ -141,6 +143,10 @@ export class AccountProgressStore implements ProgressStore {
     }
     return moved
   }
+}
+
+function newest(a: Progress, b: Progress | null): Progress {
+  return b && b.updatedAt > a.updatedAt ? b : a
 }
 
 /** The service's snake_case entry, `updated_at` an ISO 8601 string; ours is epoch ms. */

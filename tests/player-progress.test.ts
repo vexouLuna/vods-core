@@ -131,6 +131,37 @@ describe('WatchPlayer', () => {
     expect(p.loadVideoById).toHaveBeenLastCalledWith(ids[3], 0)
   })
 
+  it('keeps playing after a seek to another part while YouTube buffers or starts a part', () => {
+    const w = new WatchPlayer(new Timeline(vod))
+    const p = fakePlayer()
+    w.attach(p, { index: 2, offset: 0 })
+    p.state.s = YT_STATE.BUFFERING
+    w.handleState(YT_STATE.BUFFERING)
+    w.seek(80000)
+    expect(p.loadVideoById).toHaveBeenLastCalledWith(ids[6], 80000 - 73091)
+    p.state.s = YT_STATE.UNSTARTED // just loaded, not playing yet
+    w.seek(5000)
+    expect(p.loadVideoById).toHaveBeenLastCalledWith(ids[0], 5000)
+    expect(p.cueVideoById).not.toHaveBeenCalled()
+    w.pause()
+    w.seek(80000) // paused: only cue
+    expect(p.cueVideoById).toHaveBeenLastCalledWith(ids[6], 80000 - 73091)
+  })
+
+  it('reports playing false when a part fails', () => {
+    const w = new WatchPlayer(new Timeline(vod), { skipBroken: false })
+    const p = fakePlayer()
+    const playing: boolean[] = []
+    w.on('playing', (v) => playing.push(v))
+    w.attach(p, { index: 2, offset: 0 })
+    w.handleState(YT_STATE.PLAYING)
+    w.handleError(150)
+    expect(playing).toEqual([true, false])
+    p.state.s = YT_STATE.UNSTARTED
+    w.seek(80000) // nothing is playing after the error: cue, don't start
+    expect(p.cueVideoById).toHaveBeenLastCalledWith(ids[6], 80000 - 73091)
+  })
+
   it('ticks VOD time while playing and stops when paused', () => {
     const w = new WatchPlayer(new Timeline(vod), { tickMs: 250 })
     const p = fakePlayer()

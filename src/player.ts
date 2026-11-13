@@ -101,6 +101,8 @@ export class WatchPlayer {
   private buffering = false
   /** The last seek's VOD time, shown until YouTube catches up with it. */
   private hold: { t: number; until: number } | null = null
+  /** Playback was asked for (a load, play(), or YouTube playing) and not since paused, cued, ended or failed. */
+  private wantPlay = false
 
   constructor(
     readonly timeline: PlayableTimeline,
@@ -149,7 +151,8 @@ export class WatchPlayer {
 
   /** Jump to a VOD time. Inside a cut it lands at the end of the cut. */
   seek(t: number): void {
-    this.go(this.timeline.locate(t), this.isPlaying())
+    // While YouTube buffers or starts a part it isn't PLAYING yet, but a seek then must keep playing.
+    this.go(this.timeline.locate(t), this.isPlaying() || this.wantPlay)
   }
 
   /** Relative seek, e.g. ±10 s from the keyboard. */
@@ -167,11 +170,15 @@ export class WatchPlayer {
   }
 
   play(): void {
-    this.player?.playVideo()
+    if (!this.player) return
+    this.wantPlay = true
+    this.player.playVideo()
   }
 
   pause(): void {
-    this.player?.pauseVideo()
+    if (!this.player) return
+    this.wantPlay = false
+    this.player.pauseVideo()
   }
 
   /** 0-100. */
@@ -243,7 +250,7 @@ export class WatchPlayer {
       const sameVideo = this.index >= 0 && this.timeline.uploads[this.index]?.id === id
       this.index = pos.index
       if (sameVideo) player.seekTo(offset, true)
-      else if (autoplay) player.loadVideoById(id, offset)
+      else if ((this.wantPlay = autoplay)) player.loadVideoById(id, offset)
       else player.cueVideoById(id, offset)
       this.emit('part', pos.index)
     }
@@ -259,11 +266,14 @@ export class WatchPlayer {
   handleState(state: number): void {
     const buffering = state === YT_STATE.BUFFERING
     if (buffering !== this.buffering) this.emit('buffering', (this.buffering = buffering))
+    if (state === YT_STATE.CUED) this.wantPlay = false
     if (state === YT_STATE.PLAYING) {
+      this.wantPlay = true
       if (this.player && this.player.getPlaybackRate() !== this.wantedRate) this.player.setPlaybackRate(this.wantedRate)
       this.startTicking()
       this.emit('playing', true)
     } else if (state === YT_STATE.PAUSED || state === YT_STATE.ENDED) {
+      this.wantPlay = false
       this.stopTicking()
       this.emit('playing', false)
     }
@@ -291,7 +301,9 @@ export class WatchPlayer {
     const status = statusFromYouTubeError(code)
     this.status[index] = status
     this.stopTicking()
+    this.wantPlay = false
     if (this.buffering) this.emit('buffering', (this.buffering = false))
+    this.emit('playing', false)
     this.emit('partError', index, status)
     if (this.skipBroken) {
       const next = this.nextPlayable(index)
