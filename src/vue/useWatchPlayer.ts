@@ -84,6 +84,7 @@ export function useWatchPlayer(opts: UseWatchPlayerOptions) {
     const host = document.createElement('div')
     el.value!.replaceChildren(host)
     buffering.value = true
+    error.value = null // a new player: the last one's failure no longer applies
     mountYouTube(host, p, { start: at, autoplay, controls: toValue(opts.controls) ?? false, captions: toValue(opts.captions) ?? false })
       .then(() => {
         if (wp !== p) return

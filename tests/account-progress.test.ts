@@ -112,6 +112,19 @@ describe('AccountProgressStore', () => {
     expect(await local.list()).toEqual([])
   })
 
+  it('offers a save the account missed while it has none, or an older one', async () => {
+    const { service, local, store } = setup()
+    service.down = true
+    await store.set({ vodId: 'a', t: 100, duration: 1000, updatedAt: 7 })
+    service.down = false // back, with nothing for 'a' (204)
+    expect(await store.get('a')).toMatchObject({ t: 100 })
+    await local.set({ vodId: 'b', t: 300, duration: 1000, updatedAt: 9 })
+    service.entries.set('b', { vodId: 'b', t: 200, duration: 1000, updatedAt: 8 })
+    expect(await store.get('b')).toMatchObject({ t: 300 })
+    service.entries.set('b', { vodId: 'b', t: 400, duration: 1000, updatedAt: 10 })
+    expect(await store.get('b')).toMatchObject({ t: 400 })
+  })
+
   it('merges local entries on sign-in, newest winning, in batches', async () => {
     const { service, local, store } = setup()
     service.entries.set('a', { vodId: 'a', t: 500, duration: 1000, updatedAt: 10 })

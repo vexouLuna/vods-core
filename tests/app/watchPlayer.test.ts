@@ -94,4 +94,27 @@ describe('useWatchPlayer', () => {
     expect(ended).toHaveBeenCalledOnce()
     app.unmount()
   })
+
+  it("clears a failed player's error when a new one mounts", async () => {
+    const made = fakeYouTube()
+    const { Player } = (globalThis as unknown as { YT: { Player: unknown } }).YT
+    let fail = true
+    vi.stubGlobal('YT', {
+      Player: function (this: unknown, ...args: unknown[]) {
+        if (fail) throw new Error('blocked')
+        return (Player as (...a: unknown[]) => unknown).apply(this, args)
+      },
+    })
+    const captions = ref(false)
+    const tl = new Timeline(makeVod({ duration: 200, parts: [100, 100] }))
+    const { api, app } = mountWith(() => useWatchPlayer({ vodId: 'v1', duration: 200, timeline: tl, captions, chat: false, track: false }))
+    await flush()
+    expect(api.error.value).toBe('blocked')
+    fail = false
+    captions.value = true
+    await flush()
+    expect(made).toHaveLength(1)
+    expect(api.error.value).toBeNull()
+    app.unmount()
+  })
 })

@@ -178,13 +178,18 @@ export function useChat(opts: UseChatOptions) {
   /** Whose chat is showing: the VOD's own, or on a synthetic VOD the source of the segment playing. */
   const vodId = computed(() => target().vodId)
   // On a synthetic VOD this changes as playback crosses into a segment of another VOD.
-  watch(vodId, start, { immediate: true })
+  // While paused nothing else ticks, so fill the new source's chat now rather than leave it blank until play.
+  watch(vodId, (id, old) => {
+    start(id)
+    if (old !== undefined && !opts.playing.value) void tick(true)
+  }, { immediate: true })
   // A new chat shows at once, even while paused.
   watch(wanted, () => {
     restart(vodId.value)
     void tick(true)
   })
-  watch([opts.time, opts.playing, () => opts.offset?.value], () => tick())
+  // While paused a time change is a seek (or the delay changed): show the chat there now, not on the next play.
+  watch([opts.time, opts.playing, () => opts.offset?.value], () => tick(!opts.playing.value))
   onScopeDispose(() => {
     replay?.dispose()
     ctrl?.abort()

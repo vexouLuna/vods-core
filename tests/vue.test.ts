@@ -184,6 +184,38 @@ describe('vue composables', () => {
     expect(chat.served.value).toBe('replay')
   })
 
+  it('useChat follows a seek or a change of source VOD while paused', async () => {
+    const urls: string[] = []
+    const row = (vod: string, at: number) => ({ id: `${vod}@${at}`, vod_id: vod, display_name: 'u', content_offset_seconds: at, message: [{ text: 'hi' }], user_badges: null, user_color: null })
+    const { run } = setup(async (url) => {
+      if (url.includes('/comments')) {
+        urls.push(url)
+        const vod = url.includes('/vods/a/') ? 'a' : 'b'
+        const at = Number(new URL(url).searchParams.get('content_offset_seconds') ?? 0)
+        return json({ comments: [row(vod, at)] })
+      }
+      if (url.includes('/emotes?')) return json({ total: 0, limit: 1, skip: 0, data: [] })
+      return json({}, 404)
+    })
+    const segments = [{ vodId: 'a', start: 0, end: 100, at: 0, label: null, stream: 0 }, { vodId: 'b', start: 0, end: 100, at: 100, label: null, stream: 1 }]
+    const segmentAt = (t: number) => {
+      const index = t >= 100 ? 1 : 0
+      const segment = segments[index]!
+      return { index, segment, sourceTime: t - segment.at }
+    }
+    const time = ref(0)
+    const chat = run(() => useChat({ vodId: 'a+b', time, playing: ref(false), backlog: 10, segments: { segmentAt } }))
+    time.value = 50
+    await flush()
+    expect(chat.messages.value.length).toBeGreaterThan(0)
+    expect(urls.at(-1)).toContain('/vods/a/')
+    time.value = 150 // into b, still paused
+    await flush()
+    expect(urls.at(-1)).toContain('/vods/b/')
+    expect(chat.messages.value.length).toBeGreaterThan(0)
+    expect(chat.messages.value.every((m) => m.id.startsWith('b@'))).toBe(true)
+  })
+
   it('useChat says when chat is loading, and when the VOD has none', async () => {
     let release!: () => void
     const ready = new Promise<void>((r) => (release = r))
