@@ -75,7 +75,7 @@
     "@vex/ui": "github:vexouLuna/vex-ui#v0.36.2",
     "@vitejs/plugin-vue": "^6.0.0",
     "happy-dom": "^21.0.4",
-    "typescript": "~5.9.3",
+    "typescript": "~7.0.2",
     "vite": "^7.3.7",
     "vitest": "^4.1.12",
     "vue": "^3.5.43",
