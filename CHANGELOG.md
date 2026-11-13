@@ -1,5 +1,14 @@
 # @vex/vods-core
 
+## 0.49.1
+
+### Patch Changes
+
+- 004c372: Fix player, chat and progress state slips: a seek to another part while YouTube buffers or starts a part keeps
+  playing instead of stopping; `playing` turns false when a part fails; a new player clears the last one's load
+  `error`; chat follows a seek or a change of source VOD while paused instead of staying stale or blank; and, signed
+  in, a save the account missed (kept in the browser) is offered back when the account has none or an older one.
+
 ## 0.49.0
 
 ### Minor Changes
