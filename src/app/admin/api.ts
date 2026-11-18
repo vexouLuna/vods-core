@@ -300,10 +300,30 @@ export interface CensorRange {
   color?: string
   /** Only this box is covered, not the whole frame. */
   region?: CensorRegion
-  /** Silence the sound. A range covers the picture, mutes, or both. */
+  /** Written over the cover (its box, or the whole frame), at most 60 characters on one line. Only with a `video`. */
+  text?: string
+  /** Treat the sound (as `audio` says). A range covers the picture, treats the sound, or both. */
   mute: boolean
+  /** What `mute` does: absent (or "mute") silences, "muffle" low-passes it, "song" loops `song` over it instead. */
+  audio?: CensorAudio
+  /** With `audio: "song"`: the id of a song in the library (`songs()`). */
+  song?: string
+  /** With `audio: "song"`: the song's volume, 0 to 1 (absent: 1). */
+  volume?: number
   /** Why (at most 200 characters). */
   note?: string
+}
+
+export type CensorAudio = 'mute' | 'muffle' | 'song'
+
+/** A song of the censor song library (GET /api/v2/songs). */
+export interface CensorSong {
+  id: string
+  name: string
+  duration_seconds: number
+  size_bytes: number
+  created_at: string
+  created_by: string | null
 }
 
 /** POST /api/v2/vods/:id/youtube/delete, with `msg` and the VOD as GET /admin/vods/:id has it. */
@@ -769,6 +789,22 @@ export class AdminClient {
   /** The file's URL for a <video>, streamed while `lease` holds the lease. */
   mediaUrl(id: string, name: MediaName, lease: string): string {
     return `${this.base}/api/v2/vods/${enc(id)}/media/${name}?lease=${encodeURIComponent(lease)}`
+  }
+  // ---- censor song library ----
+  songs(signal?: AbortSignal): Promise<{ items: CensorSong[] }> {
+    return this.request('GET', '/api/v2/songs', undefined, signal)
+  }
+  /** The audio file as it is; the worker keeps it only if it reads as audio (422 `not_audio`), at most 25 MB (413). */
+  addSong(name: string, file: Blob): Promise<CensorSong> {
+    return this.request('POST', `/api/v2/songs?name=${encodeURIComponent(name)}`, file.type ? file : new Blob([file], { type: 'application/octet-stream' }))
+  }
+  /** 409 `song_in_use` (with `vods`) while a censor range plays it. */
+  deleteSong(id: string): Promise<CensorSong> {
+    return this.request('DELETE', `/api/v2/songs/${enc(id)}`)
+  }
+  /** The stored song, for an `<audio>` (the session cookie signs it in). */
+  songUrl(id: string): string {
+    return `${this.base}/api/v2/songs/${enc(id)}/audio`
   }
   /** Answers a job the censor check paused: "upload" resumes it (with the censor ranges set by now), "cut" first
    * leaves the flagged games' chapters out of the uploads (marks them restricted, locks the chapters). */

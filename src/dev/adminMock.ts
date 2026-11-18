@@ -255,6 +255,22 @@ const problem = (res: ServerResponse, status: number, code: string, detail: stri
   send(res, status, { type: 'about:blank', title: code, status, detail, code, ...(errors ? { errors } : {}), ...extra }, { 'content-type': 'application/problem+json' })
 const ok = (res: ServerResponse, msg: string, job?: Job) => send(res, 200, { error: false, msg, jobId: job?.id })
 
+// ---- the censor song library, in memory (one song to start with) ----
+const songs = new Map<string, Json>([
+  ['song-0a1b2c3d4e5f', { id: 'song-0a1b2c3d4e5f', name: 'Elevator music', duration_seconds: 94.2, size_bytes: 1_532_000, created_at: '2026-11-10T18:00:00Z', created_by: 'vexouluna' }],
+])
+/** Two seconds of a quiet 440 Hz tone, as a WAV: what every mock song plays. */
+function toneWav(): Buffer {
+  const rate = 8000
+  const n = rate * 2
+  const buf = Buffer.alloc(44 + n * 2)
+  buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16)
+  buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(rate, 24); buf.writeUInt32LE(rate * 2, 28)
+  buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34); buf.write('data', 36); buf.writeUInt32LE(n * 2, 40)
+  for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 440 * i) / rate) * 3000), 44 + i * 2)
+  return buf
+}
+
 // ---- VODs: real ones from the public archive API, edited in memory ----
 type Json = Record<string, any>
 const vods = new Map<string, Json>()
@@ -1431,6 +1447,37 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           return send(res, 200, { running: false, last: ytCheck })
         }
 
+        // ---- censor song library (twitch-archive's api_v2_songs.py) ----
+        if (path === '/api/v2/songs' && method === 'GET') return send(res, 200, { items: [...songs.values()].reverse() })
+        if (path === '/api/v2/songs' && method === 'POST') {
+          const name = (url.searchParams.get('name') ?? '').trim().replace(/\s+/g, ' ')
+          if (!name || name.length > 80) return problem(res, 422, 'invalid_song', 'a song needs a name (at most 80 characters)')
+          const raw = rawBodies.get(req) ?? ''
+          if (raw.length > 25 * 1024 * 1024) return problem(res, 413, 'too_large', 'a song file is at most 25 MB')
+          // The worker asks ffprobe; the mock takes anything that starts like MP3, MP4, OGG, WAV or FLAC.
+          const head = raw.slice(0, 12)
+          if (!/^(ID3|RIFF|OggS|fLaC)/.test(head) && head.slice(4, 8) !== 'ftyp' && head.charCodeAt(0) !== 0xfffd) return problem(res, 422, 'not_audio', 'ffprobe could not read the file as audio')
+          const id = `song-${randomBytes(6).toString('hex')}`
+          const song = { id, name, duration_seconds: 30, size_bytes: raw.length, created_at: iso(), created_by: by }
+          songs.set(id, song)
+          return send(res, 201, song)
+        }
+        const songm = /^\/api\/v2\/songs\/([^/]+)(\/audio)?$/.exec(path)
+        if (songm) {
+          const song = songs.get(decodeURIComponent(songm[1]!))
+          if (!song) return problem(res, 404, 'song_not_found', `no song ${songm[1]}`)
+          if (songm[2] && method === 'GET') {
+            res.writeHead(200, { 'content-type': 'audio/wav' })
+            return res.end(toneWav())
+          }
+          if (!songm[2] && method === 'DELETE') {
+            const using = [...vods.values()].filter((v) => ((v.censor as Json[]) ?? []).some((c) => c.song === song.id)).map((v) => String(v.id))
+            if (using.length) return problem(res, 409, 'song_in_use', `censor ranges of ${using.join(', ')} play this song; give them another song first`, undefined, { vods: using })
+            songs.delete(song.id)
+            return send(res, 200, song)
+          }
+        }
+
         // ---- censor review (a job the censor check paused) ----
         const crm = /^\/api\/v2\/jobs\/(\d+)\/censor-review$/.exec(path)
         if (crm && method === 'POST') {
@@ -1755,7 +1802,16 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
                 if (typeof c.mute !== 'boolean') return fail(res, 400, `censor[${i}].mute must be true or false`)
                 if (!c.video && !c.mute) return fail(res, 400, `censor[${i}] neither covers the video nor mutes`)
                 const note = typeof c.note === 'string' && c.note.trim() ? c.note.trim() : undefined
-                out.push({ start, end, video: c.video ?? null, ...(c.video === 'color' ? { color: String(c.color).toLowerCase() } : {}), ...(r ? { region: r } : {}), mute: c.mute, ...(note ? { note } : {}) })
+                const text = typeof c.text === 'string' && c.text.trim() ? c.text.trim().replace(/\s+/g, ' ') : undefined
+                if (text && !c.video) return problem(res, 422, 'invalid_censor', `censor[${i}].text needs a video cover`)
+                if (text && text.length > 60) return problem(res, 422, 'invalid_censor', `censor[${i}].text is longer than 60 characters`)
+                if (c.audio != null && !['mute', 'muffle', 'song'].includes(c.audio)) return problem(res, 422, 'invalid_censor', `censor[${i}].audio must be 'mute', 'muffle', 'song' or absent`)
+                if (c.audio && c.audio !== 'mute' && !c.mute) return problem(res, 422, 'invalid_censor', `censor[${i}].audio needs mute: true`)
+                if (c.audio === 'song' && !songs.has(String(c.song))) return problem(res, 422, 'invalid_censor', `censor[${i}].song ${c.song} is not in the song library`)
+                const volume = c.audio === 'song' ? Math.round(Number(c.volume ?? 1) * 100) / 100 : undefined
+                if (volume !== undefined && !(volume >= 0 && volume <= 1)) return problem(res, 422, 'invalid_censor', `censor[${i}].volume must be a number from 0 to 1`)
+                const sound = c.audio === 'muffle' ? { audio: 'muffle' } : c.audio === 'song' ? { audio: 'song', song: c.song, volume } : {}
+                out.push({ start, end, video: c.video ?? null, ...(c.video === 'color' ? { color: String(c.color).toLowerCase() } : {}), ...(r ? { region: r } : {}), ...(text ? { text } : {}), mute: c.mute, ...sound, ...(note ? { note } : {}) })
               }
               vod.censor = out.sort((x, y) => x.start - y.start || x.end - y.end)
               return send(res, 200, adminVod(vod))

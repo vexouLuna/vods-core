@@ -44,6 +44,12 @@ const editingLive = computed(() => {
 })
 
 const pct = (v: number) => `${v * 100}%`
+/** The worker's text size (ffmpeg.text_filter): half the box's height at most, smaller to fit its width. */
+function textSize(r: CensorDraft): string {
+  const w = (r.region?.w ?? 1) * box.value.width
+  const h = (r.region?.h ?? 1) * box.value.height
+  return `${Math.max(6, Math.min(h / 2, (w * 1.6) / Math.max(1, r.text.trim().length)))}px`
+}
 const place = (r: CensorRegion | null) => (r ? { left: pct(r.x), top: pct(r.y), width: pct(r.w), height: pct(r.h) } : { inset: '0' })
 
 // ---- draw, move, resize (pointer capture on the content box) ----
@@ -113,7 +119,9 @@ function key(e: KeyboardEvent) {
       @pointerup="up"
       @pointercancel="up"
     >
-      <div v-for="r in active" :key="r.key" class="cover" :class="`is-${r.video}`" :style="[place(r.region), r.video === 'color' ? { background: r.color } : {}]" />
+      <div v-for="r in active" :key="r.key" class="cover" :class="`is-${r.video}`" :style="[place(r.region), r.video === 'color' ? { background: r.color } : {}]">
+        <span v-if="r.text.trim()" class="say" :style="{ fontSize: textSize(r) }">{{ r.text.trim() }}</span>
+      </div>
       <div
         v-if="editing && (editing.region || editingLive)"
         class="cover selected"
@@ -126,6 +134,7 @@ function key(e: KeyboardEvent) {
         :aria-valuetext="editing.region ? `${Math.round(editing.region.w * 100)}% by ${Math.round(editing.region.h * 100)}% at ${Math.round(editing.region.x * 100)}%, ${Math.round(editing.region.y * 100)}%` : 'Whole frame'"
         @keydown="key"
       >
+        <span v-if="editingLive && editing.text.trim()" class="say" :style="{ fontSize: textSize(editing) }">{{ editing.text.trim() }}</span>
         <template v-if="editing.region">
           <span v-for="h in ['nw', 'ne', 'sw', 'se']" :key="h" class="handle" :class="h" :data-handle="h" />
         </template>
@@ -167,4 +176,9 @@ function key(e: KeyboardEvent) {
   border-radius: 999px; background: rgb(0 0 0 / 0.65); color: #fff; font-size: 12px; pointer-events: none; white-space: nowrap;
 }
 @media (pointer: coarse) { .handle { width: 22px; height: 22px; margin: -11px; } }
+.say {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+  color: #fff; font-weight: 700; line-height: 1; white-space: nowrap; overflow: hidden; pointer-events: none;
+  text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 3px #000;
+}
 </style>
