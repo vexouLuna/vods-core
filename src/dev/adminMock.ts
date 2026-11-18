@@ -547,7 +547,7 @@ async function buildSynthetic(api: string, id: string, b: Json, was: Synth | nul
     const end = g.end ?? durOf(src)
     if (end <= start) return { status: 422, code: 'invalid_synthetic', error: `Segment ${i + 1}: the end must come after the start.` }
     const place = g.at ?? at
-    segments.push({ vod_id: String(src.id), start, end, at: place, label: g.label ?? null, stream: String(src.stream_id ?? src.id) })
+    segments.push({ vod_id: String(src.id), start, end, at: place, label: g.label ?? null, ...(i > 0 && g.gap_label ? { gap_label: g.gap_label } : {}), stream: String(src.stream_id ?? src.id) })
     at = place + end - start
   }
   const now = iso()
@@ -1322,7 +1322,8 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           const id = sm[1] ? decodeURIComponent(sm[1]) : null
           if (!id && method === 'POST') {
             const nid = String(b.id ?? '').trim()
-            if (!nid || /^\d+$/.test(nid)) return problem(res, 422, 'invalid_synthetic', 'The id must not be only digits: those are Twitch VOD ids.')
+            // The archive's compose.check_id.
+            if (!/^[a-z0-9][a-z0-9+_-]{0,99}$/.test(nid) || /^\d+$/.test(nid)) return problem(res, 422, 'invalid_synthetic', 'The id must be lowercase letters, digits, + _ - (not only digits), at most 100.')
             if (synthetics.has(nid) || vods.has(nid)) return problem(res, 409, 'synthetic_conflict', `${nid} already exists.`)
             const body = await withAuto(publicApi, b)
             if ('error' in body) return problem(res, body.status, body.code, body.error)

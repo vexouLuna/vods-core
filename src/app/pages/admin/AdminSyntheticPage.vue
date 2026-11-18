@@ -12,7 +12,7 @@ import { GAP_LABEL } from '../../lib/cuts'
 import { timeAgo } from '../../lib/time'
 import { toClock } from '../../../index'
 import { computed, ref, watch, watchEffect } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { errorText } from '@vex/platform-web'
 import { JobsTable, usePoll } from '@vex/platform-web/vue'
 import { followedGames, type AdminVod, type PlaythroughWindow, type SyntheticDmca, type SyntheticInput, type SyntheticVod } from '../../admin/api'
@@ -28,9 +28,11 @@ import VodHeaderPanel from '../../admin/VodHeaderPanel.vue'
 import { isAutoTag, tagConfig, VODS_TAG } from '../../lib/vodTags'
 import { site } from '../../site'
 import { moved } from '../../lib/reorder'
+import { copyId, copyOf, idProblem } from '../../lib/syntheticCopy'
 
 const props = defineProps<{ id?: string }>()
 const router = useRouter()
+const route = useRoute()
 const toast = useToast()
 const isNew = computed(() => !props.id)
 
@@ -73,7 +75,12 @@ async function load() {
   const isLatest = begin()
   loadError.value = null
   notFound.value = false
-  if (!props.id) return fill(null)
+  if (!props.id) {
+    fill(null)
+    const from = typeof route.query.from === 'string' ? route.query.from : ''
+    if (from) await startCopy(from, isLatest)
+    return
+  }
   vod.value = null
   full.value = null
   try {
@@ -87,7 +94,33 @@ async function load() {
     else loadError.value = errorText(e)
   }
 }
-watch(() => props.id, load, { immediate: true })
+/** /manage/synthetic/new?from=<id>: the new-VOD form filled from `from`, with a free id (see copyOf for what isn't carried). */
+async function startCopy(from: string, isLatest: () => boolean) {
+  try {
+    const src = await admin.synthetic(from)
+    const free = async (c: string) => admin.vod(c).then(() => false, (e: { status?: number }) => e?.status === 404)
+    let id = ''
+    const seen = new Set<string>()
+    for (;;) {
+      id = copyId(from, (c) => seen.has(c))
+      if (await free(id)) break
+      seen.add(id)
+    }
+    if (!isLatest()) return
+    const c = copyOf(src)
+    form.value = { id, title: c.title, tags: c.tags }
+    segments.value = c.rows.map((r) => row({ ...r }))
+    copiedFrom.value = from
+    droppedAuto.value = followedGames(src.auto ?? null).length > 0
+  } catch (e) {
+    if (!isLatest()) return
+    if ((e as { status?: number }).status === 404) notFound.value = true
+    else loadError.value = errorText(e)
+  }
+}
+const copiedFrom = ref<string | null>(null)
+const droppedAuto = ref(false)
+watch(() => [props.id, route.query.from], () => ((copiedFrom.value = null), (droppedAuto.value = false), load()), { immediate: true })
 const reloadFull = async () => (full.value = await admin.vod(props.id!).catch(() => full.value))
 
 // Its jobs refresh on their own (none for a new one).
@@ -148,11 +181,7 @@ const tagOptions = computed(() => Object.keys(tagConfig.value).filter((t) => !is
 const newLocked = [{ value: 'synthetic', tone: 'accent' as const, title: 'Made of windows of other VODs' }]
 const idError = computed(() => {
   if (!isNew.value) return null
-  const id = form.value.id.trim()
-  if (!id) return 'Give it an id.'
-  if (/^\d+$/.test(id)) return "Not only digits: those are Twitch's VOD ids."
-  if (!/^[A-Za-z0-9_-]+$/.test(id)) return 'Letters, digits, - and _ only.'
-  return null
+  return idProblem(form.value.id.trim())
 })
 const segError = (s: Row) =>
   !s.vod_id.trim() ? 'Give a VOD id.' : s.start != null && s.end != null && s.end <= s.start ? 'The end must come after the start.' : null
@@ -260,6 +289,7 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
 <template>
   <ManageShell :title="isNew ? 'New synthetic VOD' : `Synthetic VOD ${id}`">
     <template #actions>
+      <UiButton v-if="!isNew" :to="`/manage/synthetic/new?from=${encodeURIComponent(id!)}`" title="A new synthetic VOD with the same segments, under a new id">Duplicate</UiButton>
       <UiButton v-if="!isNew" :to="`/vods/${encodeURIComponent(id!)}`">Watch page</UiButton>
       <UiButton v-if="!isNew" :loading="compiling" title="Join its windows into one file and upload it" @click="compile">{{ vod?.compiled ? 'Recompile' : 'Compile' }}</UiButton>
       <UiButton v-if="!isNew" variant="danger" @click="deleteOpen = true">Delete</UiButton>
@@ -304,6 +334,9 @@ watchEffect(() => (document.title = `${props.id ?? 'New synthetic VOD'} · Manag
         </section>
       </template>
 
+      <UiCallout v-if="copiedFrom" tone="info" :title="`A copy of ${copiedFrom}`">
+        Nothing is saved yet. The copy hides none of its sources, and it{{ droppedAuto ? ' does not follow games (turn that on after saving: the segments below are the ones it has now)' : ' keeps its segment gaps' }}.
+      </UiCallout>
       <form @submit.prevent="save">
         <section v-if="isNew" class="panel vods-panel vx-glass-rim">
           <h2 class="vods-eyebrow sec">Details</h2>
