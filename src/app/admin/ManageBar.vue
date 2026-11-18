@@ -15,6 +15,7 @@ const LINKS = [
   { label: 'Upload', to: '/manage/upload' },
   { label: 'Storage', to: '/manage/storage' },
   { label: 'YouTube', to: '/manage/youtube' },
+  { label: 'Thumbnails', to: '/manage/thumbnails' },
   { label: 'Settings', to: '/manage/settings' },
   { label: 'Tags', to: '/manage/tags' },
   { label: 'Home', to: '/manage/home' },
