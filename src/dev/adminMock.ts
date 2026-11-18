@@ -1472,7 +1472,11 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           }
           if (!songm[2] && method === 'DELETE') {
             const using = [...vods.values()].filter((v) => ((v.censor as Json[]) ?? []).some((c) => c.song === song.id)).map((v) => String(v.id))
-            if (using.length) return problem(res, 409, 'song_in_use', `censor ranges of ${using.join(', ')} play this song; give them another song first`, undefined, { vods: using })
+            if (using.length)
+              return problem(res, 409, 'file_in_use', `censor ranges of ${using.join(', ')} play this song; give them another song first`, undefined, {
+                file: { kind: 'song', id: song.id },
+                used_by: using.map((id) => ({ kind: 'vod', id })),
+              })
             songs.delete(song.id)
             return send(res, 200, song)
           }

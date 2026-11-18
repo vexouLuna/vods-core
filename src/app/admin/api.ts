@@ -798,7 +798,7 @@ export class AdminClient {
   addSong(name: string, file: Blob): Promise<CensorSong> {
     return this.request('POST', `/api/v2/songs?name=${encodeURIComponent(name)}`, file.type ? file : new Blob([file], { type: 'application/octet-stream' }))
   }
-  /** 409 `song_in_use` (with `vods`) while a censor range plays it. */
+  /** 409 `file_in_use` (`extra.file` {kind, id}, `extra.used_by` [{kind: 'vod', id}]) while a censor range plays it. */
   deleteSong(id: string): Promise<CensorSong> {
     return this.request('DELETE', `/api/v2/songs/${enc(id)}`)
   }
