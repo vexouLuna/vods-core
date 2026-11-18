@@ -34,12 +34,12 @@ describe('censor drafts', () => {
     expect(errors.get(empty!.key)).toMatch(/required/)
     expect(errors.get(back!.key)).toMatch(/after the start/)
     expect(errors.get(late!.key)).toMatch(/after the VOD/)
-    expect(errors.get(nothing!.key)).toMatch(/mute/)
+    expect(errors.get(nothing!.key)).toMatch(/treat the sound/)
   })
 
   it('start a new range after the last, inside the VOD', () => {
     const rows = censorDrafts([{ start: 0, end: 100, video: 'blur', mute: false }])
-    expect(newCensor(rows, 600)).toMatchObject({ start: 100, end: 160, video: 'blur', mute: false })
+    expect(newCensor(rows, 600)).toMatchObject({ start: 100, end: 160, video: 'blur', sound: 'none' })
     expect(newCensor(censorDrafts([{ start: 0, end: 590, video: 'blur', mute: false }]), 600)).toMatchObject({ start: 540, end: 600 })
   })
 
@@ -64,6 +64,61 @@ describe('AdminClient censor and re-archive', () => {
       ['/b/api/v2/vods/7/youtube/delete', 'POST', { videos: ['abc'] }],
       ['/b/api/v2/vods/7/rearchive', 'POST', { type: 'live', part: 2 }],
     ])
+  })
+})
+
+describe('censor text and sound', () => {
+  it('round-trip text, muffling and a song, and save only what each option means', () => {
+    const [text, muffled, song, silent] = censorDrafts([
+      { start: 0, end: 5, video: 'black', text: 'Spoilers', mute: false },
+      { start: 5, end: 6, video: null, mute: true, audio: 'muffle' },
+      { start: 6, end: 9, video: null, mute: true, audio: 'song', song: 'song-0a1b2c3d4e5f', volume: 0.35 },
+      { start: 9, end: 10, video: null, mute: true },
+    ])
+    expect([muffled!.sound, song!.sound, song!.volume, silent!.sound, text!.sound]).toEqual(['muffle', 'song', 35, 'mute', 'none'])
+    text!.text = '  Spoilers   ahead '
+    expect(censorEdits([text!, muffled!, song!, silent!])).toEqual([
+      { start: 0, end: 5, video: 'black', text: 'Spoilers ahead', mute: false },
+      { start: 5, end: 6, video: null, mute: true, audio: 'muffle' },
+      { start: 6, end: 9, video: null, mute: true, audio: 'song', song: 'song-0a1b2c3d4e5f', volume: 0.35 },
+      { start: 9, end: 10, video: null, mute: true },
+    ])
+    song!.sound = 'mute' // the song stays in the draft for switching back, but isn't saved
+    expect(censorEdits([song!])).toEqual([{ start: 6, end: 9, video: null, mute: true }])
+  })
+
+  it('check text and songs as the worker does', () => {
+    const rows = censorDrafts([
+      { start: 0, end: 5, video: null, mute: true },
+      { start: 0, end: 5, video: 'blur', mute: false },
+      { start: 0, end: 5, video: null, mute: true, audio: 'song', song: 'x' },
+    ])
+    rows[0]!.text = 'hi'
+    rows[1]!.text = 'x'.repeat(61)
+    rows[2]!.song = ''
+    const errors = censorErrors(rows, 600)
+    expect(errors.has(rows[0]!.key)).toBe(false) // text with no cover is hidden and not saved: it can't block saving
+    expect(censorEdits([rows[0]!])).toEqual([{ start: 0, end: 5, video: null, mute: true }])
+    rows[0]!.text = 'x'.repeat(61)
+    expect(censorErrors([rows[0]!], 600).has(rows[0]!.key)).toBe(false) // nor its length
+    expect(errors.get(rows[1]!.key)).toMatch(/longer than 60/)
+    expect(errors.get(rows[2]!.key)).toMatch(/Pick a song/)
+  })
+
+  it('talk to the song library', async () => {
+    const pages = [{ items: [{ id: 'song-a' }], next_cursor: 'c 1' }, { items: [{ id: 'song-b' }], next_cursor: null }]
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify(pages.shift() ?? { items: [] }), { status: 200 }))
+    const c = new AdminClient({ base: '/b/', fetch })
+    expect((await c.songs()).items.map((s) => s.id)).toEqual(['song-a', 'song-b']) // every page
+    await c.addSong('A tune', new Blob(['ID3'], { type: 'audio/mpeg' }))
+    await c.deleteSong('song-0a1b2c3d4e5f')
+    expect(fetch.mock.calls.map(([url, init]) => [url, init!.method, (init!.headers as Record<string, string>)['content-type']])).toEqual([
+      ['/b/api/v2/songs?limit=500', 'GET', undefined],
+      ['/b/api/v2/songs?limit=500&cursor=c%201', 'GET', undefined],
+      ['/b/api/v2/songs?name=A%20tune', 'POST', 'audio/mpeg'],
+      ['/b/api/v2/songs/song-0a1b2c3d4e5f', 'DELETE', undefined],
+    ])
+    expect(c.songUrl('song-0a1b2c3d4e5f')).toBe('/b/api/v2/songs/song-0a1b2c3d4e5f/audio')
   })
 })
 

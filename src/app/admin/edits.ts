@@ -1,7 +1,7 @@
 // Editing a VOD's chapters and uploads: draft rows for the forms, the same checks the worker makes (so mistakes show
 // next to the row before saving), and the request bodies. Pure functions; the pages hold the drafts.
 import { boxArt, normalizeVod, toClock, toSeconds, type RawChapter, type RawDrive, type RawUpload } from '../../index'
-import type { AdminVod, CensorCover, CensorRange, CensorRegion, ChapterEdit, VodPatch, YoutubeEdit } from './api'
+import type { AdminVod, CensorAudio, CensorCover, CensorRange, CensorRegion, ChapterEdit, VodPatch, YoutubeEdit } from './api'
 import { GAP_LABEL } from '../lib/cuts'
 import { isAutoTag, vodTags } from '../lib/vodTags'
 
@@ -244,11 +244,23 @@ export interface CensorDraft {
   color: string
   /** Only this box is covered; null covers the whole frame. */
   region: CensorRegion | null
-  mute: boolean
+  /** Written over the cover ('' for none). */
+  text: string
+  /** What the sound gets: 'none' leaves it. */
+  sound: CensorSound
+  /** The library song for 'song' (kept while another sound is picked). */
+  song: string
+  /** The song's volume in percent, 0 to 100. */
+  volume: number
   note: string
 }
 
+export type CensorSound = 'none' | CensorAudio
+
 export const CENSOR_NOTE_MAX = 200
+/** The worker's TEXT_MAX: censor text is one line over the box. */
+export const CENSOR_TEXT_MAX = 60
+export const DEFAULT_VOLUME = 50
 /** A box's smallest width or height, as a fraction of the frame (the worker's REGION_MIN). */
 export const REGION_MIN = 0.01
 export const DEFAULT_COLOR = '#000000'
@@ -271,7 +283,10 @@ export const censorDrafts = (ranges: readonly CensorRange[] | null | undefined):
     video: r.video ?? 'none',
     color: r.color ?? DEFAULT_COLOR,
     region: r.region ? { ...r.region } : null,
-    mute: r.mute,
+    text: r.text ?? '',
+    sound: r.mute ? (r.audio ?? 'mute') : 'none',
+    song: r.song ?? '',
+    volume: Math.round((r.volume ?? 1) * 100),
     note: r.note ?? '',
   }))
 
@@ -280,7 +295,7 @@ export function newCensor(rows: readonly CensorDraft[], duration: number, at?: n
   const after = at ?? rows.reduce((m, r) => Math.max(m, r.end ?? 0), 0)
   const start = duration > 0 ? Math.min(after, Math.max(0, duration - 60)) : after
   const end = duration > 0 ? Math.min(start + 60, duration) : start + 60
-  return { key: key(), start, end, video: 'blur', color: DEFAULT_COLOR, region: null, mute: false, note: '' }
+  return { key: key(), start, end, video: 'blur', color: DEFAULT_COLOR, region: null, text: '', sound: 'none', song: '', volume: DEFAULT_VOLUME, note: '' }
 }
 
 /** The same range again, its box moved a little so both show (two boxes at once are two ranges). */
@@ -289,7 +304,9 @@ export function duplicateCensor(r: CensorDraft): CensorDraft {
   return { ...r, key: key(), region }
 }
 
-/** The worker's checks: a start and an end inside the VOD, and something to do (cover the picture or mute); a colour
+/** The worker's checks: a start and an end inside the VOD, and something to do (cover the picture or treat the sound),
+ * text of at most CENSOR_TEXT_MAX over a cover (hidden and not saved without one, so not checked then), a song
+ * for a song; a colour
  * for a fill, and a box inside the frame on a range that covers. Ranges may overlap: the strongest whole-frame cover
  * wins where they do (black, colour, pixelate, blur), and boxes stack. */
 export function censorErrors(rows: readonly CensorDraft[], duration: number): Map<number, string> {
@@ -299,7 +316,10 @@ export function censorErrors(rows: readonly CensorDraft[], duration: number): Ma
     else if (r.start < 0) errors.set(r.key, 'Start must be 0 or later.')
     else if (r.end <= r.start) errors.set(r.key, 'End must be after the start.')
     else if (duration > 0 && r.end > duration + 1) errors.set(r.key, `Ends after the VOD (${toClock(duration)}).`)
-    else if (r.video === 'none' && !r.mute) errors.set(r.key, 'Cover the picture, mute the sound, or both.')
+    else if (r.video === 'none' && r.sound === 'none') errors.set(r.key, 'Cover the picture, treat the sound, or both.')
+    else if (r.video !== 'none' && r.text.trim().length > CENSOR_TEXT_MAX) errors.set(r.key, `The text is longer than ${CENSOR_TEXT_MAX} characters.`)
+    else if (r.sound === 'song' && !r.song) errors.set(r.key, 'Pick a song from the library.')
+    else if (r.sound === 'song' && !(r.volume >= 0 && r.volume <= 100)) errors.set(r.key, 'The volume is 0 to 100%.')
     else if (r.video === 'color' && !HEX_COLOR.test(r.color)) errors.set(r.key, 'Pick a colour (#rrggbb).')
     else if (r.region && r.video === 'none') errors.set(r.key, 'A box needs a cover: blur, black, pixelate or a colour.')
     else if (r.region && regionError(r.region)) errors.set(r.key, regionError(r.region)!)
@@ -326,7 +346,10 @@ export function censorEdits(rows: readonly CensorDraft[]): CensorRange[] {
       video: r.video === 'none' ? null : r.video,
       ...(r.video === 'color' ? { color: r.color.toLowerCase() } : {}),
       ...(r.region && r.video !== 'none' ? { region: { x: round4(r.region.x), y: round4(r.region.y), w: round4(r.region.w), h: round4(r.region.h) } } : {}),
-      mute: r.mute,
+      ...(r.video !== 'none' && r.text.trim() ? { text: r.text.trim().replace(/\s+/g, ' ') } : {}),
+      mute: r.sound !== 'none',
+      ...(r.sound === 'muffle' ? { audio: 'muffle' as const } : {}),
+      ...(r.sound === 'song' ? { audio: 'song' as const, song: r.song, volume: Math.round(r.volume) / 100 } : {}),
       ...(r.note.trim() ? { note: r.note.trim() } : {}),
     }))
 }

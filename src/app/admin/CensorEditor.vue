@@ -1,13 +1,17 @@
 <script setup lang="ts">
-// What the YouTube uploads hide: stretches to blur, black out or mute, for what Twitch allows and YouTube doesn't
+// What the YouTube uploads hide: stretches to blur, black out (with text over it) or mute, muffle or put a song over, for what Twitch allows and YouTube doesn't
 // (in-game nudity, say). The worker applies them to every upload after they're saved; the uploads already on YouTube
 // keep what they had until the VOD is re-archived (the actions above).
 import { useToast } from '@vex/ui/utils'
 import type { Option } from '@vex/ui'
-import { computed, onBeforeUnmount, watch, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { toClock } from '../../index'
-import type { AdminVod } from './api'
-import { CENSOR_NOTE_MAX, censorDrafts, censorEdits, censorErrors, censoredSeconds, duplicateCensor, newCensor, type CensorDraft, type CensorVideo } from './edits'
+import type { AdminVod, CensorSong } from './api'
+import {
+  CENSOR_NOTE_MAX, CENSOR_TEXT_MAX, censorDrafts, censorEdits, censorErrors, censoredSeconds, duplicateCensor, newCensor,
+  type CensorDraft, type CensorSound, type CensorVideo,
+} from './edits'
+import SongLibrary from './SongLibrary.vue'
 import { seekTo, usePreview } from './preview/previewState'
 import EditorRows from './EditorRows.vue'
 import { admin } from './session'
@@ -25,6 +29,28 @@ const VIDEO: Option<CensorVideo>[] = [
   { value: 'black', label: 'Black out' },
   { value: 'color', label: 'Fill with a colour' },
 ]
+
+const SOUND: Option<CensorSound>[] = [
+  { value: 'none', label: 'Sound as is' },
+  { value: 'mute', label: 'Mute' },
+  { value: 'muffle', label: 'Muffle' },
+  { value: 'song', label: 'Song over it' },
+]
+
+// The song library: a range picks one of these; an older worker has no /songs (404), so the list stays empty.
+const songs = ref<CensorSong[]>([])
+async function loadSongs() {
+  try {
+    songs.value = (await admin.songs()).items
+  } catch {
+    songs.value = []
+  }
+}
+onMounted(loadSongs)
+const songOptions = computed<Option<string>[]>(() => [
+  { value: '', label: songs.value.length ? 'Pick a song' : 'No songs: upload one below' },
+  ...songs.value.map((s) => ({ value: s.id, label: s.name })),
+])
 
 const { rows, error, saving, dirty, errors, reset, save, remove } = useDraftEditor<CensorDraft>({
   source: () => [props.vod.id, props.vod.censor],
@@ -85,8 +111,9 @@ const uploaded = computed(() => (props.vod.youtube ?? []).length > 0)
     @save="save"
   >
     <p class="vods-muted note">
-      Blur, pixelate, black out, fill or mute stretches of the uploads, the whole picture or only a box drawn in the
-      preview, for what Twitch allows and YouTube doesn't. Saved ranges apply
+      Blur, pixelate, black out or fill stretches of the uploads (the whole picture or only a box drawn in the
+      preview, with text over it if you like), and mute, muffle or put a song over their sound, for what Twitch allows
+      and YouTube doesn't. Saved ranges apply
       to every upload from then on; <template v-if="uploaded">the parts already on YouTube keep what they had until
       you re-archive the VOD.</template><template v-else>nothing is on YouTube yet.</template>
       The VOD on this site is never changed.
@@ -98,7 +125,22 @@ const uploaded = computed(() => (props.vod.youtube ?? []).length > 0)
       <TimeInput v-model="r.end" seekable placeholder="end" :label="`Range ${i + 1} end`" :invalid="errors.has(r.key)" />
       <UiSelect v-model="r.video" :options="VIDEO" width="170px" :aria-label="`Range ${i + 1} picture`" />
       <input v-if="r.video === 'color'" v-model="r.color" type="color" class="swatch" :aria-label="`Range ${i + 1} colour`" />
-      <UiCheckbox v-model="r.mute">Mute</UiCheckbox>
+      <UiInput
+        v-if="r.video !== 'none'"
+        v-model="r.text"
+        class="text"
+        :maxlength="CENSOR_TEXT_MAX"
+        placeholder="Text over it (optional)"
+        :aria-label="`Range ${i + 1} text`"
+      />
+      <UiSelect v-model="r.sound" :options="SOUND" width="150px" :aria-label="`Range ${i + 1} sound`" />
+      <template v-if="r.sound === 'song'">
+        <UiSelect v-model="r.song" :options="songOptions" width="190px" :aria-label="`Range ${i + 1} song`" />
+        <span class="volume">
+          <UiSlider v-model="r.volume" :min="0" :max="100" :step="5" :label="`Range ${i + 1} song volume`" class="slider" />
+          <span class="vods-muted">{{ r.volume }}%</span>
+        </span>
+      </template>
       <UiInput
         v-model="r.note"
         class="what"
@@ -117,6 +159,9 @@ const uploaded = computed(() => (props.vod.youtube ?? []).length > 0)
         <UiButton variant="ghost" icon :label="`Remove range ${i + 1}`" @click="remove(r)">×</UiButton>
       </span>
     </template>
+    <template #after>
+      <SongLibrary :songs="songs" @changed="loadSongs" />
+    </template>
     <template #actions>
       <UiButton @click="add">{{ preview?.ready.value ? '+ Add range at the playhead' : '+ Add range' }}</UiButton>
     </template>
@@ -129,4 +174,7 @@ const uploaded = computed(() => (props.vod.youtube ?? []).length > 0)
 .tools { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .swatch { width: 34px; height: 30px; padding: 0; border: 0; background: none; cursor: pointer; }
 .what { flex: 1 1 180px; }
+.text { flex: 1 1 170px; }
+.volume { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 180px; }
+.slider { flex: 1 1 110px; min-width: 90px; }
 </style>
