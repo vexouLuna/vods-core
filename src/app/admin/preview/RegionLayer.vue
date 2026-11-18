@@ -1,14 +1,19 @@
 <script setup lang="ts">
-// Over the preview's video: the censor ranges playing now, drawn roughly as the worker will (a CSS stand-in: the real
-// blur and pixelation are stronger), and the selected range's box to draw, move and resize. Sits on the video's
-// content box (the picture inside its letterbox), so a box's fractions are the frame's, as the worker reads them.
+// Over the preview's video: the censor ranges playing now, drawn as the worker will (censorRender: its order, its
+// boxes, text sizes and blur radius in the frame's pixels, scaled to the screen; a later range over an earlier one),
+// and the selected range's box to draw, move and resize, outlined on top. Sits on the video's content box (the picture
+// inside its letterbox), so a box's fractions are the frame's, as the worker reads them. What CSS can't match: the
+// pixelation (a blur under a grid of the worker's block size) and the font (DejaVu Sans Bold where installed).
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CensorRegion } from '../api'
 import { fitRegion, REGION_MIN, type CensorDraft } from '../edits'
+import { aloneCover, blurRadius, boxPx, censorOrder, censorText, isOn, pixelBlock, textSize } from './censorRender'
 
 const props = defineProps<{
   /** The picture's width / height. */
   aspect: number
+  /** The picture's size in pixels, which the worker sizes boxes and text in. */
+  frame: { w: number; h: number }
   rows: CensorDraft[]
   time: number
   selected: number | null
@@ -34,23 +39,35 @@ const box = computed(() => {
 })
 
 const covers = (r: CensorDraft) => r.video !== 'none'
-const active = computed(() =>
-  props.showActive ? props.rows.filter((r) => covers(r) && r.start != null && r.end != null && r.start <= props.time && props.time < r.end && r.key !== props.selected) : [],
-)
+/** The covers playing now, in the order the worker draws them; the one being edited among them. */
+const active = computed(() => (props.showActive ? censorOrder(props.rows).filter((r) => covers(r) && isOn(r, props.time)) : []))
 const editing = computed(() => props.rows.find((r) => r.key === props.selected && covers(r)) ?? null)
-const editingLive = computed(() => {
-  const r = editing.value
-  return !!r && r.start != null && r.end != null && r.start <= props.time && props.time < r.end
-})
+const editingLive = computed(() => !!editing.value && isOn(editing.value, props.time))
+/** With the drafts hidden (a file that has them), the box being edited is still drawn while it plays. */
+const drawn = computed(() => (props.showActive ? active.value : editing.value && editingLive.value ? [editing.value] : []))
 
+/** Screen px per frame px. */
+const scale = computed(() => (props.frame.w > 0 ? box.value.width / props.frame.w : 0))
 const pct = (v: number) => `${v * 100}%`
-/** The worker's text size (ffmpeg.text_filter): half the box's height at most, smaller to fit its width. */
-function textSize(r: CensorDraft): string {
-  const w = (r.region?.w ?? 1) * box.value.width
-  const h = (r.region?.h ?? 1) * box.value.height
-  return `${Math.max(6, Math.min(h / 2, (w * 1.6) / Math.max(1, r.text.trim().length)))}px`
-}
 const place = (r: CensorRegion | null) => (r ? { left: pct(r.x), top: pct(r.y), width: pct(r.w), height: pct(r.h) } : { inset: '0' })
+
+/** One cover as the worker draws it: its box on the frame's even pixels, the blur's radius, the pixel block. */
+function coverStyle(r: CensorDraft): Record<string, string> {
+  const k = scale.value
+  const b = boxPx(r.region, props.frame.w, props.frame.h)
+  const style: Record<string, string> = { left: `${b.x * k}px`, top: `${b.y * k}px`, width: `${b.w * k}px`, height: `${b.h * k}px` }
+  if (r.video === 'color') style.background = r.color
+  if (r.video === 'blur') style['--blur'] = `${blurRadius(r.region ? b : boxPx(null, props.frame.w, props.frame.h), aloneCover(drawn.value)) * k}px`
+  if (r.video === 'pixelate') style['--block'] = `${pixelBlock(b) * k}px`
+  return style
+}
+
+/** ffmpeg.text_filter: the size and outline for the box, centred in it, not clipped to it. */
+function textStyle(r: CensorDraft): Record<string, string> {
+  const k = scale.value
+  const { size, border } = textSize(boxPx(r.region, props.frame.w, props.frame.h), r.text)
+  return { fontSize: `${size * k}px`, WebkitTextStroke: `${2 * border * k}px #000` }
+}
 
 // ---- draw, move, resize (pointer capture on the content box) ----
 type Handle = 'move' | 'nw' | 'ne' | 'sw' | 'se' | 'draw'
@@ -119,14 +136,14 @@ function key(e: KeyboardEvent) {
       @pointerup="up"
       @pointercancel="up"
     >
-      <div v-for="r in active" :key="r.key" class="cover" :class="`is-${r.video}`" :style="[place(r.region), r.video === 'color' ? { background: r.color } : {}]">
-        <span v-if="r.text.trim()" class="say" :style="{ fontSize: textSize(r) }">{{ r.text.trim() }}</span>
+      <div v-for="r in drawn" :key="r.key" class="cover" :class="`is-${r.video}`" :style="coverStyle(r)">
+        <span v-if="censorText(r.text)" class="say" :style="textStyle(r)">{{ censorText(r.text) }}</span>
       </div>
       <div
         v-if="editing && (editing.region || editingLive)"
         class="cover selected"
-        :class="[`is-${editing.video}`, { live: editingLive, boxed: editing.region }]"
-        :style="[place(editing.region), editing.video === 'color' && editingLive ? { background: editing.color } : {}]"
+        :class="{ boxed: editing.region, live: editingLive }"
+        :style="place(editing.region)"
         :data-handle="editing.region ? 'move' : undefined"
         :tabindex="editing.region ? 0 : -1"
         role="slider"
@@ -134,7 +151,6 @@ function key(e: KeyboardEvent) {
         :aria-valuetext="editing.region ? `${Math.round(editing.region.w * 100)}% by ${Math.round(editing.region.h * 100)}% at ${Math.round(editing.region.x * 100)}%, ${Math.round(editing.region.y * 100)}%` : 'Whole frame'"
         @keydown="key"
       >
-        <span v-if="editingLive && editing.text.trim()" class="say" :style="{ fontSize: textSize(editing) }">{{ editing.text.trim() }}</span>
         <template v-if="editing.region">
           <span v-for="h in ['nw', 'ne', 'sw', 'se']" :key="h" class="handle" :class="h" :data-handle="h" />
         </template>
@@ -150,18 +166,19 @@ function key(e: KeyboardEvent) {
 .content.drawing { pointer-events: auto; cursor: crosshair; touch-action: none; }
 .cover { position: absolute; pointer-events: none; }
 .is-black { background: #000; }
-.is-blur { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
-/* Pixelate, roughly: a blur under a grid of blocks about an eighth of the box. */
+/* boxblur's radius run three times is about a Gaussian of that standard deviation, which is what CSS blur() takes. */
+.is-blur { backdrop-filter: blur(var(--blur)); -webkit-backdrop-filter: blur(var(--blur)); }
+/* Pixelate, roughly: a blur under a grid of the worker's blocks. */
 .is-pixelate {
-  backdrop-filter: blur(8px) saturate(0.8); -webkit-backdrop-filter: blur(8px) saturate(0.8);
+  backdrop-filter: blur(calc(var(--block) / 2)) saturate(0.8); -webkit-backdrop-filter: blur(calc(var(--block) / 2)) saturate(0.8);
   background-image: linear-gradient(rgb(0 0 0 / 0.18) 1px, transparent 1px), linear-gradient(90deg, rgb(0 0 0 / 0.18) 1px, transparent 1px);
-  background-size: 12.5% 12.5%;
+  background-size: var(--block) var(--block);
 }
 .selected { outline: 2px dashed var(--vods-accent); outline-offset: -1px; }
-/* Without a box the whole frame is shown, and a drag on it draws one. */
+/* Without a box the whole frame is outlined, and a drag on it draws one. */
 .selected.boxed { pointer-events: auto; cursor: move; }
-/* Outside its time the box is only an outline, so the picture under it can be lined up. */
-.selected:not(.live) { background: rgb(255 255 255 / 0.06); backdrop-filter: none; -webkit-backdrop-filter: none; background-image: none; }
+/* Outside its time the box is only an outline with a tint, so the picture under it can be lined up. */
+.selected:not(.live) { background: rgb(255 255 255 / 0.06); }
 .selected:focus-visible { outline-style: solid; }
 .handle {
   position: absolute; width: 14px; height: 14px; margin: -7px; border-radius: 3px;
@@ -176,9 +193,11 @@ function key(e: KeyboardEvent) {
   border-radius: 999px; background: rgb(0 0 0 / 0.65); color: #fff; font-size: 12px; pointer-events: none; white-space: nowrap;
 }
 @media (pointer: coarse) { .handle { width: 22px; height: 22px; margin: -11px; } }
+/* drawtext: one line centred in the box (not clipped to it), white over a black outline; the stroke is centred on the
+   glyph's edge, so it is twice the worker's borderw and painted under the fill. */
 .say {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
-  color: #fff; font-weight: 700; line-height: 1; white-space: nowrap; overflow: hidden; pointer-events: none;
-  text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 3px #000;
+  font-family: 'DejaVu Sans', Verdana, sans-serif; font-weight: 700; line-height: 1; white-space: nowrap;
+  color: #fff; paint-order: stroke fill; pointer-events: none;
 }
 </style>

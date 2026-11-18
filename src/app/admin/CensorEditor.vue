@@ -113,8 +113,8 @@ const uploaded = computed(() => (props.vod.youtube ?? []).length > 0)
     <p class="vods-muted note">
       Blur, pixelate, black out or fill stretches of the uploads (the whole picture or only a box drawn in the
       preview, with text over it if you like), and mute, muffle or put a song over their sound, for what Twitch allows
-      and YouTube doesn't. Saved ranges apply
-      to every upload from then on; <template v-if="uploaded">the parts already on YouTube keep what they had until
+      and YouTube doesn't. Ranges that overlap apply in this list's order once saved (by start, then end), each over
+      the ones before: a song after a mute plays, a mute after a song silences it. Saved ranges apply to every upload from then on; <template v-if="uploaded">the parts already on YouTube keep what they had until
       you re-archive the VOD.</template><template v-else>nothing is on YouTube yet.</template>
       The VOD on this site is never changed.
     </p>
