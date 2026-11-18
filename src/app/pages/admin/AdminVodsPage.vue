@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// /manage/vods?q=&hidden=&synthetic=&upload=: find a VOD to edit (GET /api/v2/vods, so hidden, merged and synthetic ones too;
+// /manage/vods?q=&hidden=&synthetic=&custom=&upload=: find a VOD to edit (GET /api/v2/vods, so hidden, merged and synthetic ones too;
 // a title or an id), add ones the monitor missed (?add=<id> opens that with the id in, "Find on Twitch" lists every one
 // Twitch still has), and make a synthetic one (a playthrough, say). Status: uploaded or details only, and each queued,
 // running or paused job; `upload=stuck` keeps the ones not on YouTube with no job (the overview links there). Tick VODs
@@ -32,11 +32,12 @@ const SHOWN: Option<Shown>[] = [
   { value: 'hidden', label: 'Hidden' },
 ]
 
-type Kind = 'all' | 'twitch' | 'synthetic'
+type Kind = 'all' | 'twitch' | 'synthetic' | 'custom'
 const KIND: Option<Kind>[] = [
   { value: 'all', label: 'All' },
   { value: 'twitch', label: 'Twitch' },
   { value: 'synthetic', label: 'Synthetic' },
+  { value: 'custom', label: 'Custom', title: 'Videos uploaded from Manage, with no Twitch VOD (always hidden)' },
 ]
 
 type Upload = 'all' | 'uploaded' | 'details' | 'stuck'
@@ -50,7 +51,9 @@ const UPLOAD_PARAM: Record<Exclude<Upload, 'all'>, string> = { uploaded: 'yes', 
 
 const query = computed(() => (typeof route.query.q === 'string' ? route.query.q : ''))
 const shown = computed<Shown>(() => (route.query.hidden === 'true' ? 'hidden' : route.query.hidden === 'false' ? 'shown' : 'all'))
-const kind = computed<Kind>(() => (route.query.synthetic === 'true' ? 'synthetic' : route.query.synthetic === 'false' ? 'twitch' : 'all'))
+const kind = computed<Kind>(() =>
+  route.query.custom === 'true' ? 'custom' : route.query.synthetic === 'true' ? 'synthetic' : route.query.synthetic === 'false' ? 'twitch' : 'all',
+)
 const upload = computed<Upload>(() => {
   const u = route.query.upload
   return u === 'yes' ? 'uploaded' : u === 'no' ? 'details' : u === 'stuck' ? 'stuck' : 'all'
@@ -63,7 +66,7 @@ function setQuery(p: { q?: string; s?: Shown; k?: Kind; u?: Upload }) {
     query: {
       ...(q ? { q } : {}),
       ...(s !== 'all' ? { hidden: String(s === 'hidden') } : {}),
-      ...(k !== 'all' ? { synthetic: String(k === 'synthetic') } : {}),
+      ...(k === 'custom' ? { custom: 'true' } : k !== 'all' ? { synthetic: String(k === 'synthetic') } : {}),
       ...(u !== 'all' ? { upload: UPLOAD_PARAM[u] } : {}),
     },
   })
@@ -90,11 +93,13 @@ async function load(more = false) {
     const hidden = shown.value === 'all' ? undefined : shown.value === 'hidden'
     // Nothing synthetic is uploaded, so an upload filter leaves synthetic VODs out.
     const synthetic = kind.value === 'all' ? (upload.value === 'all' ? undefined : false) : kind.value === 'synthetic'
+    // Twitch: neither synthetic nor a custom upload.
+    const custom = kind.value === 'custom' ? true : kind.value === 'twitch' ? false : undefined
     const uploaded = upload.value === 'all' ? undefined : upload.value === 'uploaded'
     const busy = upload.value === 'stuck' ? false : undefined
     const fully_cut = upload.value === 'stuck' ? false : undefined
     const cursor = more ? next.value ?? undefined : undefined
-    const page = await admin.vodList({ q: query.value || undefined, hidden, synthetic, uploaded, busy, fully_cut, limit: PER_PAGE, cursor }, mine.signal)
+    const page = await admin.vodList({ q: query.value || undefined, hidden, synthetic, custom, uploaded, busy, fully_cut, limit: PER_PAGE, cursor }, mine.signal)
     vods.value = more ? [...vods.value, ...page.items] : page.items
     next.value = page.next_cursor
   } catch (e) {
@@ -150,6 +155,7 @@ const rows = computed(() =>
     date: v.created_at.slice(0, 10),
     length: v.duration_seconds == null ? '' : toClock(v.duration_seconds),
     hidden: v.hidden,
+    custom: v.id.startsWith('upload-'),
     merged: v.merged_into?.id ?? null,
     synthetic: v.synthetic ? (v.synthetic.supersedes ? 'merge or split' : 'synthetic') : null,
     tags: v.tags,
@@ -255,7 +261,8 @@ onMounted(() => {
         <template #cell-title="{ row }">
           <RouterLink :to="row.to" class="title">{{ row.title }}</RouterLink>
           <!-- What the VOD is (states, not tags: they follow its switches and merges), boxed apart from its tags. -->
-          <span v-if="row.synthetic || row.hidden || row.merged" class="states" title="State, not a tag">
+          <span v-if="row.synthetic || row.hidden || row.merged || row.custom" class="states" title="State, not a tag">
+            <UiChip v-if="row.custom" tone="accent" title="Uploaded from Manage: no Twitch VOD behind it">custom</UiChip>
             <UiChip v-if="row.hidden" tone="warn" title="Gone from the public site">hidden</UiChip>
             <UiChip v-if="row.synthetic" tone="accent" :title="row.synthetic === 'synthetic' ? 'Made of windows of other VODs' : 'Stands in for the VODs it was made of'">{{ row.synthetic }}</UiChip>
             <UiChip v-if="row.merged" :title="`Merged into ${row.merged}`">merged</UiChip>
