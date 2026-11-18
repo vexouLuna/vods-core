@@ -10,6 +10,7 @@ export function toDraft(s: Pick<RuntimeSetting, 'type' | 'value'>): SettingDraft
     case 'bool': return !!s.value
     case 'int':
     case 'float': return String(s.value ?? '')
+    case 'choice': return String(s.value ?? '')
     case 'list': return Array.isArray(s.value) ? s.value.map(String) : []
     // A plain copy: the value may be a reactive proxy, which structuredClone refuses.
     case 'steps': return Object.fromEntries(Object.entries((s.value ?? {}) as Record<string, string[]>).map(([k, v]) => [k, [...v]]))
@@ -31,6 +32,7 @@ export function fromDraft(s: RuntimeSetting, d: SettingDraft): { value: SettingV
       if (s.max != null && n > s.max) return { error: `At most ${s.max}.` }
       return { value: n }
     }
+    case 'choice': return s.options?.includes(String(d)) ? { value: String(d) } : { error: 'Pick one of the options.' }
     case 'list': return { value: [...new Set((d as string[]).map((x) => x.trim()).filter(Boolean))] }
     case 'steps': {
       const out: Record<string, string[]> = {}
