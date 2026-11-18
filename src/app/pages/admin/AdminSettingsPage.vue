@@ -191,6 +191,14 @@ onMounted(() => {
                 mono
                 :invalid="pending.errors.has(s.key)"
               />
+              <UiSelect
+                v-else-if="s.type === 'choice'"
+                :id="`set-${s.key}`"
+                v-model="(drafts[s.key] as string)"
+                :options="(s.options ?? []).map((o) => ({ value: o, label: o }))"
+                width="160px"
+                :aria-label="settingLabel(s.key)"
+              />
               <GameListInput
                 v-else-if="s.type === 'list' && GAME_LISTS.includes(s.key)"
                 v-model="(drafts[s.key] as string[])"
