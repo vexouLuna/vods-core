@@ -563,7 +563,7 @@ async function buildSynthetic(api: string, id: string, b: Json, was: Synth | nul
     const end = g.end ?? durOf(src)
     if (end <= start) return { status: 422, code: 'invalid_synthetic', error: `Segment ${i + 1}: the end must come after the start.` }
     const place = g.at ?? at
-    segments.push({ vod_id: String(src.id), start, end, at: place, label: g.label ?? null, stream: String(src.stream_id ?? src.id) })
+    segments.push({ vod_id: String(src.id), start, end, at: place, label: g.label ?? null, ...(i > 0 && g.gap_label ? { gap_label: g.gap_label } : {}), stream: String(src.stream_id ?? src.id) })
     at = place + end - start
   }
   const now = iso()
@@ -773,7 +773,7 @@ function undo(sp: SpliceRow, force: boolean) {
 }
 
 // ---- runtime settings (the worker's runtime_settings.ENTRIES) ----
-interface SettingSpec { key: string; type: string; group: string; applies: string; help: string; default: unknown; min?: number; max?: number }
+interface SettingSpec { key: string; type: string; group: string; applies: string; help: string; default: unknown; min?: number; max?: number; options?: string[] }
 const SETTINGS: SettingSpec[] = [
   { key: 'vod_download', type: 'bool', group: 'Capture', applies: 'now', help: "Archive every stream's Twitch VOD", default: true },
   { key: 'chat_download', type: 'bool', group: 'Capture', applies: 'next job', help: 'Save the chat replay', default: true },
@@ -790,6 +790,8 @@ const SETTINGS: SettingSpec[] = [
   { key: 'split_duration', type: 'int', group: 'Pipeline', applies: 'next job', help: 'Maximum YouTube part length in seconds', default: 43200, min: 600, max: 43200 },
   { key: 'keep_hls', type: 'bool', group: 'Pipeline', applies: 'next job', help: 'Keep the HLS segments after upload', default: false },
   { key: 'keep_mp4', type: 'bool', group: 'Pipeline', applies: 'next job', help: 'Keep the MP4 after upload', default: false },
+  { key: 'short_chapter_minutes', type: 'float', group: 'Pipeline', applies: 'next job', help: 'A chapter shorter than this many minutes (a mistaken category change) is merged into a neighbour when chapters are fetched; 0 = off', default: 5, min: 0, max: 120 },
+  { key: 'short_chapter_merge', type: 'choice', options: ['following', 'previous'], group: 'Pipeline', applies: 'next job', help: 'Which neighbour takes a short chapter; the first or last chapter goes the other way', default: 'following' },
   { key: 'manual_steps', type: 'steps', group: 'Pipeline', applies: 'now', help: "Steps a job pauses before until resumed, per job kind (a job's own list wins)", default: {} },
   { key: 'runner_concurrency', type: 'int', group: 'Runner', applies: 'now', help: 'Jobs run at once', default: 2, min: 1, max: 16 },
   { key: 'max_attempts', type: 'int', group: 'Runner', applies: 'now', help: 'Tries of a failing step before its job fails', default: 3, min: 1, max: 10 },
@@ -801,6 +803,7 @@ const settingsJson = () =>
     return {
       key: e.key, value: o ? o.value : e.default, default: e.default, overridden: !!o, type: e.type, group: e.group, applies: e.applies,
       help: e.help, min: e.min ?? null, max: e.max ?? null, updated_at: o?.updatedAt ?? null, updated_by: o?.updatedBy ?? null,
+      ...(e.type === 'choice' ? { options: e.options } : {}),
       ...(e.type === 'steps' ? { choices: Object.fromEntries(Object.entries(KINDS).map(([k, v]) => [k, v.steps])) } : {}),
     }
   })
@@ -813,6 +816,7 @@ function checkSetting(key: string, v: unknown): string | null {
     case 'int': return typeof v === 'number' && Number.isInteger(v) ? range(v) : `${key} must be a whole number`
     case 'float': return typeof v === 'number' && Number.isFinite(v) ? range(v) : `${key} must be a number`
     case 'text': return typeof v === 'string' && v.length <= 500 ? null : `${key} must be text of at most 500 characters`
+    case 'choice': return e.options?.includes(v as string) ? null : `${key} must be one of: ${e.options?.join(', ')}`
     case 'list': return Array.isArray(v) && v.every((x) => typeof x === 'string' && x.trim()) ? null : `${key} must be a list of names`
     case 'steps': {
       if (!v || typeof v !== 'object' || Array.isArray(v)) return `${key} must map job kinds to lists of steps`
@@ -1338,7 +1342,8 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
           const id = sm[1] ? decodeURIComponent(sm[1]) : null
           if (!id && method === 'POST') {
             const nid = String(b.id ?? '').trim()
-            if (!nid || /^\d+$/.test(nid)) return problem(res, 422, 'invalid_synthetic', 'The id must not be only digits: those are Twitch VOD ids.')
+            // The archive's compose.check_id.
+            if (!/^[a-z0-9][a-z0-9+_-]{0,99}$/.test(nid) || /^\d+$/.test(nid)) return problem(res, 422, 'invalid_synthetic', 'The id must be lowercase letters, digits, + _ - (not only digits), at most 100.')
             if (synthetics.has(nid) || vods.has(nid)) return problem(res, 409, 'synthetic_conflict', `${nid} already exists.`)
             const body = await withAuto(publicApi, b)
             if ('error' in body) return problem(res, body.status, body.code, body.error)

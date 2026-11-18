@@ -204,6 +204,15 @@ describe('settings drafts', () => {
     expect(fromDraft(steps, { vod: ['cleanup', 'download'], live: [] })).toEqual({ value: { vod: ['download', 'cleanup'] } })
   })
 
+  it('takes one of a choice setting options', () => {
+    const s = setting({ type: 'choice', value: 'following', options: ['following', 'previous'] })
+    expect(toDraft(s)).toBe('following')
+    expect(fromDraft(s, 'previous')).toEqual({ value: 'previous' })
+    expect(fromDraft(s, 'next')).toEqual({ error: 'Pick one of the options.' })
+    expect(settingChanges([s], { k: 'previous' }).changes).toEqual({ k: 'previous' })
+    expect(settingChanges([s], { k: 'following' }).changes).toEqual({})
+  })
+
   it('sends only changed settings, and none with errors', () => {
     const items = [
       setting({ key: 'on', type: 'bool', value: true }),

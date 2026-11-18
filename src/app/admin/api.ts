@@ -363,7 +363,7 @@ export interface SiteTags {
 /** A tag as PUT /admin/site/tags takes it: everything but the shape, which is uploaded on its own. */
 export type TagInput = Omit<RawTag, 'shape'>
 
-export type SettingType = 'bool' | 'int' | 'float' | 'text' | 'list' | 'steps'
+export type SettingType = 'bool' | 'int' | 'float' | 'text' | 'list' | 'choice' | 'steps'
 export type SettingValue = boolean | number | string | string[] | Record<string, string[]>
 
 /** One worker setting the dashboard can change (GET /api/v2/settings). */
@@ -384,6 +384,8 @@ export interface RuntimeSetting {
   updated_by: string | null
   /** For `steps`: each job kind's steps. */
   choices?: Record<string, string[]> | null
+  /** For `choice`: the values it can take. */
+  options?: string[] | null
   /** A bool setting this one does nothing without. */
   requires?: string | null
 }
