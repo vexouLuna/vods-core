@@ -29,6 +29,8 @@ export interface VodsPages {
     home?: VodsPage
     /** Recurring jobs (needs vex-platform 0.10 on the worker). */
     schedules?: VodsPage
+    /** A video uploaded to YouTube with no Twitch VOD (a worker with /api/v2/uploads). */
+    upload?: VodsPage
   }
 }
 
@@ -71,6 +73,7 @@ export function vodsRoutes(pages: VodsPages): RouteRecordRaw[] {
     { path: '/manage/synthetic/new', component: m.synthetic },
     { path: '/manage/synthetic/:id', component: m.synthetic, props: true },
     { path: '/manage/storage', component: m.storage },
+    ...(m.upload ? [{ path: '/manage/upload', component: m.upload }] : []),
     { path: '/manage/youtube', component: m.youtube },
     { path: '/manage/settings', component: m.settings },
     { path: '/manage/tags', component: m.tags },

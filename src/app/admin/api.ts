@@ -314,6 +314,28 @@ export interface CensorRange {
   note?: string
 }
 
+/** An unfinished custom upload (GET /api/v2/uploads). */
+export interface CustomUpload {
+  id: string
+  filename: string
+  size_bytes: number
+  received_bytes: number
+  /** The most one PUT may carry. */
+  chunk_bytes: number
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
+export type UploadPrivacy = 'private' | 'unlisted' | 'public'
+
+/** What YouTube gets for a custom upload. */
+export interface CustomUploadDetails {
+  title: string
+  description: string
+  privacy: UploadPrivacy
+}
+
 export type CensorAudio = 'mute' | 'muffle' | 'song'
 
 /** A song of the censor song library (GET /api/v2/songs). */
@@ -792,6 +814,30 @@ export class AdminClient {
   mediaUrl(id: string, name: MediaName, lease: string): string {
     return `${this.base}/api/v2/vods/${enc(id)}/media/${name}?lease=${encodeURIComponent(lease)}`
   }
+  // ---- custom uploads (a video sent in chunks, published with no Twitch VOD behind it) ----
+  /** Room for the file: at most the worker's custom_upload_max_gb (413), with twice its size free on disk (507). */
+  startUpload(filename: string, size_bytes: number): Promise<CustomUpload> {
+    return this.request('POST', '/api/v2/uploads', { filename, size_bytes })
+  }
+  /** The unfinished uploads, newest first: a page that lost its upload resumes one of these. */
+  uploads(signal?: AbortSignal): Promise<{ items: CustomUpload[] }> {
+    return this.request('GET', '/api/v2/uploads', undefined, signal)
+  }
+  upload(id: string, signal?: AbortSignal): Promise<CustomUpload> {
+    return this.request('GET', `/api/v2/uploads/${enc(id)}`, undefined, signal)
+  }
+  /** The bytes from `offset` (at most `chunk_bytes`); 409 `offset_mismatch` carries `received_bytes` to go on from. */
+  putChunk(id: string, offset: number, chunk: Blob, signal?: AbortSignal): Promise<CustomUpload> {
+    const raw = chunk.type ? chunk : new Blob([chunk], { type: 'application/octet-stream' })
+    return this.request('PUT', `/api/v2/uploads/${enc(id)}?offset=${offset}`, raw, signal)
+  }
+  cancelUpload(id: string): Promise<CustomUpload> {
+    return this.request('DELETE', `/api/v2/uploads/${enc(id)}`)
+  }
+  /** The whole file is there: checked by ffprobe (422 `not_video`), made a hidden `upload-…` VOD, its job queued. */
+  finishUpload(id: string, details: CustomUploadDetails): Promise<{ vod_id: string; job_id: number; duration_seconds: number }> {
+    return this.request('POST', `/api/v2/uploads/${enc(id)}/finish`, details)
+  }
   // ---- censor song library ----
   /** Every song, newest first: the worker sends them a page at a time (?cursor=&limit=, at most 500). */
   async songs(signal?: AbortSignal): Promise<{ items: CensorSong[] }> {
@@ -866,6 +912,8 @@ export class AdminClient {
       q?: string
       hidden?: boolean
       synthetic?: boolean
+      /** Custom uploads only (true) or none (false); an older worker ignores it. */
+      custom?: boolean
       tag?: string
       uploaded?: boolean
       busy?: boolean
