@@ -1,5 +1,19 @@
 # @vex/vods-core
 
+## 0.50.0
+
+### Minor Changes
+
+- 347b14c: Censor editor: a range can write text over its cover, muffle the sound, or put a looped song from the new song library over it, at a volume. The library (upload, listen, delete) sits under the ranges. Needs a twitch-archive worker with `/api/v2/songs` and the new range keys (`text`, `audio`, `song`, `volume`); against an older worker the library stays empty and saving those keys is refused.
+- ece7b93: Manage → Upload: send a video with no Twitch VOD behind it to YouTube through the censor step. The file goes up in chunks with progress, pauses and resumes (also after a reload: pick the same file again), then becomes a hidden `upload-…` VOD that waits for review on its VOD page; Upload to YouTube sends it and the page shows the link. The VOD list gets a "Custom" kind filter and chip. Adds the optional `manage.upload` page to `VodsPages`. Needs a twitch-archive worker with `/api/v2/uploads`.
+- 50d9818: Manage: a Duplicate button on a synthetic VOD opens the new-VOD form filled from it, with a free id (`<id>-copy`); the id check now follows the archive's rule (lowercase).
+- bf1b3c2: Settings: a `choice` setting type (a select over the setting's `options`).
+- 6034b9c: Manage gets a Thumbnails page (`/manage/thumbnails`, optional `manage.thumbnails` page): the YouTube thumbnail template's
+  lines of text with `{fields}` over a frame of the part, a live preview drawn by the worker, saving, and a button that
+  makes the thumbnails again for a VOD's existing uploads. `AdminClient` gains `thumbnailTemplate`,
+  `saveThumbnailTemplate`, `thumbnailPreview` and `thumbnailsAgain`. Needs a twitch-archive worker with
+  `/api/v2/thumbnail`. No new `Ui*` controls.
+
 ## 0.49.1
 
 ### Patch Changes
