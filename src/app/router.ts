@@ -31,6 +31,8 @@ export interface VodsPages {
     schedules?: VodsPage
     /** A video uploaded to YouTube with no Twitch VOD (a worker with /api/v2/uploads). */
     upload?: VodsPage
+    /** The YouTube thumbnail template (a worker with /api/v2/thumbnail). */
+    thumbnails?: VodsPage
   }
 }
 
@@ -74,6 +76,7 @@ export function vodsRoutes(pages: VodsPages): RouteRecordRaw[] {
     { path: '/manage/synthetic/:id', component: m.synthetic, props: true },
     { path: '/manage/storage', component: m.storage },
     ...(m.upload ? [{ path: '/manage/upload', component: m.upload }] : []),
+    ...(m.thumbnails ? [{ path: '/manage/thumbnails', component: m.thumbnails }] : []),
     { path: '/manage/youtube', component: m.youtube },
     { path: '/manage/settings', component: m.settings },
     { path: '/manage/tags', component: m.tags },

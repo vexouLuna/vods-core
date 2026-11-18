@@ -88,6 +88,7 @@ export function createVodsApp(options: VodsAppOptions): VodsApp {
         synthetic: () => import('./pages/admin/AdminSyntheticPage.vue'),
         storage: () => import('./pages/admin/AdminStoragePage.vue'),
         upload: () => import('./pages/admin/AdminUploadPage.vue'),
+        thumbnails: () => import('./pages/admin/AdminThumbnailPage.vue'),
         youtube: () => import('./pages/admin/AdminYoutubePage.vue'),
         settings: () => import('./pages/admin/AdminSettingsPage.vue'),
         tags: () => import('./pages/admin/AdminTagsPage.vue'),

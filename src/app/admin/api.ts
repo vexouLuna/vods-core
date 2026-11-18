@@ -336,6 +336,33 @@ export interface CustomUploadDetails {
   privacy: UploadPrivacy
 }
 
+/** One line of the thumbnail template: `text` (with `{field}`s) drawn at `x`/`y` (0–1 of the frame; `y` its top,
+ * `x` its left, centre or right edge as `align` says), `size` (0.02–0.3 of the frame's height), in `color`, over a
+ * `box` of that colour or, with none, outlined. The contract is the worker's docs/admin-api.md "Thumbnails". */
+export interface ThumbnailLine {
+  text: string
+  x: number
+  y: number
+  align: 'left' | 'center' | 'right'
+  size: number
+  color: string
+  box: string | null
+}
+
+/** The YouTube thumbnail template: the frame `at` (0–1) into the part, with `lines` over it. */
+export interface ThumbnailTemplate {
+  at: number
+  lines: ThumbnailLine[]
+}
+
+export interface ThumbnailTemplateState {
+  template: ThumbnailTemplate
+  /** False: none saved yet, so this is the worker's default. */
+  saved: boolean
+  /** The `{field}`s a line's text can use. */
+  fields: string[]
+}
+
 export type CensorAudio = 'mute' | 'muffle' | 'song'
 
 /** A song of the censor song library (GET /api/v2/songs). */
@@ -837,6 +864,39 @@ export class AdminClient {
   /** The whole file is there: checked by ffprobe (422 `not_video`), made a hidden `upload-…` VOD, its job queued. */
   finishUpload(id: string, details: CustomUploadDetails): Promise<{ vod_id: string; job_id: number; duration_seconds: number }> {
     return this.request('POST', `/api/v2/uploads/${enc(id)}/finish`, details)
+  }
+  // ---- YouTube thumbnail template ----
+  thumbnailTemplate(signal?: AbortSignal): Promise<ThumbnailTemplateState> {
+    return this.request('GET', '/api/v2/thumbnail/template', undefined, signal)
+  }
+  /** 422 `invalid_template` says what the worker refused. */
+  saveThumbnailTemplate(template: ThumbnailTemplate): Promise<ThumbnailTemplateState> {
+    return this.request('PUT', '/api/v2/thumbnail/template', { template })
+  }
+  /** The template drawn by the worker as a JPEG, over a frame of `vodId`'s file on the worker (or a plain one). */
+  async thumbnailPreview(template: ThumbnailTemplate, vodId: string | null, signal?: AbortSignal): Promise<Blob> {
+    const headers: Record<string, string> = { accept: 'image/jpeg', 'content-type': 'application/json' }
+    if (this.csrf) headers['x-csrf-token'] = this.csrf
+    const res = await this.fetcher(`${this.base}/api/v2/thumbnail/preview`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ template, vod_id: vodId || null }),
+      credentials: 'same-origin',
+      signal,
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new ProblemError(res.status, body && typeof body === 'object' ? body : {}, null, res.statusText)
+    }
+    return res.blob()
+  }
+  /** A job setting the template's thumbnail again on the VOD's uploads of `type` (only `parts`, if given). */
+  async thumbnailsAgain(id: string, type: 'vod' | 'live' | 'compiled', parts?: number[]): Promise<ActionResult> {
+    const r = await this.request<{ job_id: number; message: string }>('POST', `/api/v2/vods/${enc(id)}/thumbnails`, {
+      type,
+      ...(parts?.length ? { parts } : {}),
+    })
+    return { error: false, msg: r.message, jobId: r.job_id }
   }
   // ---- censor song library ----
   /** Every song, newest first: the worker sends them a page at a time (?cursor=&limit=, at most 500). */

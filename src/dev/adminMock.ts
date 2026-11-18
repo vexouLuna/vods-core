@@ -255,6 +255,45 @@ const problem = (res: ServerResponse, status: number, code: string, detail: stri
   send(res, status, { type: 'about:blank', title: code, status, detail, code, ...(errors ? { errors } : {}), ...extra }, { 'content-type': 'application/problem+json' })
 const ok = (res: ServerResponse, msg: string, job?: Job) => send(res, 200, { error: false, msg, jobId: job?.id })
 
+// ---- the thumbnail template, in memory (the worker's default to start with) ----
+const THUMB_FIELDS = ['part', 'total', 'games', 'label', 'title', 'date', 'channel']
+let thumbSaved = false
+let thumbTemplate: Json = {
+  at: 0.25,
+  lines: [
+    { text: '{label}', x: 0.04, y: 0.06, align: 'left', size: 0.07, color: '#ffffff', box: '#9146ff' },
+    { text: 'PART {part}/{total}', x: 0.96, y: 0.06, align: 'right', size: 0.07, color: '#ffffff', box: '#000000' },
+    { text: '{games}', x: 0.5, y: 0.8, align: 'center', size: 0.08, color: '#ffffff', box: '#000000' },
+  ],
+}
+/** The template as the worker would keep it, or what it would say is wrong (a shorter check than thumbnails.py). */
+function thumbProblem(raw: unknown): Json | string {
+  const t = raw as Json | null
+  if (!t || typeof t !== 'object' || !Array.isArray(t.lines)) return 'the template must be an object with at and lines'
+  if (!(typeof t.at === 'number' && t.at >= 0 && t.at <= 1)) return 'at must be a number from 0 to 1'
+  if (t.lines.length > 8) return 'lines must be a list of at most 8'
+  for (const [i, l] of (t.lines as Json[]).entries()) {
+    const text = String(l.text ?? '')
+    if (!text.trim() || text.length > 120) return `line ${i + 1}: text must be 1 to 120 characters on one line`
+    const unknown = [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).find((f) => !THUMB_FIELDS.includes(f))
+    if (unknown) return `line ${i + 1}: unknown field {${unknown}}`
+  }
+  return t
+}
+const xmlText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+function thumbSvg(t: Json, values: Record<string, string | number>): string {
+  const lines = (t.lines as Json[]).map((l) => {
+    const text = String(l.text).replace(/\{(\w+)\}/g, (_m, f: string) => String(values[f] ?? '')).trim()
+    if (!text) return ''
+    const size = Number(l.size) * 720, x = Number(l.x) * 1280, y = Number(l.y) * 720
+    const anchor = { left: 'start', center: 'middle', right: 'end' }[String(l.align)] ?? 'start'
+    const w = text.length * size * 0.62, left = anchor === 'start' ? x : anchor === 'end' ? x - w : x - w / 2
+    const box = l.box ? `<rect x="${left - size / 4}" y="${y - size / 4}" width="${w + size / 2}" height="${size * 1.5}" fill="${l.box}" fill-opacity="0.85"/>` : ''
+    return `${box}<text x="${x}" y="${y + size}" font-size="${size}" font-family="DejaVu Sans, sans-serif" font-weight="bold" text-anchor="${anchor}" fill="${l.color}"${l.box ? '' : ' stroke="black" stroke-width="2"'}>${xmlText(text)}</text>`
+  })
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#1b2130"/>${lines.join('')}</svg>`
+}
+
 // ---- the censor song library, in memory (one song to start with) ----
 const songs = new Map<string, Json>([
   ['song-0a1b2c3d4e5f', { id: 'song-0a1b2c3d4e5f', name: 'Elevator music', duration_seconds: 94.2, size_bytes: 1_532_000, created_at: '2026-11-10T18:00:00Z', created_by: 'vexouluna' }],
@@ -1485,6 +1524,36 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             songs.delete(song.id)
             return send(res, 200, song)
           }
+        }
+
+        // ---- YouTube thumbnail template (twitch-archive's api_v2_thumbnails.py) ----
+        if (path === '/api/v2/thumbnail/template' && method === 'GET') return send(res, 200, { template: thumbTemplate, saved: thumbSaved, fields: THUMB_FIELDS })
+        if (path === '/api/v2/thumbnail/template' && method === 'PUT') {
+          const bad = thumbProblem((await body(req)).template)
+          if (typeof bad === 'string') return problem(res, 422, 'invalid_template', bad)
+          thumbTemplate = bad
+          thumbSaved = true
+          return send(res, 200, { template: thumbTemplate, saved: true, fields: THUMB_FIELDS })
+        }
+        if (path === '/api/v2/thumbnail/preview' && method === 'POST') {
+          const b = await body(req)
+          const bad = thumbProblem(b.template)
+          if (typeof bad === 'string') return problem(res, 422, 'invalid_template', bad)
+          const vod = b.vod_id ? vods.get(String(b.vod_id)) : null
+          if (b.vod_id && !vod) return problem(res, 404, 'vod_not_found', `no VOD ${b.vod_id}`)
+          // The worker draws a JPEG with ffmpeg; the mock an SVG of the same lines, near enough to edit with.
+          res.writeHead(200, { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' })
+          return res.end(thumbSvg(bad, { part: 2, total: 3, games: 'Elden Ring · Celeste', label: 'VOD', title: String(vod?.title ?? 'Stream title'), date: '2026-01-31', channel: 'vexouluna' }))
+        }
+        const thm = /^\/api\/v2\/vods\/([^/]+)\/thumbnails$/.exec(path)
+        if (thm && method === 'POST') {
+          const vod = vods.get(decodeURIComponent(thm[1]!))
+          if (!vod) return problem(res, 404, 'vod_not_found', `no VOD ${thm[1]}`)
+          const b = await body(req)
+          const type = String(b.type ?? 'vod')
+          if (!((vod.youtube as Json[]) ?? []).some((e) => (e.type ?? 'vod') === type)) return problem(res, 409, 'no_uploads', `${vod.id} has no ${type} uploads`)
+          const job = add('thumbnail', String(vod.id), 'queued', 0, 0, { payload: { type, ...(b.parts ? { only_parts: b.parts } : {}) } })
+          return send(res, 202, { job_id: job.id, message: `Making the ${type} thumbnails of ${vod.id} again` })
         }
 
         // ---- censor review (a job the censor check paused) ----
