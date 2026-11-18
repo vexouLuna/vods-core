@@ -305,7 +305,8 @@ export function duplicateCensor(r: CensorDraft): CensorDraft {
 }
 
 /** The worker's checks: a start and an end inside the VOD, and something to do (cover the picture or treat the sound),
- * text only over a cover, a song for a song; a colour
+ * text of at most CENSOR_TEXT_MAX over a cover (hidden and not saved without one, so not checked then), a song
+ * for a song; a colour
  * for a fill, and a box inside the frame on a range that covers. Ranges may overlap: the strongest whole-frame cover
  * wins where they do (black, colour, pixelate, blur), and boxes stack. */
 export function censorErrors(rows: readonly CensorDraft[], duration: number): Map<number, string> {
@@ -316,8 +317,7 @@ export function censorErrors(rows: readonly CensorDraft[], duration: number): Ma
     else if (r.end <= r.start) errors.set(r.key, 'End must be after the start.')
     else if (duration > 0 && r.end > duration + 1) errors.set(r.key, `Ends after the VOD (${toClock(duration)}).`)
     else if (r.video === 'none' && r.sound === 'none') errors.set(r.key, 'Cover the picture, treat the sound, or both.')
-    else if (r.text.trim() && r.video === 'none') errors.set(r.key, 'Text goes over a cover: pick blur, black, pixelate or a colour.')
-    else if (r.text.trim().length > CENSOR_TEXT_MAX) errors.set(r.key, `The text is longer than ${CENSOR_TEXT_MAX} characters.`)
+    else if (r.video !== 'none' && r.text.trim().length > CENSOR_TEXT_MAX) errors.set(r.key, `The text is longer than ${CENSOR_TEXT_MAX} characters.`)
     else if (r.sound === 'song' && !r.song) errors.set(r.key, 'Pick a song from the library.')
     else if (r.sound === 'song' && !(r.volume >= 0 && r.volume <= 100)) errors.set(r.key, 'The volume is 0 to 100%.')
     else if (r.video === 'color' && !HEX_COLOR.test(r.color)) errors.set(r.key, 'Pick a colour (#rrggbb).')

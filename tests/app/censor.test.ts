@@ -97,19 +97,24 @@ describe('censor text and sound', () => {
     rows[1]!.text = 'x'.repeat(61)
     rows[2]!.song = ''
     const errors = censorErrors(rows, 600)
-    expect(errors.get(rows[0]!.key)).toMatch(/over a cover/)
+    expect(errors.has(rows[0]!.key)).toBe(false) // text with no cover is hidden and not saved: it can't block saving
+    expect(censorEdits([rows[0]!])).toEqual([{ start: 0, end: 5, video: null, mute: true }])
+    rows[0]!.text = 'x'.repeat(61)
+    expect(censorErrors([rows[0]!], 600).has(rows[0]!.key)).toBe(false) // nor its length
     expect(errors.get(rows[1]!.key)).toMatch(/longer than 60/)
     expect(errors.get(rows[2]!.key)).toMatch(/Pick a song/)
   })
 
   it('talk to the song library', async () => {
-    const fetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ items: [] }), { status: 200 }))
+    const pages = [{ items: [{ id: 'song-a' }], next_cursor: 'c 1' }, { items: [{ id: 'song-b' }], next_cursor: null }]
+    const fetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify(pages.shift() ?? { items: [] }), { status: 200 }))
     const c = new AdminClient({ base: '/b/', fetch })
-    await c.songs()
+    expect((await c.songs()).items.map((s) => s.id)).toEqual(['song-a', 'song-b']) // every page
     await c.addSong('A tune', new Blob(['ID3'], { type: 'audio/mpeg' }))
     await c.deleteSong('song-0a1b2c3d4e5f')
     expect(fetch.mock.calls.map(([url, init]) => [url, init!.method, (init!.headers as Record<string, string>)['content-type']])).toEqual([
-      ['/b/api/v2/songs', 'GET', undefined],
+      ['/b/api/v2/songs?limit=500', 'GET', undefined],
+      ['/b/api/v2/songs?limit=500&cursor=c%201', 'GET', undefined],
       ['/b/api/v2/songs?name=A%20tune', 'POST', 'audio/mpeg'],
       ['/b/api/v2/songs/song-0a1b2c3d4e5f', 'DELETE', undefined],
     ])

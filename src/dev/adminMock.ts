@@ -1453,7 +1453,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
         }
 
         // ---- censor song library (twitch-archive's api_v2_songs.py) ----
-        if (path === '/api/v2/songs' && method === 'GET') return send(res, 200, { items: [...songs.values()].reverse() })
+        if (path === '/api/v2/songs' && method === 'GET') return send(res, 200, { items: [...songs.values()].reverse(), next_cursor: null }) // one page: the mock's few songs
         if (path === '/api/v2/songs' && method === 'POST') {
           const name = (url.searchParams.get('name') ?? '').trim().replace(/\s+/g, ' ')
           if (!name || name.length > 80) return problem(res, 422, 'invalid_song', 'a song needs a name (at most 80 characters)')

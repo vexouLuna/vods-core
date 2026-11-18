@@ -793,8 +793,17 @@ export class AdminClient {
     return `${this.base}/api/v2/vods/${enc(id)}/media/${name}?lease=${encodeURIComponent(lease)}`
   }
   // ---- censor song library ----
-  songs(signal?: AbortSignal): Promise<{ items: CensorSong[] }> {
-    return this.request('GET', '/api/v2/songs', undefined, signal)
+  /** Every song, newest first: the worker sends them a page at a time (?cursor=&limit=, at most 500). */
+  async songs(signal?: AbortSignal): Promise<{ items: CensorSong[] }> {
+    const items: CensorSong[] = []
+    let cursor: string | null = null
+    do {
+      const q = cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''
+      const page: { items: CensorSong[]; next_cursor?: string | null } = await this.request('GET', `/api/v2/songs?limit=500${q}`, undefined, signal)
+      items.push(...page.items)
+      cursor = page.next_cursor ?? null
+    } while (cursor)
+    return { items }
   }
   /** The audio file as it is; the worker keeps it only if it reads as audio (422 `not_audio`), at most 25 MB (413). */
   addSong(name: string, file: Blob): Promise<CensorSong> {
