@@ -10,7 +10,8 @@
   ],
   "files": [
     "dist",
-    "src/app/deep-field/deep-field.css"
+    "src/app/deep-field/deep-field.css",
+    "src/app/admin/preview/fonts/LICENSE"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",

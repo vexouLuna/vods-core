@@ -6,7 +6,7 @@ import { HEARTBEAT_MS, TAB_LEASE, useMediaLease } from '../../src/app/admin/prev
 import { admin } from '../../src/app/admin/session'
 
 describe('censor drafts', () => {
-  it('round-trip ranges, sorted, with notes trimmed and empty ones dropped', () => {
+  it('round-trip ranges in their own order, with notes trimmed and empty ones dropped', () => {
     const drafts = censorDrafts([
       { start: 300, end: 360, video: null, mute: true },
       { start: 10, end: 20, video: 'blur', mute: false, note: 'menu' },
@@ -15,8 +15,8 @@ describe('censor drafts', () => {
     drafts[0]!.note = '  song  '
     drafts[1]!.note = '   '
     expect(censorEdits(drafts)).toEqual([
-      { start: 10, end: 20, video: 'blur', mute: false },
       { start: 300, end: 360, video: null, mute: true, note: 'song' },
+      { start: 10, end: 20, video: 'blur', mute: false },
     ])
   })
 

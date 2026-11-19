@@ -1891,7 +1891,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
                 const sound = c.audio === 'muffle' ? { audio: 'muffle' } : c.audio === 'song' ? { audio: 'song', song: c.song, volume } : {}
                 out.push({ start, end, video: c.video ?? null, ...(c.video === 'color' ? { color: String(c.color).toLowerCase() } : {}), ...(r ? { region: r } : {}), ...(text ? { text } : {}), mute: c.mute, ...sound, ...(note ? { note } : {}) })
               }
-              vod.censor = out.sort((x, y) => x.start - y.start || x.end - y.end)
+              vod.censor = out // in the order sent, as the worker keeps it
               return send(res, 200, adminVod(vod))
             }
             if (part === 'youtube/delete' && method === 'POST') {

@@ -15,6 +15,7 @@ import type { AdminVod, MediaHolder, MediaList, MediaName } from '../api'
 import { admin } from '../session'
 import RegionLayer from './RegionLayer.vue'
 import { seekTo, usePreview } from './previewState'
+import { useCensorAudio } from './useCensorAudio'
 import { useMediaLease } from './useMediaLease'
 
 const props = defineProps<{ vod: AdminVod; duration: number }>()
@@ -84,6 +85,8 @@ const video = ref<HTMLVideoElement | null>(null)
 const ytEl = ref<HTMLElement | null>(null)
 const playing = ref(false)
 const aspect = ref(16 / 9)
+/** The picture's size in pixels, which the worker sizes boxes and text in (YouTube's: assumed 1080p). */
+const frame = ref({ w: 1920, h: 1080 })
 const loadError = ref<string | null>(null)
 let watch_: WatchPlayer | null = null
 let raf = 0
@@ -98,6 +101,15 @@ const timeline = computed(() => {
 const youtube = computed(() => !!timeline.value && !timeline.value.isEmpty)
 const burnedIn = computed(() => source.value === 'youtube' || file.value !== 'source')
 const showDrafts = ref(true)
+// The drafts' sound, as the worker will make it, over the source file (YouTube and the censored file have theirs).
+const audio = useCensorAudio({
+  video,
+  on: () => showDrafts.value && !burnedIn.value,
+  rows: () => preview.censor.value ?? [],
+  time: () => preview.time.value,
+  playing: () => playing.value,
+  songUrl: (id) => admin.songUrl(id),
+})
 
 function tick() {
   if (source.value === 'server' && video.value) preview.time.value = video.value.currentTime
@@ -130,7 +142,7 @@ async function loadServer() {
   const at = preview.time.value
   v.src = admin.mediaUrl(props.vod.id, file.value, lease.lease)
   v.addEventListener('loadedmetadata', () => {
-    if (v.videoWidth && v.videoHeight) aspect.value = v.videoWidth / v.videoHeight
+    if (v.videoWidth && v.videoHeight) (aspect.value = v.videoWidth / v.videoHeight), (frame.value = { w: v.videoWidth, h: v.videoHeight })
     v.currentTime = at
     preview.ready.value = true
   }, { once: true })
@@ -142,6 +154,7 @@ async function loadYouTube() {
   await lease.release()
   preview.ready.value = false
   aspect.value = 16 / 9
+  frame.value = { w: 1920, h: 1080 }
   const tl = timeline.value
   await nextTick()
   if (!tl || tl.isEmpty || !ytEl.value) return
@@ -202,6 +215,7 @@ function toggle() {
   }
   const v = video.value
   if (!v) return
+  audio.start()
   if (v.paused) void v.play()
   else v.pause()
 }
@@ -257,7 +271,7 @@ function setEnd(end: 'start' | 'end') {
     <div class="top">
       <UiSegmented v-model="source" :options="SOURCES" label="Preview source" />
       <UiSelect v-if="source === 'server' && fileOpts.length" v-model="file" :options="fileOpts" width="260px" aria-label="Server file" />
-      <UiCheckbox v-model="showDrafts">Draw the censor drafts</UiCheckbox>
+      <UiCheckbox v-model="showDrafts">Preview the censor drafts</UiCheckbox>
     </div>
 
     <UiCallout v-if="listError" tone="error" title="Couldn't list the server's files">
@@ -312,11 +326,11 @@ function setEnd(end: 'start' | 'end') {
       <div v-if="source === 'server' && list?.items.length && !wanted && !other" class="load">
         <UiButton variant="primary" @click="load">Load the server file</UiButton>
       </div>
-      <RegionLayer :aspect="aspect" :rows="rows" :time="preview.time.value" :selected="preview.selected.value" :show-active="showDrafts && !burnedIn" />
+      <RegionLayer :aspect="aspect" :frame="frame" :rows="rows" :time="preview.time.value" :selected="preview.selected.value" :show-active="showDrafts && !burnedIn" />
     </div>
     <p v-if="burnedIn" class="vods-muted small">
       {{ source === 'youtube' ? 'The uploads have the censor ranges they were made with.' : 'This file has the censor ranges it was made with.' }}
-      The drafts aren't drawn over it, except the one being edited.
+      The drafts aren't drawn or played over it, except the box being edited.
     </p>
 
     <div class="controls">
