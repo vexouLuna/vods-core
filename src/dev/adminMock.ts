@@ -82,6 +82,14 @@ addSchedule('Global emotes', 'global_emotes_backfill', '30 2 * * *', { pausedAt:
 for (let i = 0; i < 70; i++) add(i % 3 ? 'archive' : 'chapters', String(2300000000 + i * 7919), 'done', 99, 60 * 24 * (70 - i))
 add('dmca', '2301234567', 'cancelled', 1, 60 * 30)
 add('reupload', '2309876543', 'failed', 1, 60 * 5, { lastError: 'YouTube quota exceeded (403 quotaExceeded); retry after midnight Pacific.' })
+// A finished upload whose payload remembers the part it put on YouTube (the job page can edit it: PATCH payload).
+add('reupload', '2307777777', 'done', 99, 60 * 8, {
+  payload: {
+    type: 'vod', total_parts: 1, mp4: '/data/vods/2307777777/2307777777.mp4',
+    parts: [{ number: 1, start: 0, end: 7260.5, path: '/data/vods/2307777777/2307777777.mp4' }],
+    uploaded: { 1: { id: '_u9ZzJ6HcDw', part: 1, type: 'vod', duration: 7260, thumbnail_url: 'https://i.ytimg.com/vi/_u9ZzJ6HcDw/mqdefault.jpg' } },
+  },
+})
 add('chat', '2304444444', 'failed', 0, 60 * 50, { lastError: 'Twitch GQL 500 (internal error)', dismissedAt: iso(60_000 * 20) })
 add('download', '2311111111', 'paused', 2, 90, { pauseBefore: ['upload'] })
 // Paused by the censor check (POST /api/v2/jobs/{id}/censor-review answers it).
@@ -1136,7 +1144,7 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             const target = am ? `${am[1] === 'vods' ? 'vod' : 'job'}:${am[2]}` : b.vodId ? `vod:${b.vodId}` : typeof b.subject === 'string' ? b.subject : null
             // vex-platform names its own job actions (job.enqueue, job.pause…); the worker's v1 routes keep the route as the name.
             const jm = /^\/api\/v2\/jobs(?:\/\d+(?:\/(\w+))?)?$/.exec(path)
-            const action = jm ? `job.${jm[1] ?? (method === 'PATCH' ? 'update' : 'enqueue')}` : `${method} ${path.replace(/\/\d+/g, '/{id}')}`
+            const action = jm ? `job.${jm[1] ?? (method === 'PATCH' ? ('payload' in b ? 'payload.update' : 'update') : 'enqueue')}` : `${method} ${path.replace(/\/\d+/g, '/{id}')}`
             // GET /api/v2/audit's shape (the worker names actions "vod.update" and so on; the mock keeps the route).
             audit.unshift({
               id: ++auditId, at: iso(), actor_kind: 'user', actor_id: s.user ? s.user.id : 'password', actor_login: s.user?.login ?? null,
@@ -1701,7 +1709,15 @@ export function adminMock(base = '/backend-admin', publicApi = 'https://vods.vex
             return send(res, 200, { root_id: root.id, items: items.map(v2Job), truncated: tree.length > limit })
           }
           if (!action && method === 'PATCH') {
-            if (!isActive(job)) return conflict('only unfinished jobs can be changed')
+            // A payload edit (vex-platform 0.12): any run not running, unless it changed since it was read.
+            if ('payload' in b) {
+              const p = b.payload
+              if (!p || typeof p !== 'object' || Array.isArray(p)) return problem(res, 422, 'invalid', 'payload must be a JSON object')
+              if (job.state === 'running') return conflict('its payload can be edited once it stops')
+              if (b.expected_updated_at && b.expected_updated_at !== job.updatedAt) return conflict('it changed since it was read; load it again and redo the edit')
+              if ((('pause_before' in b) || ('pause_next' in b)) && !isActive(job)) return conflict('only unfinished jobs can be changed')
+              job.payload = p as Record<string, unknown>
+            } else if (!isActive(job)) return conflict('only unfinished jobs can be changed')
             if ('pause_before' in b) job.pauseBefore = (b.pause_before as string[] | null) ?? null
             if ('pause_next' in b) job.pauseNext = !!b.pause_next
             return done()
