@@ -1,13 +1,15 @@
 <script setup lang="ts">
 // Over the preview's video: the censor ranges playing now, drawn as the worker will (censorRender: its order, its
-// boxes, text sizes and blur radius in the frame's pixels, scaled to the screen; a later range over an earlier one),
+// boxes, text sizes (measured in the worker's own font, which it loads) and blur radius in the frame's pixels, scaled
+// to the screen; a later range in the list over an earlier one),
 // and the selected range's box to draw, move and resize, outlined on top. Sits on the video's content box (the picture
 // inside its letterbox), so a box's fractions are the frame's, as the worker reads them. What CSS can't match: the
-// pixelation (a blur under a grid of the worker's block size) and the font (DejaVu Sans Bold where installed).
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+// pixelation (a blur under a grid of the worker's block size) and FreeType's exact rendering of the font.
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import type { CensorRegion } from '../api'
 import { fitRegion, REGION_MIN, type CensorDraft } from '../edits'
-import { aloneCover, blurRadius, boxPx, censorOrder, censorText, isOn, pixelBlock, textSize } from './censorRender'
+import { aloneCover, blurRadius, boxPx, censorText, isOn, pixelBlock, textSize } from './censorRender'
+import { CENSOR_FAMILY, censorFont, type FontMetrics } from './fontMetrics'
 
 const props = defineProps<{
   /** The picture's width / height. */
@@ -30,6 +32,10 @@ onMounted(() => {
 })
 onBeforeUnmount(() => observer?.disconnect())
 
+/** The worker's font, for sizing and drawing the text (null until loaded: a rough size meanwhile). */
+const font = shallowRef<FontMetrics | null>(null)
+onMounted(() => void censorFont().then((m) => (font.value = m), () => {}))
+
 /** The content box inside the letterbox, in px. */
 const box = computed(() => {
   const { w, h } = size.value
@@ -39,8 +45,8 @@ const box = computed(() => {
 })
 
 const covers = (r: CensorDraft) => r.video !== 'none'
-/** The covers playing now, in the order the worker draws them; the one being edited among them. */
-const active = computed(() => (props.showActive ? censorOrder(props.rows).filter((r) => covers(r) && isOn(r, props.time)) : []))
+/** The covers playing now, in the list's order, as the worker draws them; the one being edited among them. */
+const active = computed(() => (props.showActive ? props.rows.filter((r) => covers(r) && isOn(r, props.time)) : []))
 const editing = computed(() => props.rows.find((r) => r.key === props.selected && covers(r)) ?? null)
 const editingLive = computed(() => !!editing.value && isOn(editing.value, props.time))
 /** With the drafts hidden (a file that has them), the box being edited is still drawn while it plays. */
@@ -65,8 +71,8 @@ function coverStyle(r: CensorDraft): Record<string, string> {
 /** ffmpeg.text_filter: the size and outline for the box, centred in it, not clipped to it. */
 function textStyle(r: CensorDraft): Record<string, string> {
   const k = scale.value
-  const { size, border } = textSize(boxPx(r.region, props.frame.w, props.frame.h), r.text)
-  return { fontSize: `${size * k}px`, WebkitTextStroke: `${2 * border * k}px #000` }
+  const { size, border } = textSize(boxPx(r.region, props.frame.w, props.frame.h), r.text, font.value)
+  return { fontSize: `${size * k}px`, WebkitTextStroke: `${2 * border * k}px #000`, fontFamily: `'${CENSOR_FAMILY}', 'DejaVu Sans', Verdana, sans-serif` }
 }
 
 // ---- draw, move, resize (pointer capture on the content box) ----

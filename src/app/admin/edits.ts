@@ -4,7 +4,6 @@ import { boxArt, normalizeVod, toClock, toSeconds, type RawChapter, type RawDriv
 import type { AdminVod, CensorAudio, CensorCover, CensorRange, CensorRegion, ChapterEdit, VodPatch, YoutubeEdit } from './api'
 import { GAP_LABEL } from '../lib/cuts'
 import { isAutoTag, vodTags } from '../lib/vodTags'
-import { censorOrder } from './preview/censorRender'
 
 let nextKey = 1
 const key = () => nextKey++
@@ -308,8 +307,8 @@ export function duplicateCensor(r: CensorDraft): CensorDraft {
 /** The worker's checks: a start and an end inside the VOD, and something to do (cover the picture or treat the sound),
  * text of at most CENSOR_TEXT_MAX over a cover (hidden and not saved without one, so not checked then), a song
  * for a song; a colour
- * for a fill, and a box inside the frame on a range that covers. Ranges may overlap: the worker applies them in the saved
- * order (censorOrder), each over the ones before, video and sound alike. */
+ * for a fill, and a box inside the frame on a range that covers. Ranges may overlap: the worker applies them in the list's
+ * own order (kept as it is on save and load), each over the ones before, video and sound alike. */
 export function censorErrors(rows: readonly CensorDraft[], duration: number): Map<number, string> {
   const errors = new Map<number, string>()
   for (const r of rows) {
@@ -339,7 +338,7 @@ function regionError(r: CensorRegion): string | null {
 }
 
 export function censorEdits(rows: readonly CensorDraft[]): CensorRange[] {
-  return censorOrder(rows).map((r) => ({
+  return rows.map((r) => ({
       start: r.start ?? 0,
       end: r.end ?? 0,
       video: r.video === 'none' ? null : r.video,

@@ -6,6 +6,7 @@ import { useToast } from '@vex/ui/utils'
 import type { Option } from '@vex/ui'
 import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { toClock } from '../../index'
+import { moved } from '../lib/reorder'
 import type { AdminVod, CensorSong } from './api'
 import {
   CENSOR_NOTE_MAX, CENSOR_TEXT_MAX, censorDrafts, censorEdits, censorErrors, censoredSeconds, duplicateCensor, newCensor,
@@ -90,6 +91,8 @@ function duplicate(r: CensorDraft) {
   rows.value.splice(rows.value.indexOf(r) + 1, 0, copy)
   if (preview) preview.selected.value = copy.key
 }
+/** Up or down the list: the worker applies the ranges in this order. */
+const move = (r: CensorDraft, by: -1 | 1) => (rows.value = moved(rows.value, rows.value.indexOf(r), by))
 const pct = (v: number) => `${Math.round(v * 100)}%`
 
 const hidden = computed(() => censoredSeconds(props.vod.censor ?? []))
@@ -113,8 +116,8 @@ const uploaded = computed(() => (props.vod.youtube ?? []).length > 0)
     <p class="vods-muted note">
       Blur, pixelate, black out or fill stretches of the uploads (the whole picture or only a box drawn in the
       preview, with text over it if you like), and mute, muffle or put a song over their sound, for what Twitch allows
-      and YouTube doesn't. Ranges that overlap apply in this list's order once saved (by start, then end), each over
-      the ones before: a song after a mute plays, a mute after a song silences it. Saved ranges apply to every upload from then on; <template v-if="uploaded">the parts already on YouTube keep what they had until
+      and YouTube doesn't. Where ranges overlap they apply in this list's order (↑ ↓ to change it), each over the ones
+      before: a song after a mute plays, a mute after a song silences it, a later box is drawn over an earlier one. Saved ranges apply to every upload from then on; <template v-if="uploaded">the parts already on YouTube keep what they had until
       you re-archive the VOD.</template><template v-else>nothing is on YouTube yet.</template>
       The VOD on this site is never changed.
     </p>
@@ -156,6 +159,8 @@ const uploaded = computed(() => (props.vod.youtube ?? []).length > 0)
         </UiButton>
         <UiButton v-if="r.region" size="sm" variant="ghost" @click="r.region = null">Whole frame</UiButton>
         <UiButton size="sm" variant="ghost" :label="`Duplicate range ${i + 1}`" title="Duplicate: another box at the same time" @click="duplicate(r)">Duplicate</UiButton>
+        <UiButton size="sm" variant="ghost" :disabled="i === 0" :aria-label="`Move range ${i + 1} up (applied earlier)`" @click="move(r, -1)">↑</UiButton>
+        <UiButton size="sm" variant="ghost" :disabled="i === rows.length - 1" :aria-label="`Move range ${i + 1} down (applied later)`" @click="move(r, 1)">↓</UiButton>
         <UiButton variant="ghost" icon :label="`Remove range ${i + 1}`" @click="remove(r)">×</UiButton>
       </span>
     </template>

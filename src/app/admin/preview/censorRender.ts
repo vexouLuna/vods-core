@@ -1,13 +1,11 @@
-// What the worker makes of the censor drafts, for the preview to show and play the same: the order it applies them in,
-// each box and its text in the frame's pixels (twitch-archive's ffmpeg._box, text_filter and cover_filter), and what the
+// What the worker makes of the censor drafts, for the preview to show and play the same: each box and its text in the
+// frame's pixels (twitch-archive's ffmpeg._box, text_filter and cover_filter), and what the
 // sound is at a moment (ffmpeg.sound_args). tests/app/censorRender.test.ts pins these to the worker's own numbers.
 import type { CensorRegion } from '../api'
 import type { CensorDraft } from '../edits'
+import type { FontMetrics } from './fontMetrics'
 
-/** The drafts in the order the worker applies them, each over the ones before: the saved order (censorEdits), by
- * start, then end, ties as listed. */
-export const censorOrder = <T extends Pick<CensorDraft, 'start' | 'end'>>(rows: readonly T[]): T[] =>
-  [...rows].sort((a, b) => (a.start ?? 0) - (b.start ?? 0) || (a.end ?? 0) - (b.end ?? 0))
+// The worker applies the ranges in the list's own order, each over the ones before; nothing here sorts them.
 
 /** The text the worker writes: trimmed, whitespace runs as one space (what censorEdits saves). */
 export const censorText = (text: string): string => text.trim().replace(/\s+/g, ' ')
@@ -33,11 +31,16 @@ export function boxPx(region: CensorRegion | null, width: number, height: number
   return { x: Math.max(px, 0), y: Math.max(py, 0), w: pw, h: ph }
 }
 
-/** ffmpeg.text_filter: the font size (px) for one line of `text` in `box`, as large as fits (half the box's height at
- * most, 10 at least), and its black outline's width. Characters are counted as Python counts them (code points). */
-export function textSize(box: PxBox, text: string): { size: number; border: number } {
-  const chars = Math.max([...censorText(text)].length, 1)
-  const size = Math.max(10, Math.min(Math.floor(box.h / 2), Math.floor((box.w * 1.6) / chars)))
+/** ffmpeg.text_size: the font size (px) for one line of `text` in `box` (half the box's height at most; the line,
+ * measured in the worker's font with its outline, at most 90% of the box's width; 10 at least), and the outline's
+ * width (ffmpeg.text_filter). The same integer maths as the worker. Until the font has loaded (`font` null), a rough
+ * guess of 0.625 em a character. */
+export function textSize(box: PxBox, text: string, font: FontMetrics | null): { size: number; border: number } {
+  const line = censorText(text)
+  const units = font?.units ?? 2048
+  const width = font ? font.advance(line) : Math.round([...line].length * 0.625 * units)
+  const fits = Math.floor((54 * box.w * units) / (10 * (6 * width + units))) // 0.9 * w / (width / units + 1 / 6)
+  const size = Math.max(10, Math.min(Math.floor(box.h / 2), fits))
   return { size, border: Math.max(1, Math.floor(size / 12)) }
 }
 
@@ -57,7 +60,7 @@ export const aloneCover = (covers: readonly Pick<CensorDraft, 'region' | 'text' 
 /** A range is on at `t` (start inclusive, end exclusive). */
 export const isOn = (r: Pick<CensorDraft, 'start' | 'end'>, t: number): boolean => r.start != null && r.end != null && r.start <= t && t < r.end
 
-/** What the audio is at a moment, the ranges over it applied in list order, each over what the ones before made:
+/** What the audio is at a moment, the ranges over it applied in the list's order, each over what the ones before made:
  * silence or a song replaces everything before it (a song silences the stream, then plays), a muffle low-passes what
  * there is. `song` plays from its range's `start`, looped, at `volume` (0 to 1). */
 export interface SoundNow {
@@ -69,7 +72,7 @@ export interface SoundNow {
 
 export function soundAt(rows: readonly CensorDraft[], t: number): SoundNow {
   let now: SoundNow = { base: 'stream', muffles: 0 }
-  for (const r of censorOrder(rows)) {
+  for (const r of rows) {
     if (r.sound === 'none' || !isOn(r, t)) continue
     if (r.sound === 'muffle') now = { ...now, muffles: now.muffles + 1 }
     else if (r.sound === 'song' && r.song) now = { base: 'song', song: { id: r.song, volume: Math.round(r.volume) / 100, start: r.start! }, muffles: 0 }
